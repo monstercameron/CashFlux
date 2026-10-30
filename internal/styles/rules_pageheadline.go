@@ -89,4 +89,11 @@ func registerPageHeadline() {
 	ruleMedia("(max-width: 720px)", ".page-headline-visual",
 		flex("1 1 100%"), minWidth("0"), maxWidth("none"),
 	)
+	rule(".txn-top-actions",
+		display("flex"), alignItems("center"), justifyContent("flex-end"), flexWrap("wrap"), gap("0.5rem"),
+	)
+	rule(".txn-bubble",
+		display("flex"), flexDirection("column"), gap("0.6rem"), minWidth("0"),
+		background("var(--bg-card)"), border("1px solid var(--border)"), borderRadius("var(--radius-md)"), padding("0.75rem"),
+	)
 }

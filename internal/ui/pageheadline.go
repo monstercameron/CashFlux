@@ -59,7 +59,6 @@ func PageHeadline(props PageHeadlineProps) uic.Node {
 		Div(copyArgs...),
 		props.Meter,
 		Div(facts...),
-		Div(css.Class("page-headline-footer"), props.Footer),
 		Div(css.Class("page-headline-attention"), props.Attention),
 	}
 	args := []any{css.Class("page-headline"), Attr("data-testid", props.TestID),
@@ -67,6 +66,7 @@ func PageHeadline(props PageHeadlineProps) uic.Node {
 			Div(stack...),
 			Div(css.Class("page-headline-visual"), props.Visual),
 		),
+		Div(css.Class("page-headline-footer"), props.Footer),
 	}
 	if props.State != "" {
 		args = append(args, Attr("data-state", props.State))

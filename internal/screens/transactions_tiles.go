@@ -662,7 +662,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	renderProps := txnToolbarRenderProps{txnToolbarProps: props, Own: own, Filter: filter, MemberLens: memberLens, LensOn: lensOn, Indexes: indexes, Summary: summary, Derived: derived, SetFilter: func(mut func(*txnfilter.Criteria)) { setTxFilterOn(filterAtom, mut) }}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: txnResponsiveToolbar(ui.CreateElement(txnToolbarControls, renderProps), ui.CreateElement(txnUpcomingStrip, struct{}{}), ui.CreateElement(txnToolbarInterpret, renderProps), txnToolbarFoot(ui.CreateElement(txnToolbarCount, renderProps))),
+		Body: txnResponsiveToolbar(txnTopActions(renderProps), txnSummaryHead(renderProps), Div(css.Class("txn-bubble"), ui.CreateElement(txnToolbarControls, renderProps), ui.CreateElement(txnUpcomingStrip, struct{}{}), ui.CreateElement(txnToolbarInterpret, renderProps))),
 	})
 }
 
@@ -752,7 +752,7 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 		ClearAllLabel: clearAllLabel(len(props.Own.PageFilters())), RemoveLabel: uistate.T("transactions.removeFilter"),
 		Actions: []ui.Node{
 			Div(css.Class("txn-toolbar-context"), ui.CreateElement(txnDateScope, struct{}{}), ui.CreateElement(txnViewToggle, struct{}{})),
-			Div(css.Class("txn-toolbar-commands"), ui.CreateElement(txnToolbarAdd, props), ui.CreateElement(txnToolbarReview, props), ui.CreateElement(txnToolbarMore, props)),
+			Div(css.Class("txn-toolbar-commands"), ui.CreateElement(txnToolbarMore, props)),
 		},
 	})
 }
@@ -1036,8 +1036,16 @@ func txnResponsiveToolbar(toolbar ui.Node, content ...any) ui.Node {
 
 // txnUserColumnVisible limits the member column to an Everyone view with multiple
 // household members.
+// txnToolbarFoot is the count line under the summary: the period's figures, the
+// category breakdown and the row count.
 func txnToolbarFoot(countLine ui.Node) ui.Node {
 	return Div(css.Class("txn-toolbar-foot"), countLine)
+}
+
+// txnTopActions is the row of the two actions that open the page's work: add a
+// transaction, and review the ones waiting for a look.
+func txnTopActions(props txnToolbarRenderProps) ui.Node {
+	return Div(css.Class("txn-top-actions"), ui.CreateElement(txnToolbarAdd, props), ui.CreateElement(txnToolbarReview, props))
 }
 
 func txnUserColumnVisible(enabled bool, memberScope string, memberCount int) bool {

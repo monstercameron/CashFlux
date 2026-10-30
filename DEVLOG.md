@@ -1,3 +1,7 @@
+## 2026-10-30 - Transactions follows the Accounts order
+
+The Transactions page now opens with its two actions, then the period summary (net, a running-total line, spent and income) built on the shared page headline, then the search and filter bubble above the list. The summary keeps the existing count line as its footer, so its interactive figures and their tests stay put. The running total is a pure helper, txntoolbar.RunningTotal, with table tests.
+
 ## 2026-10-30 - Shared page headline for Budgets and Accounts
 
 The Accounts summary was three cards and a strip. Budgets already had a headline (figure, sentence, gauge, attention line) styled under a Budgets-only scope. The shared piece is `ui.PageHeadline`, with `PageHeadlineFigure` and `PageHeadlineFact` for its parts, styled once in `rules_pageheadline.go`. Budgets and Accounts now both build it; the Budgets-only `bud3-headline` rules and the Accounts-only rules are gone. `MeterBar` gained a pace marker and a test id so the Budgets gauge is a shared meter too. The Transactions count line stays its own component: its figures are filter toggles, and moving them onto a display-only headline would change how the filters work. Verified in the browser at phone width; the screens wasm focused run passes. Follow-up: the summary sizes now come from the shared --fs tokens defined on the headline and the transaction count line, the Accounts trend is deferred one settle (as the Dashboard hero is) so it cannot disturb the hero, and the Budgets window label is no longer double-wrapped.
