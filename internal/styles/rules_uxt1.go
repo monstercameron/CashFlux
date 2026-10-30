@@ -117,10 +117,20 @@ func registerUXT1() {
 		background("var(--text-dim)"),
 		cursor("pointer"),
 	)
-	rule(".txn-category-segment:nth-child(2)", background("color-mix(in srgb, var(--text-dim) 82%, var(--bg) 18%)"))
-	rule(".txn-category-segment:nth-child(3)", background("color-mix(in srgb, var(--text-dim) 66%, var(--bg) 34%)"))
-	rule(".txn-category-segment:nth-child(4)", background("color-mix(in srgb, var(--text-dim) 50%, var(--bg) 50%)"))
-	rule(".txn-category-segment:nth-child(5)", background("color-mix(in srgb, var(--text-dim) 34%, var(--bg) 66%)"))
+	rule(".txn-category-segment:nth-child(1)", background("var(--chart-4)"))
+	rule(".txn-category-item:nth-child(1)::before", background("var(--chart-4)"))
+	rule(".txn-category-segment:nth-child(2)", background("var(--chart-3)"))
+	rule(".txn-category-item:nth-child(2)::before", background("var(--chart-3)"))
+	rule(".txn-category-segment:nth-child(3)", background("var(--chart-5)"))
+	rule(".txn-category-item:nth-child(3)::before", background("var(--chart-5)"))
+	rule(".txn-category-segment:nth-child(4)", background("var(--chart-1)"))
+	rule(".txn-category-item:nth-child(4)::before", background("var(--chart-1)"))
+	rule(".txn-category-segment:nth-child(5)", background("var(--chart-2)"))
+	rule(".txn-category-item:nth-child(5)::before", background("var(--chart-2)"))
+	rule(".txn-category-segment-other", background("var(--border)"))
+	rule(".txn-category-item::before",
+		content("\"\""), display("inline-block"), width("8px"), height("8px"), marginRight("0.4rem"), borderRadius("2px"), flex("0 0 auto"),
+	)
 	rule(".txn-category-segment.is-selected",
 		background("var(--accent)"),
 	)
