@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/provisional"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -248,11 +249,15 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 		},
 		OnSetBalance: func(ac domain.Account, currentBal money.Money, newStr, catID, asOfISO string) {
 			dec := currency.Decimals(ac.Currency)
-			target, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
+			typed, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
 			if err != nil {
 				uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
 				return
 			}
+			// The figure is typed in the stated convention (negative is money owed), so convert
+			// it to the way this account holds balances at rest before it is posted.
+			conv, _ := reconcile.ConventionOf(ac, currentBal.Amount)
+			target := reconcile.Stored(typed, conv)
 			// C684: the difference is posted as a provisional balance CHECKPOINT, not
 			// as an ordinary adjustment. It is real for the balance and invisible to
 			// reporting, because the money was not earned or spent — the account
@@ -299,7 +304,7 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			// G3: a balance set posts a real transaction — one-click reversible. Since
 			// C684 that row is a provisional CHECKPOINT: it moves the balance and stays
 			// out of reports, and it is retired when a statement covers its date.
-			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))))
+			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(typed, ac.Currency))))
 		},
 		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) {
 			doAccountTransfer(app, fromID, toID, amountStr, "", "", dateStr, desc)

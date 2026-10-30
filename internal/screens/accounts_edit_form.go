@@ -99,6 +99,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// and disagreed with the card about the same account.
 	reconConv, _ := reconcile.ConventionOf(a, curBal.Amount)
 	curClearedStated := money.New(reconcile.Stated(curCleared.Amount, reconConv), a.Currency)
+	curBalStated := statedBalance(a, curBal)
 
 	// ---- setbal state ----
 	setBalAmtS := ui.UseState("")
@@ -625,7 +626,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.4rem 1.25rem",
 				"padding": "0.5rem 0.65rem", "border": "1px solid var(--border)", "border-radius": "8px",
 				"margin-bottom": "0.6rem"}),
-			stat("accounts.balCurrent", fmtMoney(curBal), "acct-bal-current"),
+			stat("accounts.balCurrent", fmtMoney(curBalStated), "acct-bal-current"),
 			stat("accounts.balCleared", fmtMoney(curCleared), "acct-bal-cleared"),
 			stat("accounts.balStatement", stmtStr, "acct-bal-statement"),
 			stat("accounts.balProjected", projStr, "acct-bal-projected"),
@@ -668,29 +669,57 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 // acctValueUpdateSection is the "update value / balance" block folded into the top of
 // the merged editor (it replaced the standalone update-balance modal). Typing a new
+// statedBalance converts a stored balance into the stated convention the app shows and
+// the user types: positive is money you have, negative is money you owe.
+func statedBalance(a domain.Account, stored money.Money) money.Money {
+	conv, _ := reconcile.ConventionOf(a, stored.Amount)
+	return money.New(reconcile.Stated(stored.Amount, conv), a.Currency)
+}
+
+// setBalanceNote says, in one line, what a typed figure does. For a debt it says whether
+// the debt goes down or up; anything else shows the signed change. A debt typed without
+// its minus sign also gets a short warning under the line. Both figures are in the
+// stated convention.
+func setBalanceNote(a domain.Account, curStated, targetStated int64) ui.Node {
+	delta := targetStated - curStated
+	isDebt := a.Class == domain.ClassLiability
+	var line ui.Node
+	switch {
+	case delta == 0:
+		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+			uistate.T("accounts.setBalanceNoAdjNeeded"))
+	case isDebt && reconcile.ClassifyChange(curStated, targetStated) == reconcile.ShapeDebtFalls:
+		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+			uistate.T("accounts.setBalanceDebtFalls", fmtMoney(money.New(delta, a.Currency))))
+	case isDebt && reconcile.ClassifyChange(curStated, targetStated) == reconcile.ShapeDebtRises:
+		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+			uistate.T("accounts.setBalanceDebtRises", fmtMoney(money.New(-delta, a.Currency))))
+	default:
+		signed := fmtMoney(money.New(delta, a.Currency))
+		if delta > 0 {
+			signed = "+" + signed
+		}
+		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+			uistate.T("accounts.setBalanceDeltaPreview", signed))
+	}
+	var warning ui.Node = Fragment()
+	if isDebt && reconcile.LooksLikeUnsignedDebt(curStated, targetStated) {
+		warning = P(css.Class("t-caption"), Attr("data-testid", "setbal-unsigned-warning"),
+			uistate.T("accounts.setBalanceUnsignedDebt", fmtMoney(money.New(-targetStated, a.Currency))))
+	}
+	return Div(line, warning)
+}
+
 // value records an adjustment so the computed balance matches; leaving it blank keeps
 // the balance as-is (a plain edit). It shows the current balance for context, a live
 // delta preview, and — once a value is entered — the category for the adjustment.
-func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBalAmtS, setBalCatS, setBalAsOfS ui.State[string], onSetBalAmt, onSetBalAsOf ui.Handler, categories []domain.Category, focusValue bool) ui.Node {
+// curStated is the current balance in the stated convention.
+func acctValueUpdateSection(a domain.Account, curStated money.Money, dec int, setBalAmtS, setBalCatS, setBalAsOfS ui.State[string], onSetBalAmt, onSetBalAsOf ui.Handler, categories []domain.Category, focusValue bool) ui.Node {
 	rawAmt := strings.TrimSpace(setBalAmtS.Get())
 	var deltaNode ui.Node = Fragment()
 	if rawAmt != "" {
 		if targetMinor, parseErr := money.ParseMinor(rawAmt, dec); parseErr == nil {
-			dp := reconcile.PreviewDelta(curBal.Amount, targetMinor)
-			sign := ""
-			if dp.AdjustmentMinor > 0 {
-				sign = "+"
-			}
-			adjLabel := sign + money.FormatMinor(dp.AdjustmentMinor, dec)
-			if dp.NeedsAdjustment {
-				deltaNode = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-					uistate.T("accounts.setBalanceDeltaPreview",
-						fmtMoney(money.New(curBal.Amount, a.Currency)),
-						fmtMoney(money.New(targetMinor, a.Currency)), adjLabel))
-			} else {
-				deltaNode = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-					uistate.T("accounts.setBalanceNoAdjNeeded"))
-			}
+			deltaNode = setBalanceNote(a, curStated.Amount, targetMinor)
 		}
 	}
 	catOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.setBalanceNoCategory")}}
@@ -706,7 +735,7 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 	return Div(css.Class("acct-value-section"), Attr("data-testid", "acct-value-section"),
 		labeledField(uistate.T(updateActionKey(a.Type)), Input(append(valInput, uiw.FieldValue(setBalAmtS.Get()))...)),
 		Span(css.Class("t-caption acct-value-now", tw.TextDim), Attr("data-testid", "acct-value-now"),
-			uistate.T("accounts.currentValueNow", fmtMoney(curBal))),
+			uistate.T("accounts.currentValueNow", fmtMoney(curStated))),
 		deltaNode,
 		// C684: shown only once a value is typed, so updating a balance stays one
 		// field for the common case. It answers "when was this true", which is what
@@ -1014,7 +1043,7 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 			// Merged "update value / balance" section, up top so the marquee account action
 			// (record a new value) is the fast path; leaving it blank keeps the balance as-is.
 			x.balancesNode,
-			acctValueUpdateSection(a, curBal, dec, setBalAmtS, setBalCatS, x.setBalAsOfS, onSetBalAmt, x.onSetBalAsOf, categories, focusValue),
+			acctValueUpdateSection(a, statedBalance(a, curBal), dec, setBalAmtS, setBalCatS, x.setBalAsOfS, onSetBalAmt, x.onSetBalAsOf, categories, focusValue),
 			// QA CF-10: opened from the balance figure ("Update balance"), the account
 			// METADATA folds behind a native details disclosure so the dialog matches
 			// its label — value on top, everything else opt-in. The Edit entry keeps
