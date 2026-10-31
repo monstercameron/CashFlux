@@ -1212,7 +1212,7 @@ func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
 				If(r.Cleared, txnRowClearedGlyph()),
 				If(r.HasNote, ui.CreateElement(txnRowNote, txnRowNoteProps{Note: r.Note})),
 				If(props.SaveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), props.SaveStatus)),
-				If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0,
+				If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0, FollowUps: r.FollowUps,
 					OnReceipt: func() {
 						if r.OnViewReceipt != nil {
 							r.OnViewReceipt(r.Attachment)

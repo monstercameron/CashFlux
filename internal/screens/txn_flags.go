@@ -258,26 +258,24 @@ type txnRowInfoProps struct {
 	Text         string
 	HasReceipt   bool
 	HasFollowUps bool
+	FollowUps    []followUpItem
 	OnReceipt    func()
 	OnFollowUps  func()
 }
 
+// txnRowInfo is the row's info button. A row with follow-ups opens a preview of its open to-dos
+// first. The preview carries the way on to the page: "Open in To-do", and "View receipt" when the
+// row has one. A row with only a receipt opens the receipt directly.
 func txnRowInfo(props txnRowInfoProps) ui.Node {
 	open := ui.UseState(false)
 	popoverID := ui.UseId()
-	hasPopup := "false"
-	if props.HasReceipt && props.HasFollowUps {
-		hasPopup = "true"
-	}
 	toggle := ui.UseEvent(Prevent(func() {
-		if props.HasReceipt && props.HasFollowUps {
+		if props.HasFollowUps {
 			open.Set(!open.Get())
 			return
 		}
 		if props.HasReceipt && props.OnReceipt != nil {
 			props.OnReceipt()
-		} else if props.HasFollowUps && props.OnFollowUps != nil {
-			props.OnFollowUps()
 		}
 	}))
 	viewReceipt := ui.UseEvent(Prevent(func() {
@@ -293,38 +291,61 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 		}
 	}))
 	closePopover := func() { open.Set(false) }
-	viewReceiptClick := OnClick(viewReceipt)
-	openFollowUpsClick := OnClick(openFollowUps)
-	toggleClick := OnClick(toggle)
-	var popover ui.Node = Fragment()
-	var content ui.Node
 	if !props.HasReceipt && !props.HasFollowUps {
 		if strings.TrimSpace(props.Text) == "" {
-			content = Fragment()
-		} else {
-			content = Span(css.Class("txn-row-info-text"), Attr("data-testid", "txn-row-info-text"), props.Text)
+			return Fragment()
 		}
-	} else {
-		if props.HasReceipt && props.HasFollowUps {
-			popover = uiw.Overlay(uiw.OverlayProps{
-				Open: open.Get(), Kind: uiw.OverlayPopover,
-				Title: uistate.T("uxt5.info", props.Text), AnchorID: popoverID,
-				OnClose: closePopover,
-				TestID:  "txn-row-info-popover",
-				Body: Div(css.Class("txn-row-info-popover"),
-					Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-receipt"), viewReceiptClick, uistate.T("uxt5.viewReceipt")),
-					Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), openFollowUpsClick, uistate.T("uxt5.openFollowUpsAction"))),
-			})
-		}
-		content = Div(css.Class("txn-row-info-wrap"),
-			Button(css.Class("txn-row-info"), ID(popoverID), Type("button"),
-				Attr("data-testid", "txn-row-info"), Attr("aria-label", uistate.T("uxt5.info", props.Text)),
-				Attr("aria-haspopup", hasPopup),
-				Attr("aria-expanded", ariaBool(open.Get())), Title(props.Text), toggleClick, "i"),
-			popover,
-		)
+		return Span(css.Class("txn-row-info-text"), Attr("data-testid", "txn-row-info-text"), props.Text)
 	}
-	return content
+	var popover ui.Node = Fragment()
+	hasPopup := "false"
+	if props.HasFollowUps {
+		hasPopup = "true"
+		popover = uiw.Overlay(uiw.OverlayProps{
+			Open: open.Get(), Kind: uiw.OverlayPopover,
+			Title: uistate.T("uxt5.info", props.Text), AnchorID: popoverID,
+			OnClose: closePopover,
+			TestID:  "txn-row-info-popover",
+			Body:    txnRowInfoPreview(props, viewReceipt, openFollowUps),
+		})
+	}
+	return Div(css.Class("txn-row-info-wrap"),
+		Button(css.Class("txn-row-info"), ID(popoverID), Type("button"),
+			Attr("data-testid", "txn-row-info"), Attr("aria-label", uistate.T("uxt5.info", props.Text)),
+			Attr("aria-haspopup", hasPopup),
+			Attr("aria-expanded", ariaBool(open.Get())), Title(props.Text), OnClick(toggle), "i"),
+		popover,
+	)
+}
+
+// txnRowInfoPreview lists the row's open to-dos, each with its check-off, then the exits: to the
+// To-do page, and to the receipt when there is one. Done items stay on the To-do page.
+func txnRowInfoPreview(props txnRowInfoProps, viewReceipt, openFollowUps ui.Handler) ui.Node {
+	const maxShown = 5
+	open := 0
+	kids := []any{css.Class("txn-row-info-popover"), Attr("data-testid", "txn-row-info-preview")}
+	for _, it := range props.FollowUps {
+		if it.Done {
+			continue
+		}
+		open++
+		if open <= maxShown {
+			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due}))
+		}
+	}
+	if open == 0 {
+		kids = append(kids, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutOK, Body: Span(uistate.T("transactions.followUpsAllDone"))}))
+	} else if open > maxShown {
+		kids = append(kids, Div(css.Class("txnfu-more"), uistate.T("transactions.followUpsMore", open-maxShown)))
+	}
+	exits := []any{css.Class("txnfu-pop-foot"),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), OnClick(openFollowUps), uistate.T("uxt5.openFollowUpsAction")),
+	}
+	if props.HasReceipt {
+		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-receipt"), OnClick(viewReceipt), uistate.T("uxt5.viewReceipt")))
+	}
+	kids = append(kids, Div(exits...))
+	return Div(kids...)
 }
 
 // txnFlagChip renders the row's strongest flag as a compact chip. Its own
