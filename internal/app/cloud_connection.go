@@ -37,7 +37,7 @@ var cloudDiscoveryCache struct {
 
 // useCloudServer owns drafts. Typing never switches server/account scope. Only
 // the explicit connection check commits the address, after a successful probe.
-func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnection {
+func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep, discover bool) cloudConnection {
 	p := atom.Get().Normalize()
 	cached := cloudDiscoveryCache.endpoint != "" && cloudDiscoveryCache.endpoint == normalizedBackendEndpoint(p.ServerURL)
 	initialPhase := discoveryIdle
@@ -148,15 +148,21 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 		})
 	}
 	uic.UseEffect(func() func() {
-		if step != cloudOff && step != cloudWhere {
+		if discover && step != cloudOff && step != cloudWhere {
 			probe(p.ServerURL, false)
 		}
 		// The next probe or a draft-address edit invalidates the previous result.
 		// Cleanup can run after a render while this probe is still in flight;
 		// invalidating here stranded the sign-in pane at "Checking the connection".
 		return nil
-	}, p.ServerURL, string(step))
+	}, p.ServerURL, string(step), discover)
 	test := func() {
+		// Sign-in retries the already selected server. A capability check must
+		// not write preferences (or race a pending local dataset save).
+		if step != cloudWhere {
+			probe(atom.Get().ServerURL, false)
+			return
+		}
 		address := strings.TrimSpace(url.Get())
 		if segment.Get() == "local" {
 			address = currentPageOrigin()
@@ -237,17 +243,26 @@ type cloudWhereProps struct {
 
 func cloudWhereView(p cloudWhereProps) uic.Node {
 	c := p.Connection
+	destination := uistate.T("cloud1.sameServer")
+	switch c.Segment {
+	case "commercial":
+		destination = uistate.T("sync.segmentCommercial")
+	case "remote":
+		destination = uistate.T("cloud1.ownServer")
+	}
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap3), Attr("data-testid", "cloud-setup-where"),
 		H3(css.Class(tw.Text15, tw.FontSemibold), uistate.T("cloud1.step.where")),
 		P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.whereHint")),
-		uiw.Segmented(uiw.SegmentedProps{Label: uistate.T("cloud1.destination"), Selected: c.Segment, OnSelect: c.OnSegment,
-			Options: []uiw.SegOption{{Value: "commercial", Label: uistate.T("sync.segmentCommercial")}, {Value: "local", Label: uistate.T("cloud1.sameServer")}, {Value: "remote", Label: uistate.T("cloud1.ownServer")}}}),
-		If(c.Segment == "local", P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.sameServerHint"))),
-		If(c.Segment != "local", uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.connectionAddress"), TestID: "cloud-address-advanced", Body: uic.CreateElement(cloudAddressField, c)})),
+		P(css.Class(tw.Text14), uistate.T("cloud1.selectedDestination", destination)),
+		uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.otherDestinations"), TestID: "cloud-server-options", Body: Fragment(
+			uiw.Segmented(uiw.SegmentedProps{Label: uistate.T("cloud1.destination"), Selected: c.Segment, OnSelect: c.OnSegment,
+				Options: []uiw.SegOption{{Value: "commercial", Label: uistate.T("sync.segmentCommercial")}, {Value: "local", Label: uistate.T("cloud1.sameServer")}, {Value: "remote", Label: uistate.T("cloud1.ownServer")}}}),
+			If(c.Segment != "local", uic.CreateElement(cloudAddressField, c)),
+			A(css.Class("btn-link"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
+		)}),
 		uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.test"), TestID: "sync-test", OnClick: c.Test, Disabled: p.Busy || c.Phase == discoveryChecking}),
 		uic.CreateElement(cloudConnectionFeedback, cloudFeedbackProps{Phase: c.Phase, Error: c.Error}),
 		uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.continue"), TestID: "cloud-where-continue", Kind: cloudActionPrimary, OnClick: p.OnContinue, Disabled: p.Busy || c.Phase != discoveryOK}),
-		A(css.Class("btn-link"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 	)
 }
 

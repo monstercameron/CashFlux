@@ -117,6 +117,15 @@ func persistAuthSessionWithCommitThen(current prefs.Prefs, serverURL string, pai
 					p = p.Normalize()
 				}
 				commit(p, func(err error) {
+					if err == nil {
+						// A rejected credential from the outgoing session must not
+						// keep the newly saved account at the sign-in step.
+						if st := loadSyncStatus(); st.AuthFailed {
+							st.AuthFailed = false
+							st.Message = ""
+							setSyncStatus(st)
+						}
+					}
 					done(err)
 					if err == nil && startSync {
 						reloadAfterIdentityChange("sign-in")

@@ -270,6 +270,9 @@ func Shell(props ShellProps) uic.Node {
 		triggerPageEnter()
 		return nil
 	}, props.ActivePath)
+	if foreignDatasetForDisplay() {
+		return uic.CreateElement(foreignDatasetGate)
+	}
 
 	// The skip link must include the current path: a document <base href> is set so
 	// deep-link refreshes resolve assets, but that also makes a bare "#main" resolve
@@ -377,6 +380,24 @@ func Shell(props ShellProps) uic.Node {
 		// survives the navigation that puts the control on screen — mounting it
 		// inside a screen would unmount it at the moment it is needed.
 		uic.CreateElement(screens.SpotlightHost),
+	)
+}
+
+// foreignDatasetGate keeps another account's local records out of the signed-in
+// account's screens while preserving the protected dataset for its owner.
+func foreignDatasetGate() uic.Node {
+	prefsAtom := uistate.UsePrefs()
+	pr := prefsAtom.Get().Normalize()
+	auth := useCloudAuth(prefsAtom, pr.ServerURL, uistate.BumpDataRevision)
+	return Main(css.Class(tw.HScreen, tw.BgBase, tw.TextFg, tw.FontSans, tw.Flex, tw.ItemsCenter, tw.JustifyCenter),
+		Attr("data-testid", "foreign-dataset-gate"),
+		Div(css.Class("card", tw.P3, tw.MaxWFull), Attr("role", "alert"),
+			H1(css.Class(tw.Text18, tw.FontSemibold), uistate.T("cloud1.foreignDatasetTitle")),
+			P(uistate.T("cloud1.foreignDatasetBody")),
+			P(uistate.T("cloud1.foreignDatasetAction")),
+			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "foreign-dataset-signout"), OnClick(auth.SignOut), uistate.T("settings.signOut")),
+		),
+		uic.CreateElement(DialogHost),
 	)
 }
 

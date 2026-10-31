@@ -194,12 +194,9 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 		return status.Error(codes.Internal, "blob staging read failed")
 	}
 	mime := safeBlobMIMEGRPC(strings.TrimSpace(first.Header.Mime), data)
-	blob, err := s.store.PutBlobContext(stream.Context(), root, data, mime, strings.TrimSpace(first.Header.Name), s.cfg.BlobMaxBytes)
+	blob, err := s.store.PutLinkedBlobContext(stream.Context(), root, data, mime, strings.TrimSpace(first.Header.Name), s.cfg.BlobMaxBytes, user.ID, workspaceID)
 	if err != nil {
 		return status.Error(codes.Internal, "blob write failed")
-	}
-	if err := s.store.LinkWorkspaceBlob(user.ID, workspaceID, blob.Hash); err != nil {
-		return status.Error(codes.Internal, "blob link failed")
 	}
 	if s.cfg.Metrics != nil {
 		s.cfg.Metrics.ObserveBlobStored(blob.Size)

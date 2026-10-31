@@ -207,5 +207,5 @@ func boundedPercent(n, d int64) int {
 	}
 	hi, lo := bits.Mul64(uint64(n), 100)
 	p, _ := bits.Div64(hi, lo, uint64(d))
-	return int(p)
+	return int(p) // #nosec G115 -- 0 < n < d proves this percentage is below 100.
 }

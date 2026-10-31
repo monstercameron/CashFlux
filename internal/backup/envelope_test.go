@@ -13,7 +13,7 @@ func sampleEnvelope() Envelope {
 			`{"schemaVersion":1,"accounts":[{"id":"a1"}]}`,
 			`{"schemaVersion":1,"accounts":[{"id":"b1"},{"id":"b2"}]}`,
 		},
-		WorkspaceRegistry: `{"active":"w1","workspaces":[{"id":"w1","name":"Personal"},{"id":"w2","name":"Side business"}]}`,
+		WorkspaceRegistry: `{"activeId":"w1","workspaces":[{"id":"w1","name":"Personal"},{"id":"w2","name":"Side business"}]}`,
 		Appearance:        Appearance{Theme: `{"accent":"#2e8b57"}`, Fonts: "data:font/woff2;base64,AA==", Banner: "data:image/png;base64,BB==", Prefs: `{"compact":true}`},
 	}
 }
@@ -47,6 +47,34 @@ func TestUnmarshalEnvelopeVersioning(t *testing.T) {
 	// A newer-than-supported version is rejected, not silently mishandled.
 	if _, err := UnmarshalEnvelope([]byte(`{"schemaVersion":999,"datasets":[]}`)); err == nil {
 		t.Error("a newer schema version should be rejected")
+	}
+}
+
+func TestUnmarshalEnvelopeRejectsMisalignedWorkspaces(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		registry string
+		datasets []string
+	}{
+		{"missing dataset", `{"activeId":"w1","workspaces":[{"id":"w1"},{"id":"w2"}]}`, []string{`{}`}},
+		{"extra dataset", `{"activeId":"w1","workspaces":[{"id":"w1"}]}`, []string{`{}`, `{}`}},
+		{"missing active", `{"workspaces":[{"id":"w1"}]}`, []string{`{}`}},
+		{"duplicate ID", `{"activeId":"w1","workspaces":[{"id":"w1"},{"id":"w1"}]}`, []string{`{}`, `{}`}},
+		{"empty ID", `{"activeId":"w1","workspaces":[{"id":"w1"},{"id":""}]}`, []string{`{}`, `{}`}},
+		{"malformed registry", `{"activeId":`, []string{`{}`}},
+		{"invalid dataset", `{"activeId":"w1","workspaces":[{"id":"w1"}]}`, []string{`null`}},
+		{"no registry for two", "", []string{`{}`, `{}`}},
+		{"no datasets", "", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			blob, err := MarshalEnvelope(Envelope{WorkspaceRegistry: tc.registry, Datasets: tc.datasets})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := UnmarshalEnvelope(blob); err == nil {
+				t.Fatal("invalid backup should be rejected before restore")
+			}
+		})
 	}
 }
 

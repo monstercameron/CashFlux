@@ -90,6 +90,9 @@ func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
 	if err != nil || !ok || usage.Requests != 1 || usage.Tokens != 5 {
 		t.Fatalf("usage = %+v/%v/%v", usage, ok, err)
 	}
+	if usage.EstimatedCostNanoUSD != 15_000 || usage.CostIncomplete {
+		t.Fatalf("estimated cost = %+v, want 15,000 nano-USD and complete", usage)
+	}
 	var metricsOut strings.Builder
 	metrics.WritePrometheus(&metricsOut)
 	if !strings.Contains(metricsOut.String(), "cashflux_ai_proxy_requests_total 1") {

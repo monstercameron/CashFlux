@@ -622,7 +622,7 @@ func (c *documentsController) useChooseImage() {
 	c.chooseImage = ui.UseEvent(func() { c.chooseImportFile("receipt") })
 	c.settings = c.app.Settings()
 	c.pr = uistate.UsePrefs().Get().Normalize()
-	c.useBackendAI = uistate.BackendConnectionActive(c.pr)
+	c.useBackendAI = uistate.BackendAIActive(c.pr)
 	c.aiModel = c.settings.OpenAIModel
 	if c.aiModel == "" {
 		c.aiModel = "gpt-5.4-mini"

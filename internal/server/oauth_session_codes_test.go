@@ -203,8 +203,8 @@ func TestOAuthSessionCodeMigrationAndPruning(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, err := store.SchemaVersion()
-	if err != nil || version != 21 {
-		t.Fatalf("schema = %d, %v; want 21", version, err)
+	if err != nil || version != CurrentServerSchemaVersion {
+		t.Fatalf("schema = %d, %v; want %d", version, err, CurrentServerSchemaVersion)
 	}
 	now := time.Now().UTC()
 	issueTestOAuthCode(t, store, now.Add(-time.Minute))

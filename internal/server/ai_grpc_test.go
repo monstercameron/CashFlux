@@ -94,6 +94,10 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 	if chatResp.Content != "grpc says hi" || chatResp.Usage.TotalTokens != 13 {
 		t.Fatalf("Chat response = %+v", chatResp)
 	}
+	var cost int64
+	if err := store.db.QueryRow(`SELECT SUM(estimated_cost_nano_usd) FROM usage`).Scan(&cost); err != nil || cost != 36_000 {
+		t.Fatalf("gRPC AI cost = %d/%v, want 36,000 nano-USD", cost, err)
+	}
 }
 
 func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
@@ -171,6 +175,10 @@ func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
 	}
 	if last.Usage.TotalTokens != 21 {
 		t.Fatalf("final chunk usage = %+v", last.Usage)
+	}
+	var cost int64
+	if err := store.db.QueryRow(`SELECT SUM(estimated_cost_nano_usd) FROM usage`).Scan(&cost); err != nil || cost != 57_000 {
+		t.Fatalf("streamed gRPC AI cost = %d/%v, want 57,000 nano-USD", cost, err)
 	}
 	if last.Content != "" {
 		t.Fatalf("the final chunk repeated the text, which would double it on screen: %q", last.Content)

@@ -19,6 +19,23 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
+func TestHostedGateRechecksARejectedCredential(t *testing.T) {
+	for _, tc := range []struct {
+		refresh, validated string
+		authFailed         bool
+		want               bool
+	}{
+		{"", "", false, false},
+		{"current", "old", false, false},
+		{"current", "current", true, false},
+		{"current", "current", false, true},
+	} {
+		if got := hostedSessionValidated(tc.refresh, tc.validated, tc.authFailed); got != tc.want {
+			t.Fatalf("session validation for %#v = %t, want %t", tc, got, tc.want)
+		}
+	}
+}
+
 func hostgateEnvelope() []byte {
 	return cryptobox.Marshal(cryptobox.Envelope{
 		V: cryptobox.CurrentVersion, Alg: cryptobox.AlgAESGCM,

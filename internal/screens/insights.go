@@ -112,11 +112,11 @@ func Insights() ui.Node {
 	// MIA-extend (#445-9): read the active scope at a stable hook slot so all
 	// spend calcs below can be pre-filtered consistently.
 	insightsScopeAtom := uistate.UseActiveScope()
-	useBackendAI := uistate.BackendConnectionActive(pr)
+	useBackendAI := uistate.BackendAIActive(pr)
 	// Model + thinking level are adjustable inline from the assistant header (a quick
 	// switch, no trip to Settings). Seed from the saved settings; picks persist back so
-	// they stick and stay in sync with Settings. modelList is populated live from
-	// OpenAI's /v1/models when a key is set (falls back to the built-in defaults).
+	// they stick and stay in sync with Settings. The list comes from the selected
+	// AI route and falls back to built-in defaults while loading or offline.
 	initModel := settings.OpenAIModel
 	if initModel == "" {
 		initModel = "gpt-5.4-mini"
@@ -125,11 +125,16 @@ func Insights() ui.Node {
 	effortSel := ui.UseState(settings.OpenAIReasoningEffort)
 	modelList := ui.UseState([]string{})
 	ui.UseEffect(func() func() {
+		modelList.Set(nil)
+		if useBackendAI {
+			return ai.FetchProxyModels(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken),
+				func(ids []string) { modelList.Set(ids) }, func(string) {})
+		}
 		if k := strings.TrimSpace(settings.OpenAIKey); k != "" {
-			ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
+			return ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
 		}
 		return nil
-	}, "")
+	}, useBackendAI, pr.ServerURL, pr.ServerToken, settings.OpenAIKey, aiBaseURL)
 	pickEffort := func(v string) {
 		effortSel.Set(v)
 		s := app.Settings()
@@ -1451,12 +1456,12 @@ func Insights() ui.Node {
 		promptOpen.Set(false)
 	}
 	closePrompt := func() { promptOpen.Set(false) }
-	// Toggle the backend AI proxy on/off so the user can force the direct OpenAI
-	// provider (or back to the proxy) without leaving the chat.
+	// Switch only the AI route. Sync stays connected while the assistant uses
+	// either the server or this browser's direct OpenAI key.
 	prefsAtom := uistate.UsePrefs()
-	toggleBackend := ui.UseEvent(Prevent(func() {
+	toggleAIProxy := ui.UseEvent(Prevent(func() {
 		p := prefsAtom.Get()
-		p.BackendDisabled = !p.BackendDisabled
+		p.AIProxyDisabled = !p.AIProxyDisabled
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 	}))
@@ -1850,7 +1855,7 @@ func Insights() ui.Node {
 	// The session's credential, not the static one: on a hosted instance
 	// prefs.ServerToken is empty while a rotating session is live, and reading it
 	// here hid the backend/OpenAI toggle from every hosted user.
-	backendConfigured := strings.TrimSpace(pr.ServerURL) != "" && uistate.Session(pr.ServerToken).Present()
+	backendConfigured := uistate.BackendConnectionActive(pr)
 	backendToggle := Fragment()
 	if backendConfigured {
 		label := uistate.T("insights.usingOpenAI")
@@ -1861,7 +1866,7 @@ func Insights() ui.Node {
 		}
 		backendToggle = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2, tw.Text12, tw.TextFaint),
 			Span(label),
-			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleBackend), action),
+			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleAIProxy), action),
 		)
 	}
 

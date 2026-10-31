@@ -70,7 +70,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		seeded.Set(txnID)
 	}
 	others := smartcatview.MerchantOthers(txn, txns)
-	backend := pr.Normalize().BackendActive()
+	backend := uistate.BackendAIActive(pr)
 	aiEnabled := app != nil && aiProviderConfigured(app, backend) && uistate.LoadSmartSettings().IsEnabled(catSuggestAICode)
 	var conn smartAIConn
 	if app != nil {

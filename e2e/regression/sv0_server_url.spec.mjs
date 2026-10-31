@@ -30,7 +30,7 @@ test("changing the server URL clears A's token before contacting B", async ({ ap
   await expect(app.locator("#cf-dialog-confirm")).toBeVisible();
   await app.locator("#cf-dialog-confirm").click();
   await expect(app.getByTestId("cloud-setup-where")).toBeVisible();
-  await app.getByTestId("cloud-address-advanced").click();
+  await app.getByTestId("cloud-server-options").click();
   await app.getByTestId("sync-server-url").fill(`${serverB.origin}/`);
   await app.getByTestId("sync-test").click();
   await expect(app.locator("#cf-dialog-confirm")).toBeVisible();
@@ -48,7 +48,7 @@ test("changing the server URL clears A's token before contacting B", async ({ ap
   expect(after.access, "server A access token must be cleared on host change").toBe("");
 
   await expect(app.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
-  await app.getByTestId("cloud-address-advanced").click();
+  await app.getByTestId("cloud-server-options").click();
   await app.getByTestId("sync-test").click();
   await expect(app.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
   await app.getByTestId("cloud-where-continue").click();

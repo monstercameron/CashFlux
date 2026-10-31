@@ -3230,6 +3230,11 @@ func (a *App) AttachTransactionArtifact(transactionID string, artifact domain.Ar
 	if !ok {
 		return fmt.Errorf("the transaction no longer exists")
 	}
+	if _, exists, err := a.store.GetArtifact(artifact.ID); err != nil {
+		return fmt.Errorf("check receipt id: %w", err)
+	} else if exists {
+		return fmt.Errorf("a receipt with that id already exists")
+	}
 	before, err := json.Marshal(txn)
 	if err != nil {
 		return fmt.Errorf("encode receipt transaction: %w", err)
@@ -3238,6 +3243,12 @@ func (a *App) AttachTransactionArtifact(transactionID string, artifact domain.Ar
 	after, err := json.Marshal(txn)
 	if err != nil {
 		return fmt.Errorf("encode receipt reference: %w", err)
+	}
+	// Commit the encrypted local file before the transaction can reference it.
+	// The caller runs this off a browser callback because IndexedDB is async.
+	artifact, err = a.StoreBlobForArtifact(artifact)
+	if err != nil {
+		return fmt.Errorf("store receipt bytes: %w", err)
 	}
 	encodedArtifact, err := json.Marshal(artifact)
 	if err != nil {

@@ -71,7 +71,7 @@ func splitSuggestHint(props splitSuggestProps) ui.Node {
 		})
 	}
 
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	aiEnabled := app != nil && aiProviderConfigured(app, backendAI) &&
 		settings.IsEnabled(splitSuggestAICode) && !settings.IsMuted(splitSuggestAICode)
 	aiConn := smartAIConn{}

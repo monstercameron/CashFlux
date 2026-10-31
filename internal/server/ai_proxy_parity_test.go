@@ -64,6 +64,9 @@ func TestAIProxyRefusesBilledEmptyCompletionAndStillRecordsUsage(t *testing.T) {
 	if usage.Tokens != 10116 {
 		t.Fatalf("usage tokens = %d, want the 10,116 that were billed", usage.Tokens)
 	}
+	if usage.EstimatedCostNanoUSD != 9_383_250 || usage.CostIncomplete {
+		t.Fatalf("billed empty reply's estimated cost = %+v", usage)
+	}
 }
 
 // A household on the shared server key gets the same tool-using assistant as one on

@@ -68,7 +68,7 @@ func sparklineSVG(series []int64, alt string) ui.Node {
 func receiptThumbnails(app *appstate.App, txn domain.Transaction) ui.Node {
 	var thumbs []ui.Node
 	for _, thumb := range txnform.Thumbnails(txn.Attachments, app.Artifacts()) {
-		thumbs = append(thumbs, ui.CreateElement(receiptThumb, receiptThumbProps{Ref: thumb.Ref, DataURL: thumb.DataURL}))
+		thumbs = append(thumbs, ui.CreateElement(receiptThumb, receiptThumbProps{App: app, Ref: thumb.Ref, Artifact: thumb.Artifact}))
 	}
 
 	return Div(css.Class(tw.Flex, tw.Gap2), Attr("data-testid", "txn-receipt-thumbs"), thumbs)
@@ -76,22 +76,24 @@ func receiptThumbnails(app *appstate.App, txn domain.Transaction) ui.Node {
 
 // receiptThumbProps configures one receipt thumbnail.
 type receiptThumbProps struct {
-	Ref     domain.AttachmentRef
-	DataURL string // empty when the artifact bytes aren't available
+	App      *appstate.App
+	Ref      domain.AttachmentRef
+	Artifact domain.Artifact
 }
 
 // receiptThumb is a single receipt thumbnail: an image button that opens the
 // shared receipt preview overlay (the same full-view the table's paperclip uses)
 // on click. Owning its own OnClick hook keeps it safe inside the attachments loop.
 func receiptThumb(props receiptThumbProps) ui.Node {
+	url := useArtifactImageURL(props.App, props.Artifact)
 	preview := uistate.UseTxnPreview()
 	ref := props.Ref
 	open := ui.UseEvent(Prevent(func() { preview.Set(ref) }))
 	label := uistate.T("merchantPanel.openReceipt", firstNonEmpty(ref.Name, ref.ArtifactID))
 	inner := Span(css.Class("muted", tw.P1), "📎")
-	if props.DataURL != "" {
-		inner = Img(Attr("src", props.DataURL), Attr("alt", label),
-			css.Class(tw.W10, tw.H10, "txn-receipt-thumb-img"))
+	if url != "" {
+		inner = Img(Attr("src", url), Attr("alt", label),
+			css.Class(tw.W10, tw.H10), Attr("style", "object-fit:cover;border-radius:4px;"))
 	}
 	return Button(css.Class("btn btn-icon"), Type("button"), Attr("data-testid", "txn-receipt-thumb"),
 		Attr("aria-label", label), Title(label), OnClick(open), inner)
@@ -430,17 +432,36 @@ func (s txnEditState) attach() {
 		}
 		art := txnform.ReceiptArtifact(id.New(), name, mime, data, time.Now())
 		s.saving.Set(true)
-		_ = CommitUndoable(s.app, uistate.T("transactions.attachReceiptTitle"), []string{s.props.TxnID}, func() error {
-			return s.app.AttachTransactionArtifact(s.props.TxnID, art)
-		}, func(err error) {
+		// Attachment storage waits for IndexedDB, so release FileReader's JS
+		// callback before the atomic receipt and transaction write begins.
+		go func() {
 			if !isCurrent() {
 				return
 			}
-			s.saving.Set(false)
+			stored, err := s.app.StoreBlobForArtifact(art)
 			if err != nil {
-				s.showProblem(txnEditSaveError(err))
+				if isCurrent() {
+					s.saving.Set(false)
+					s.showProblem(txnEditSaveError(err))
+				}
+				return
 			}
-		})
+			s.app.RefreshBlobUsage()
+			if !isCurrent() {
+				return
+			}
+			_ = CommitUndoable(s.app, uistate.T("transactions.attachReceiptTitle"), []string{s.props.TxnID}, func() error {
+				return s.app.AttachTransactionArtifact(s.props.TxnID, stored)
+			}, func(err error) {
+				if !isCurrent() {
+					return
+				}
+				s.saving.Set(false)
+				if err != nil {
+					s.errMsg.Set(txnEditSaveError(err))
+				}
+			})
+		}()
 	})
 }
 

@@ -151,7 +151,7 @@ func PayeeCleanBody(_ struct{}) ui.Node {
 	}
 
 	// AI availability (SMART+ SMART-T5): a configured provider + the feature enabled.
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	hasProvider := aiProviderConfigured(app, backendAI)
 	aiEnabled := hasProvider && uistate.LoadSmartSettings().IsEnabled("SMART-T5")
 	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)

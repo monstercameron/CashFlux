@@ -5,6 +5,7 @@
 package artifactstore
 
 import (
+	"bytes"
 	"fmt"
 	"syscall/js"
 )
@@ -171,6 +172,90 @@ func (s *IDBStore) Get(id string) (mime string, data []byte, ok bool, err error)
 
 	r := <-ch
 	return r.mime, r.data, r.ok, r.err
+}
+
+// Keys lists every artifact key, including records no dataset references.
+func (s *IDBStore) Keys() ([]string, error) {
+	tx := s.db.Call("transaction", idbStoreName, "readonly")
+	req := tx.Call("objectStore", idbStoreName).Call("getAllKeys")
+	type result struct {
+		keys []string
+		err  error
+	}
+	ch := make(chan result, 1)
+	var onSuccess, onError js.Func
+	onSuccess = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		array := args[0].Get("target").Get("result")
+		keys := make([]string, 0, array.Length())
+		for i := 0; i < array.Length(); i++ {
+			key := array.Index(i)
+			if key.Type() != js.TypeString {
+				ch <- result{err: fmt.Errorf("artifactstore: non-string artifact key at index %d", i)}
+				return nil
+			}
+			keys = append(keys, key.String())
+		}
+		ch <- result{keys: keys}
+		return nil
+	})
+	onError = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		ch <- result{err: fmt.Errorf("artifactstore: list keys: %s", args[0].Get("target").Get("error"))}
+		return nil
+	})
+	req.Set("onsuccess", onSuccess)
+	req.Set("onerror", onError)
+	r := <-ch
+	onSuccess.Release()
+	onError.Release()
+	return r.keys, r.err
+}
+
+// ReplaceIfUnchanged atomically protects a legacy record without overwriting
+// a newer value that another tab stored after the migration read it.
+func (s *IDBStore) ReplaceIfUnchanged(id, oldMIME string, oldData []byte, newMIME string, newData []byte) (bool, error) {
+	tx := s.db.Call("transaction", idbStoreName, "readwrite")
+	os := tx.Call("objectStore", idbStoreName)
+	ch := make(chan error, 1)
+	replaced := false
+	var onRead, onComplete, onAbort js.Func
+	onRead = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		val := args[0].Get("target").Get("result")
+		if val.IsUndefined() || val.IsNull() || val.Get("mime").Type() != js.TypeString || val.Get("mime").String() != oldMIME {
+			return nil
+		}
+		current := val.Get("data")
+		if !current.InstanceOf(js.Global().Get("Uint8Array")) || current.Get("byteLength").Int() != len(oldData) {
+			return nil
+		}
+		buf := make([]byte, len(oldData))
+		if js.CopyBytesToGo(buf, current) != len(buf) || !bytes.Equal(buf, oldData) {
+			return nil
+		}
+		obj := js.Global().Get("Object").New()
+		obj.Set("mime", newMIME)
+		sealed := js.Global().Get("Uint8Array").New(len(newData))
+		js.CopyBytesToJS(sealed, newData)
+		obj.Set("data", sealed)
+		os.Call("put", obj, id)
+		replaced = true
+		return nil
+	})
+	onComplete = js.FuncOf(func(_ js.Value, _ []js.Value) any { ch <- nil; return nil })
+	onAbort = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		ch <- fmt.Errorf("artifactstore: conditional put %s aborted: %s", id, tx.Get("error"))
+		return nil
+	})
+	tx.Set("oncomplete", onComplete)
+	tx.Set("onabort", onAbort)
+	os.Call("get", id).Set("onsuccess", onRead)
+	err := <-ch
+	onRead.Release()
+	onComplete.Release()
+	onAbort.Release()
+	if err != nil {
+		return false, err
+	}
+	return replaced, nil
 }
 
 // Delete removes the blob for id. Not an error if absent.

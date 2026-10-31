@@ -10,6 +10,9 @@ func init() {
 		"cloud1.differentPasscode":       "The server copy uses a different passcode. Set the matching passcode to read it, or review the separate replacement option below.",
 		"cloud1.rebindHint":              "This household is not connected to the signed-in account. Review the account and household choices below.",
 		"cloud1.identityHint":            "CashFlux could not confirm which account owns this connection. Sign in again before syncing.",
+		"cloud1.foreignDatasetTitle":     "This browser has another account's data",
+		"cloud1.foreignDatasetBody":      "Those records are saved on this device and remain available to the account that owns them.",
+		"cloud1.foreignDatasetAction":    "Sign out and use that account, or open CashFlux in a separate browser profile for this account.",
 		"cloud1.missingVersion":          "Server did not return a workspace version after creation.",
 		"cloud1.localDataUnavailable":    "Local data is unavailable; sync has stopped.",
 		"cloud1.localFileUnavailable":    "A file could not be read on this device. Sync is paused until it is restored.",
@@ -40,6 +43,8 @@ func init() {
 		"cloud1.step.first":              "First sync",
 		"cloud1.whereHint":               "Choose where to keep an encrypted copy for your other devices.",
 		"cloud1.destination":             "Where to sync",
+		"cloud1.selectedDestination":     "Selected: %s",
+		"cloud1.otherDestinations":       "Other server options",
 		"cloud1.sameServer":              "This server",
 		"cloud1.ownServer":               "Your own server",
 		"cloud1.sameServerHint":          "Check whether the site you opened also offers CashFlux sync.",
@@ -110,8 +115,7 @@ func init() {
 		"cloud1.useServer":               "Use server copy",
 		"cloud1.useServerHint":           "Load the server copy on this device. The current sync service then removes the saved device copy after it loads successfully.",
 		"cloud1.useServerConfirm":        "Use the server copy and remove the saved device copy after it loads? Choose Keep both for now if you still need to preserve that copy.",
-		"cloud1.aiTitle":                 "AI through your server",
-		"cloud1.aiHint":                  "Optional: send your OpenAI key to your server to make AI requests on your behalf. The server can read that key and those AI requests. Household sync encryption does not cover AI requests.",
+		"cloud1.aiHint":                  "Your key is sent to this server only when you save it. The server can read the key and AI requests. Household sync encryption does not cover AI requests. Estimated AI costs appear in the server console.",
 	} {
 		english[key] = value
 	}

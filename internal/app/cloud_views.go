@@ -75,6 +75,24 @@ type cloudSetupProps struct {
 	Where, SignIn, Protect, First uic.Node
 }
 
+// Hosted pages already selected their own server and passed the account gate.
+// Settings only asks for the remaining device protection and first sync tasks.
+type cloudHostedSetupProps struct {
+	Step           cloudStep
+	Protect, First uic.Node
+}
+
+func cloudHostedSetupView(p cloudHostedSetupProps) uic.Node {
+	switch p.Step {
+	case cloudProtect:
+		return p.Protect
+	case cloudFirst:
+		return p.First
+	default:
+		return Fragment()
+	}
+}
+
 func cloudSetupView(p cloudSetupProps) uic.Node {
 	id := uic.UseId()
 	uic.UseEffect(func() func() {

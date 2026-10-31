@@ -307,6 +307,7 @@ type artifactRowProps struct {
 func artifactRow(props artifactRowProps) ui.Node {
 	a := props.Artifact
 	app := appstate.Default
+	imageURL := useArtifactImageURL(app, a)
 
 	// Rename opens the shell-root flip modal (ArtifactEditHost).
 	startRename := ui.UseEvent(Prevent(func() { uistate.SetArtifactEdit(a.ID) }))
@@ -368,13 +369,13 @@ func artifactRow(props artifactRowProps) ui.Node {
 	}))
 
 	var preview ui.Node = Fragment()
-	if a.Kind == artifacts.KindImage && len(a.Bytes) > 0 {
+	if a.Kind == artifacts.KindImage && imageURL != "" {
 		// Wrap in a fixed-size container so a broken image (e.g. stub/corrupt bytes)
 		// shows a neutral placeholder rather than the browser's broken-image icon.
 		// The onerror string hides the <img> and reveals the sibling fallback div;
 		// no framework hook is used here so it is safe inside a component render (G20).
 		preview = Div(css.Class("artifact-thumb-wrap", tw.Mr2),
-			Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes)), Attr("alt", a.Name),
+			Img(Attr("src", imageURL), Attr("alt", a.Name),
 				css.Class(tw.W10, tw.H10, tw.ObjectCover, tw.Rounded),
 				Attr("onerror", "this.style.display='none';this.nextElementSibling.style.display='flex'")),
 			Div(css.Class("artifact-thumb-fallback"),

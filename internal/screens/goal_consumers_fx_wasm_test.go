@@ -74,6 +74,7 @@ func TestDashboardGoalCoverageRefreshesAfterFXSettingsChange(t *testing.T) {
 	if err := app.Store().PutGoal(goal); err != nil {
 		t.Fatal(err)
 	}
+	savedGoal := app.Goals()[0]
 	f := render.New(t)
 	defer f.Cleanup()
 	f.Render(ui.Fragment(ui.CreateElement(dashboardGoalCoverageFixture, app), ui.CreateElement(goalStatesWidget, app)))
@@ -92,7 +93,7 @@ func TestDashboardGoalCoverageRefreshesAfterFXSettingsChange(t *testing.T) {
 	if !strings.Contains(f.Text(), "100%") || strings.Contains(f.Text(), uistate.T("dashboard.goalUnavailable")) || byTestID(f, "p", "goal-states-unavailable") != nil || !strings.Contains(byTestID(f, "button", "goal-states-completed").Text(), "1") {
 		t.Fatalf("settings revision retained unavailable coverage: %s", f.Text())
 	}
-	if !reflect.DeepEqual(app.Goals()[0], goal) {
+	if !reflect.DeepEqual(app.Goals()[0], savedGoal) {
 		t.Fatal("dashboard evaluation persisted converted money")
 	}
 }

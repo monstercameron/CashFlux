@@ -8,7 +8,31 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/store"
 )
+
+func TestOutgoingDatasetStripsDeviceCredentials(t *testing.T) {
+	ds := store.EmptyDataset()
+	ds.Settings.OpenAIKey = "sk-legacy-device-secret"
+	ds.SettingsKV = map[string]string{prefsStoreKey: `{"weekStart":"monday","serverToken":"access-secret"}`}
+	if !stripDatasetDeviceSecrets(&ds) {
+		t.Fatal("credential cleanup did not mark the dataset changed")
+	}
+	data, err := store.Export(ds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "sk-legacy-device-secret") || strings.Contains(string(data), "access-secret") {
+		t.Fatal("outgoing dataset contains a device credential")
+	}
+	if !strings.Contains(string(data), "weekStart") {
+		t.Fatal("outgoing dataset lost non-secret preferences")
+	}
+	if stripDatasetDeviceSecrets(&ds) {
+		t.Fatal("credential cleanup is not idempotent")
+	}
+}
 
 // A workspace export is a file the user downloads and shares. cashflux:prefs is
 // one of perWorkspaceKeys, so it was bundled in verbatim — carrying a live

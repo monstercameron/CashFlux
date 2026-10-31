@@ -20,6 +20,30 @@ import (
 	"time"
 )
 
+func TestAPIResponsesAreNotHTTPCacheable(t *testing.T) {
+	h := securityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{path: "/v1/account/export", want: "private, no-store"},
+		{path: "/v1/me", want: "private, no-store"},
+		{path: "/v1/version", want: "private, no-store"},
+		{path: "/grpc", want: "private, no-store"},
+		{path: "/legal/privacy", want: ""},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if got := rr.Header().Get("Cache-Control"); got != tc.want {
+				t.Fatalf("Cache-Control = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConfigValidate(t *testing.T) {
 	valid := Config{Addr: ":0", DataDir: t.TempDir(), AuthMode: "token"}
 	if err := valid.Validate(); err != nil {
@@ -628,6 +652,9 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("export status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("account export Cache-Control = %q", got)
 	}
 	var export AccountExport
 	if err := json.Unmarshal(rr.Body.Bytes(), &export); err != nil {
@@ -2127,6 +2154,9 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	if rr.Header().Get("Content-Disposition") != "attachment" {
 		t.Fatalf("content-disposition = %q", rr.Header().Get("Content-Disposition"))
 	}
+	if rr.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("head cache-control = %q", rr.Header().Get("Cache-Control"))
+	}
 	if rr.Body.Len() != 0 {
 		t.Fatalf("head body length = %d, want 0", rr.Body.Len())
 	}
@@ -2138,7 +2168,7 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	if rr.Code != http.StatusOK || rr.Body.String() != string(data) {
 		t.Fatalf("get blob status/body = %d/%q", rr.Code, rr.Body.String())
 	}
-	if rr.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+	if rr.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("cache-control = %q", rr.Header().Get("Cache-Control"))
 	}
 

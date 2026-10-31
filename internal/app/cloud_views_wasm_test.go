@@ -9,6 +9,7 @@ import (
 	"syscall/js"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
@@ -88,6 +89,30 @@ func TestCloudSetupShowsOnlyTheCurrentTask(t *testing.T) {
 	}
 }
 
+func TestHostedCloudSetupShowsOnlyProtectionOrFirstSync(t *testing.T) {
+	for _, tc := range []struct {
+		step cloudStep
+		want string
+	}{
+		{cloudProtect, "protect"},
+		{cloudFirst, "first"},
+		{cloudDone, ""},
+		{cloudSignIn, ""},
+	} {
+		t.Run(string(tc.step), func(t *testing.T) {
+			f := cloudTestFixture(t, uic.CreateElement(cloudHostedSetupView, cloudHostedSetupProps{
+				Step: tc.step, Protect: Input(Attr("data-testid", "protect")), First: Input(Attr("data-testid", "first")),
+			}))
+			if got := f.AllByTag("input"); len(got) != map[bool]int{true: 0, false: 1}[tc.want == ""] {
+				t.Fatalf("hosted task %q rendered %d controls", tc.step, len(got))
+			}
+			if tc.want != "" && cloudTestID(f, "input", tc.want) == nil {
+				t.Fatalf("hosted task %q rendered the wrong control", tc.step)
+			}
+		})
+	}
+}
+
 func TestCloudFirstSyncCannotStartWithoutEncryption(t *testing.T) {
 	for mask := 0; mask < 8; mask++ {
 		t.Run(string(rune('0'+mask)), func(t *testing.T) {
@@ -132,6 +157,55 @@ func TestCloudOAuthCannotAuthorizeUnprotectedSync(t *testing.T) {
 				t.Fatal("OAuth bypassed protection")
 			}
 		})
+	}
+}
+
+func TestCloudSignInCanRetryConnectionDiscovery(t *testing.T) {
+	for _, phase := range []discoveryPhase{discoveryIdle, discoveryChecking, discoveryError, discoveryOK} {
+		t.Run(string(phase), func(t *testing.T) {
+			calls := 0
+			f := cloudTestFixture(t, uic.CreateElement(cloudSignInView, cloudSignInProps{Connection: cloudConnection{
+				Segment: "local", Phase: phase, Test: func() { calls++ },
+			}}))
+			button := cloudTestID(f, "button", "cloud-signin-test-connection")
+			if phase == discoveryOK {
+				if button != nil {
+					t.Fatal("successful discovery still offers a redundant connection check")
+				}
+				return
+			}
+			if button == nil {
+				t.Fatal("sign-in step cannot retry an unfinished connection check")
+			}
+			button.Click()
+			f.Stabilize()
+			want := 1
+			if phase == discoveryChecking {
+				want = 0
+			}
+			if calls != want {
+				t.Fatalf("connection check calls = %d, want %d", calls, want)
+			}
+		})
+	}
+}
+
+func TestCloudSignInKeepsExistingAccountLoginPrimaryWhenRegistrationClosed(t *testing.T) {
+	f := cloudTestFixture(t, uic.CreateElement(cloudSignInView, cloudSignInProps{Connection: cloudConnection{
+		Segment: "local", Phase: discoveryOK, Discovery: backendauth.Discovery{
+			CustomAuthEnabled: true, RegistrationOpen: false,
+		},
+	}}))
+	if cloudTestID(f, "div", "password-auth-card") == nil ||
+		cloudTestID(f, "input", "password-auth-username") == nil ||
+		cloudTestID(f, "input", "password-auth-password") == nil {
+		t.Fatal("existing-account login is hidden when registration is closed")
+	}
+	if cloudTestID(f, "button", "pending-device-expand") == nil {
+		t.Fatal("new users have no way to request access")
+	}
+	if cloudTestID(f, "button", "pending-device-request") != nil {
+		t.Fatal("request access obscures the existing-account login")
 	}
 }
 

@@ -59,7 +59,7 @@ func TestSettingsRekeyBC4INTKeepsCurrentCardCap(t *testing.T) {
 	}
 }
 
-func TestSettingsWipeBC4INTOwnerCommitsWithDataset(t *testing.T) {
+func TestFinancialWipeBC4INTOwnerCommitsWithDataset(t *testing.T) {
 	for _, failure := range []bool{true, false} {
 		t.Run(map[bool]string{true: "failed wipe", false: "successful wipe"}[failure], func(t *testing.T) {
 			fixture := solp22Journal(t)
@@ -83,7 +83,11 @@ func TestSettingsWipeBC4INTOwnerCommitsWithDataset(t *testing.T) {
 			if failure {
 				interrupted = solp23FailPut(t, datasetOwnerKey)
 			}
-			wipeAfterSession(func(message string, bad bool) { t.Errorf("unexpected wipe notice: %s (%v)", message, bad) })
+			if err := appstate.Default.Wipe(); err != nil {
+				t.Fatal(err)
+			}
+			suspendAutosave = true
+			wipeFinancialLocalState(reloadPage, wipeEraseEverything)
 			if failure {
 				browserstore.Barrier()
 				if !*interrupted {

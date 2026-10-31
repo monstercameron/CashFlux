@@ -439,7 +439,7 @@ func creditAINode() ui.Node {
 	if !settings.IsEnabled(code) || settings.IsMuted(code) {
 		return Fragment()
 	}
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	if !aiProviderConfigured(app, backendAI) {
 		return uiw.Card(uiw.CardProps{Title: uistate.T("credit.aiTitle"), TestID: "credit-ai",
 			Body: P(css.Class("t-caption", tw.TextDim), uistate.T("smart.aiNeedsProvider"))})

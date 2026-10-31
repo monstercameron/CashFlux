@@ -282,28 +282,56 @@ type wsExport struct {
 
 const wsExportVersion = 1
 
-// exportWorkspace downloads a workspace as a self-contained JSON file (dataset +
-// layout + settings), so it can be moved to another device or shared. The active
-// workspace's live keys are used; an inactive one comes from its saved blob.
+// exportWorkspace downloads a workspace with its file bytes. IndexedDB reads
+// must run off the browser event callback stack.
 func exportWorkspace(wsID string) {
+	go func() {
+		if err := exportWorkspaceFile(wsID); err != nil {
+			uistate.PostNotice(uistate.T("sync.mergeFailed", err.Error()), true)
+		}
+	}()
+}
+
+// exportWorkspaceFile completes the file before a recovery action may proceed.
+// It returns an error rather than silently producing an incomplete backup.
+func exportWorkspaceFile(wsID string) error {
 	r := loadRegistry()
 	w, ok := r.Get(wsID)
 	if !ok {
-		return
+		return fmt.Errorf("workspace %s is unavailable", wsID)
 	}
 	bundle := loadBlob(wsID)
 	if wsID == r.ActiveID {
 		bundle = bundleCurrent()
 		if bundle == nil {
-			return
+			return fmt.Errorf("current workspace could not be read")
 		}
+		data, err := activeDataset()
+		if err != nil {
+			return fmt.Errorf("complete current workspace backup: %w", err)
+		}
+		bundle[datasetStoreKey] = data
+	} else {
+		if bundle[datasetStoreKey] == "" {
+			return fmt.Errorf("workspace %s has no saved dataset", wsID)
+		}
+		app := appstate.Default
+		if app == nil {
+			return fmt.Errorf("active dataset is unavailable")
+		}
+		complete, err := app.CompleteArtifactSnapshot([]byte(bundle[datasetStoreKey]))
+		if err != nil {
+			return fmt.Errorf("complete workspace %s backup: %w", wsID, err)
+		}
+		bundle[datasetStoreKey] = string(complete)
 	}
 	env := wsExport{Version: wsExportVersion, Name: w.Name, Color: w.Color, Bundle: stripConnectionPrefs(bundle)}
 	data, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
-		return
+		return fmt.Errorf("encode workspace backup: %w", err)
 	}
 	downloadBytes("workspace-"+slugify(w.Name)+".json", "application/json", data)
+	return nil
 }
 
 // importWorkspace adds a workspace from an exported JSON file and switches to it

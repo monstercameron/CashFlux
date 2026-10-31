@@ -42,7 +42,10 @@ func TestStreamingBubbleScrollRunsAfterCommitAndCancelsOnUnmount(t *testing.T) {
 	}
 	f.Render(ui.CreateElement(StreamingBubble, streamingBubbleProps{Text: "Second"}))
 	f.Stabilize()
-	time.Sleep(25 * time.Millisecond)
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) && (reads != 1 || scroller.Get("scrollTop").Int() != 321) {
+		time.Sleep(time.Millisecond)
+	}
 	if reads != 1 || scroller.Get("scrollTop").Int() != 321 {
 		t.Fatalf("mounted bubble did not scroll its own canvas: reads=%d top=%v", reads, scroller.Get("scrollTop"))
 	}

@@ -5,6 +5,9 @@ package backup
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/workspace"
 )
 
 // EnvelopeSchemaVersion is the current full-backup envelope version. Bump it when
@@ -57,6 +60,34 @@ func UnmarshalEnvelope(data []byte) (Envelope, error) {
 	}
 	if e.SchemaVersion > EnvelopeSchemaVersion {
 		return Envelope{}, fmt.Errorf("backup: envelope schema version %d is newer than supported version %d", e.SchemaVersion, EnvelopeSchemaVersion)
+	}
+	if len(e.Datasets) == 0 {
+		return Envelope{}, fmt.Errorf("backup: no workspace datasets")
+	}
+	for i, ds := range e.Datasets {
+		if !strings.HasPrefix(strings.TrimSpace(ds), "{") || !json.Valid([]byte(ds)) {
+			return Envelope{}, fmt.Errorf("backup: workspace dataset %d is unreadable", i+1)
+		}
+	}
+	if e.WorkspaceRegistry == "" {
+		if len(e.Datasets) != 1 {
+			return Envelope{}, fmt.Errorf("backup: %d datasets without a workspace registry", len(e.Datasets))
+		}
+		return e, nil
+	}
+	var registry workspace.Registry
+	if err := json.Unmarshal([]byte(e.WorkspaceRegistry), &registry); err != nil {
+		return Envelope{}, fmt.Errorf("backup: unreadable workspace registry: %w", err)
+	}
+	if len(registry.Workspaces) != len(e.Datasets) || !registry.Has(registry.ActiveID) {
+		return Envelope{}, fmt.Errorf("backup: workspace registry does not match its datasets")
+	}
+	seen := make(map[string]bool, len(registry.Workspaces))
+	for _, w := range registry.Workspaces {
+		if w.ID == "" || seen[w.ID] {
+			return Envelope{}, fmt.Errorf("backup: invalid workspace ID in registry")
+		}
+		seen[w.ID] = true
 	}
 	return e, nil
 }

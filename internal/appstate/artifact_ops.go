@@ -13,7 +13,7 @@ import (
 )
 
 // SetBlobStore wires in an IndexedDB-backed binary blob store so that artifact
-// image bytes are kept out of the main localStorage JSON blob. Called once by
+// file bytes are kept out of the main localStorage JSON blob. Called once by
 // the wasm entry point after successfully opening IndexedDB. A nil argument
 // clears the blob store (falls back to embedding bytes in the dataset).
 func (a *App) SetBlobStore(s artifactstore.Store) { a.blobs = s }
@@ -76,10 +76,9 @@ func (a *App) GetBlobForArtifact(id string) ([]byte, error) {
 	return data, nil
 }
 
-// rehydrateArtifactBytes fills in Bytes for each artifact that has none stored
-// in the dataset by fetching them from the blob store. It is a no-op when blobs
-// is nil, when the artifact already carries bytes, or when the artifact kind is
-// not "image". This is safe to call only from non-render paths (export/import)
+// rehydrateArtifactBytes fills in Bytes for each binary artifact that has none
+// stored in the dataset by fetching them from the blob store. This is safe to
+// call only from non-render paths (export/import)
 // because the wasm IDB implementation blocks on a channel — calling it from a
 // render function would deadlock the single-threaded wasm runtime.
 func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) error {
@@ -172,10 +171,14 @@ func (a *App) ExportJSONRedactedWithBlobs() ([]byte, error) {
 // portable snapshot. It reads artifact metadata from that snapshot, not live
 // SQLite rows, so a later financial edit cannot enter an earlier sync push.
 // Missing or unreadable bytes fail the push instead of publishing a fileless
-// server copy. The common no-external-blob path returns the original bytes.
+// server copy. Legacy device credentials are removed before a queued snapshot
+// can become a sync payload or an inactive-workspace backup dataset.
 func (a *App) CompleteArtifactSnapshot(data []byte) ([]byte, error) {
 	var probe struct {
 		Artifacts []domain.Artifact `json:"artifacts"`
+		Settings  struct {
+			OpenAIKey string `json:"openAiKey"`
+		} `json:"settings"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return nil, fmt.Errorf("appstate: inspect committed artifacts: %w", err)
@@ -187,13 +190,14 @@ func (a *App) CompleteArtifactSnapshot(data []byte) ([]byte, error) {
 			break
 		}
 	}
-	if !needBlobs {
+	if !needBlobs && probe.Settings.OpenAIKey == "" {
 		return data, nil
 	}
 	ds, err := store.Import(data)
 	if err != nil {
 		return nil, fmt.Errorf("appstate: import committed artifact snapshot: %w", err)
 	}
+	ds.Settings.OpenAIKey = ""
 	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
 		return nil, err
 	}
@@ -261,14 +265,14 @@ func (a *App) DatasetBytesWithBlobs() int {
 // point of keeping them out of it — the next autosave would then push every
 // receipt back into localStorage.
 //
-// The OpenAI key is KEPT, matching ExportJSONWithBlobs: a backup the user asked
-// for by hand is meant to be complete. The autosave path is the one that
-// redacts, because that writes to storage nobody chose.
+// Device credentials are omitted, as in the JSON export. A SQLite file can be
+// opened by other tools and may be copied or shared outside CashFlux.
 func (a *App) ExportSQLite() ([]byte, error) {
 	ds, err := a.store.Snapshot()
 	if err != nil {
 		return nil, err
 	}
+	ds.Settings.OpenAIKey = ""
 	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
 		return nil, err
 	}

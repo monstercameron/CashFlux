@@ -65,6 +65,29 @@ func TestBackendConnectionActiveRecognizesMemoryOnlySession(t *testing.T) {
 	}
 }
 
+func TestAIProviderSwitchDoesNotDisableCloudSync(t *testing.T) {
+	browserstore.Remove(AuthAccessTokenKey)
+	browserstore.SetMemory(AuthAccessTokenKey, "memory-access")
+	t.Cleanup(func() { browserstore.SetMemory(AuthAccessTokenKey, "") })
+	pr := prefs.Default()
+	pr.ServerURL = "https://cashflux.example"
+	pr.BackendDisabled = false
+	if !BackendConnectionActive(pr) || !BackendAIActive(pr) {
+		t.Fatal("connected device should use sync and server AI initially")
+	}
+	pr.AIProxyDisabled = true
+	if !BackendConnectionActive(pr) {
+		t.Fatal("direct AI preference must leave cloud sync connected")
+	}
+	if BackendAIActive(pr) {
+		t.Fatal("direct AI preference must turn off only server AI")
+	}
+	pr.AIProxyDisabled = false
+	if !BackendAIActive(pr) {
+		t.Fatal("switching back should restore server AI")
+	}
+}
+
 func TestSessionFallsBackToTheStaticToken(t *testing.T) {
 	browserstore.Remove(AuthAccessTokenKey)
 	t.Cleanup(func() { browserstore.Remove(AuthAccessTokenKey) })

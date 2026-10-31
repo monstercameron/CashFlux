@@ -37,9 +37,10 @@ const (
 func gatherBackupDatasets(r workspace.Registry, activeDS string) ([]string, error) {
 	datasets := []string{}
 	if len(r.Workspaces) == 0 {
-		if activeDS != "" {
-			datasets = append(datasets, activeDS)
+		if activeDS == "" {
+			return nil, errors.New("active workspace dataset is unavailable")
 		}
+		datasets = append(datasets, activeDS)
 		return datasets, nil
 	}
 	app := appstate.Default
@@ -57,9 +58,10 @@ func gatherBackupDatasets(r workspace.Registry, activeDS string) ([]string, erro
 			}
 			ds = string(complete)
 		}
-		if ds != "" {
-			datasets = append(datasets, ds)
+		if ds == "" {
+			return nil, fmt.Errorf("workspace %s dataset is unavailable", w.ID)
 		}
+		datasets = append(datasets, ds)
 	}
 	return datasets, nil
 }

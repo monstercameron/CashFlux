@@ -289,3 +289,29 @@ func TestFIXPULLPushGuardStillRejectsUnencryptedDataset(t *testing.T) {
 		t.Fatalf("guard changed or dropped the queued snapshot: %#v", queue)
 	}
 }
+
+func TestHostedFirstOpenHoldsUploadsUntilAccountDataIsResolved(t *testing.T) {
+	fixpullFixture(t)
+	oldLock, oldPasscode := loadAppLock(), activePasscode
+	t.Cleanup(func() {
+		saveAppLock(oldLock)
+		activePasscode = oldPasscode
+	})
+	activePasscode = "hosted-recovery-test-passcode"
+	saveAppLock(applock.Config{}.WithPasscode(activePasscode, "hosted-recovery-test-salt", 0, ""))
+	if !datasetEncryptionActive() {
+		t.Fatal("test needs an active App Lock to reach the queue flush")
+	}
+	if reason := pushBlockedReason(); reason != "account data must be loaded from the server first" {
+		t.Fatalf("new snapshot would be queued before account recovery: %q", reason)
+	}
+	setSyncStatus(syncStatus{State: "queued", Pending: 1})
+	flushBackendSyncQueue()
+	time.Sleep(100 * time.Millisecond)
+	if status := loadSyncStatus(); status.State != "queued" {
+		t.Fatalf("queue flush ran before the server pull: %+v", status)
+	}
+	if !hostedHydrationRequired() {
+		t.Fatal("queue guard released the hosted recovery gate")
+	}
+}

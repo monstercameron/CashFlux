@@ -76,10 +76,10 @@ func StartDefault() (*Client, error) {
 	if document.IsUndefined() || document.IsNull() {
 		return nil, errors.New("rpc worker: document is unavailable")
 	}
-	workerURL := js.Global().Get("URL").New(
-		"services-worker.js",
-		document.Get("baseURI").String(),
-	).Get("href").String()
+	workerURL, err := workerURLFromBase(document.Get("baseURI").String())
+	if err != nil {
+		return nil, err
+	}
 	client, err := New(workerURL)
 	if err != nil {
 		return nil, err

@@ -7,6 +7,56 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Integrated the published v1.19.10 stability code with the pending sync/privacy changes and kept the encrypted three-browser file sync and both offline-file recovery choices passing on the combined v7 app.
+- A disposable two-browser recovery regression now exercises both merge and explicit replacement of an encrypted server copy with a locally saved file, then downloads that file byte-for-byte in a fresh profile.
+- The deploy gate now runs device-erasure storage unit tests and browser cases for two-workspace file removal and direct-link safety.
+- A two-browser full-backup regression now verifies that files from two workspaces survive a complete backup, restore, workspace switch, and byte-for-byte download on the receiving browser.
+- The hosted corrupt-checkpoint and revoked-session browser regression now runs in the required deploy gate against CI's disposable local server.
+- The hosted corrupt-checkpoint regression now revokes the disposable account's session, reloads, and verifies that sign-in returns without exposing the financial shell or changing the unreadable bytes.
+- An isolated hosted-browser regression now verifies that sign-in with an unreadable local checkpoint keeps the financial shell hidden and preserves the exact checkpoint bytes through the empty-account recovery choice.
+- Authenticated server AI calls now record daily estimated USD cost alongside token usage. The operator console shows per-account estimates and marks historical or unpriced activity as incomplete; server logs contain model and usage totals without prompts or responses.
+
+### Documentation
+- The sync privacy review now distinguishes the verified but undeployed whole-device erase from the still-open per-artifact garbage-collection gap.
+- The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
+
+### Fixed
+- Goal write and FX display tests now compare with a saved goal baseline, so UTC runners still detect real persisted-money changes after JSON normalizes the original local timestamp.
+- Assistant browser tests now queue background model callbacks onto the fixture render scheduler and wait for the committed scroll result, preventing timing-dependent failures under the v7 runtime.
+- Server-model discovery now validates the document base URL before starting its worker and reports a connection error instead of crashing on an invalid URL.
+- CI's high-severity Go security scan now uses a pinned Go 1.27-compatible analyzer; exact guarded integer casts in the published v7 financial code carry local bound justifications so the scan can report new issues.
+- Workspace merge and replacement now serialize with the normal sync writer. Merge publishes its local revision only after the direct server decision, preventing autosave from racing the version-bound recovery write.
+- A direct workspace recovery upload now bookmarks the hash of the local lightweight dataset and the signed-in owner, so the next ordinary sync does not mistake the file-complete upload for a new edit or leave an ownerless bookmark.
+- Workspace recovery now decrypts and downloads the server copy before comparing or merging, carries local file bytes into replacement uploads, and checks that the server accepted a version-bound merge. Its safety export includes active and inactive workspace files and must succeed before rebinding.
+- Every outgoing sync snapshot now strips legacy device AI keys at the final upload boundary, including explicit server-copy replacement and merge paths that bypass queued snapshot completion.
+- Legacy queued snapshots and inactive-workspace backup datasets now strip the device OpenAI key while gathering file bytes, including when no external file read is needed.
+- SQLite workspace exports now omit the device's OpenAI key, matching JSON exports; older SQLite files may still contain a key and should be handled as sensitive.
+- Settings → Data now distinguishes current-workspace JSON and SQLite exports from the all-workspace backup, which includes files from every workspace.
+- Server `/v1/` and `/grpc` responses now send `Cache-Control: private, no-store`, including account export and authentication errors, so private API data is not retained by HTTP caches.
+- Scheduled blob GC now finds aged content-addressed files with no database row and removes them only after a locked recheck; recent uploads, tracked files, and unrelated paths are preserved.
+- Authenticated HTTP blob downloads now send `Cache-Control: private, no-store` on GET and HEAD so browser and shared HTTP caches do not retain encrypted financial attachments.
+- Server blob uploads now commit their workspace link with blob metadata under the same database write lock used by garbage collection. The collector rechecks references and keeps metadata for retry when file removal fails.
+- The protected-storage guard now recognizes only the eraser's random coordination ticket as an allowed direct localStorage write, restoring the native CI gate.
+- Opening the standalone eraser URL directly can no longer start deletion. Automatic erasure requires the unguessable ticket written by the confirmed Settings action.
+- Device erasure now unregisters only the CashFlux service worker for its app path, leaving other workers on a shared origin alone.
+- The existing session-erasure Wasm regression now checks the standalone eraser handoff when server revocation or local credential removal fails, matching the verified browser flow.
+- Device erasure now leaves the app before deleting browser storage, coordinates open tabs, removes recognized CashFlux databases and caches plus legacy local records, and acknowledges completion only after a fresh storage inventory. Offline erasure and blocked-deletion retry are covered in disposable browsers.
+- Full backups now stop if any registered workspace dataset is unavailable, and restore rejects missing, unreadable, duplicated, or misaligned workspace data before replacing local state.
+- AI Settings now owns the server/direct route switch and the corresponding key controls. Server mode accepts a separate key only when explicitly saved to the server; direct mode shows the device key and endpoint. Cloud settings no longer duplicates server AI setup, and the route switch leaves encrypted sync connected.
+- Hosted Cloud settings now rely on the account gate and show only protection or first sync tasks. An authentication rejection triggers a fresh account check, and an old check cannot validate a replacement session. Portable server choices sit under Advanced while the selected destination remains visible.
+- In server AI mode, the assistant and AI settings load the server's allowed models through authenticated gRPC instead of fetching directly from OpenAI in the browser. The settings text now describes the selected route and does not claim a device key is required when server AI is active.
+- Hosted sign-in now holds both new uploads and an existing sync queue until the account's server workspace has been resolved, preventing an unreadable local checkpoint from racing the first recovery pull.
+- Switching the assistant between server AI and direct OpenAI now changes only AI routing. Cloud sync remains connected, and each browser keeps its own AI route after downloading a dataset.
+- Closed-registration servers now show existing-account login directly, with a clearly labeled request-access link secondary. Retrying discovery on the sign-in step no longer writes preferences, and a successful new login clears the old session's invalid-token warning.
+- The Cloud sign-in step now offers a connection check when server discovery is idle or failed, so a browser with an invalid stored session can retry without clearing its local recovery data.
+- The service worker now bypasses account/API GETs even during top-level navigation, matches precached paths exactly, and removes previously cached private responses when a new worker activates.
+- Protected boot now encrypts orphaned legacy attachment records in IndexedDB as well as files referenced by saved workspaces, without overwriting a file another tab changed during migration.
+- Signing into a different account in the same browser now hides the previous account's local dataset and offers sign-out, while preserving the protected copy for its owner. The account-switch regression checks that the new account receives no inherited server snapshot.
+- Receipt images, goal photos, custom-page images, and artifact thumbnails now load from encrypted local blob storage after sync restores them. New receipt and goal-photo uploads save their bytes there before the dataset refers to them.
+
+### Changed
+- Prepared v1.19.11 from the published v1.19.10 stability baseline and the pending private sync, hosted sign-in, recovery, and server AI changes. Production rollout and an authenticated live roundtrip remain pending.
+- Updated the built-in standard-rate estimates for GPT-5.4 mini and GPT-5.5 using OpenAI's published API prices checked on 2026-10-21.
 - `docs/CLEANUP_METHODOLOGY.md` records the method, standards, bugs and open items from the last 73 commits, so the same cleanup can be repeated on other pages. It now includes the shared UI elements, the typed CSS rules, the render-helper standard (`If`, `ui.If`, `ClassNames`, `Map`, `MapKeyed`, `Match`), and the Accounts sites that still assign markup inside an `if` or use inline styles.
 - One z-index scale on `:root`, for every layer above the page content: `--z-base`, `--z-raised`, `--z-sticky`, `--z-dropdown`, `--z-overlay`, `--z-popover`, `--z-modal`, `--z-dialog`, `--z-toast`, `--z-banner` and `--z-lock`. The app lock gate, the save-failure and update banners, the help and shortcut overlays, and the widget builder's status note now use these tokens instead of literal values. The app lock gate and banners keep a fallback value so they still stack without the stylesheet.
 

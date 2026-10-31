@@ -267,7 +267,7 @@ func sum(base string, values map[string]money.Money, err error) AmountFact {
 
 func magnitude(value int64) uint64 {
 	if value < 0 {
-		return uint64(-(value + 1)) + 1
+		return uint64(-(value + 1)) + 1 // #nosec G115 -- negative value plus one is negated without overflowing at MinInt64.
 	}
 	return uint64(value)
 }
@@ -284,7 +284,7 @@ func width(value int64, maximum uint64) int {
 	}
 	hi, lo := bits.Mul64(numerator, 100)
 	quotient, _ := bits.Div64(hi, lo, maximum)
-	return int(quotient)
+	return int(quotient) // #nosec G115 -- numerator < maximum proves quotient < 100.
 }
 
 func prepareRows(out *Model, members []domain.Member) {
