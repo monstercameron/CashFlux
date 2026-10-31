@@ -192,6 +192,12 @@ func registerUXT1() {
 		color("var(--text-dim)"),
 		cursor("default"),
 	)
+	// The caption names the bar below it, in the footer's quiet meta size.
+	rule(".txn-category-caption",
+		fontSize("var(--fs-meta)"),
+		fontWeight("400"),
+		color("var(--text-dim)"),
+	)
 	rule(".txn-category-more",
 		flex("0 0 auto"),
 		color("var(--text-dim)"),

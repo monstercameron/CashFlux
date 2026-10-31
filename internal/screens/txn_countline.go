@@ -276,7 +276,7 @@ func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
 		}
 		popover = Div(css.Class("txn-category-popover"), Attr("id", popoverID), Attr("role", "dialog"), Attr("aria-label", uistate.T("tv8c.categoryList")), Attr("data-testid", "txn-category-popover"), allItems)
 	}
-	return Div(css.Class(breakdownClass), Div(css.Class("txn-category-bar"), Attr("role", "group"), Attr("aria-label", uistate.T("uxt1.categoryBreakdown")), segments), Div(css.Class("txn-category-list"), items), popover, Div(css.Class("sr-only", "txn-category-accessible-list"), Attr("role", "list"), accessibleItems))
+	return Div(css.Class(breakdownClass), Span(css.Class("txn-category-caption"), uistate.T("v5sum.byCategory")), Div(css.Class("txn-category-bar"), Attr("role", "group"), Attr("aria-label", uistate.T("uxt1.categoryBreakdown")), segments), Div(css.Class("txn-category-list"), items), popover, Div(css.Class("sr-only", "txn-category-accessible-list"), Attr("role", "list"), accessibleItems))
 }
 
 func txnCategoryPopoverItem(props txnCategorySegmentProps) ui.Node {
