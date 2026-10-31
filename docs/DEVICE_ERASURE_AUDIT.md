@@ -15,7 +15,7 @@ CashFlux data can live in these browser databases on the same origin:
 | `cfv2:*` | Local database scopes, including encrypted logs and snapshots | `internal/localdb/store.go` |
 | `cashflux-fav1-*` and older `cashflux-*` CacheStorage entries | App shell and runtime-cached same-origin GET responses | `web/sw.js` |
 
-Legacy `cashflux:*` localStorage entries also require removal. A fresh boot may retain a nonpersonal “sample already shown” marker to open on a blank budget rather than silently recreate sample transactions. The current service worker's runtime cache accepts any successful same-origin non-core GET. Authenticated API responses can therefore enter CacheStorage; the runtime cache must be restricted to known static assets independently of the erase fix.
+Legacy `cashflux:*` localStorage entries also require removal. A fresh boot may retain a nonpersonal “sample already shown” marker to open on a blank budget rather than silently recreate sample transactions. Older service workers cached successful same-origin non-core GET responses, including possible authenticated API responses. The revised worker restricts future cache writes to known static assets and scrubs other entries on activation. Device erasure must still remove its CacheStorage entries; an old worker remains in control until its update activates.
 
 ## Required erase behavior
 

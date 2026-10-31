@@ -128,6 +128,10 @@ jobs:
         if: matrix.shard == 1
         run: pwsh tools/wasm-test.ps1
 
+      - name: Service worker cache privacy test
+        if: matrix.shard == 1
+        run: node --test e2e/unit/sw-cache.test.mjs
+
       - name: Run deploy gate (shard ${{ matrix.shard }} of 2)
         working-directory: e2e
         run: npx playwright test --project=prod --shard=${{ matrix.shard }}/2
