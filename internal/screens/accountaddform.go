@@ -339,7 +339,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 
 	// G5: copy an existing account — prefills the whole draft in one update, so the copy and its
 	// currency reveal land together.
-	copyFrom := func(aid string) {
+	copyFrom := ui.UseCallback(func(aid string) {
 		for _, ac := range app.Accounts() {
 			if ac.ID != aid {
 				continue
@@ -350,7 +350,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			}
 			return
 		}
-	}
+	}, baseCur)
 
 	fieldIDs := map[string]string{"Name": nameID}
 	add := ui.UseEvent(Prevent(func() {
