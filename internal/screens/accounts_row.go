@@ -596,7 +596,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		// The panel is a grid: the period figures run across the top, the balance chart and
 		// the 90-day projection sit left, the reading and the account's facts sit right, and
 		// the documents and the institution share a footer line.
-		detailsNode = Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("data-testid", "acct-details-"+a.ID),
+		detailsNode = Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("id", "acct-details-"+a.ID), Attr("data-testid", "acct-details-"+a.ID),
 			flowNode,
 			Div(css.Class("acct-panel-chart"),
 				// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
@@ -672,6 +672,8 @@ func AccountRow(props accountRowProps) ui.Node {
 					Button(css.Class("btn-link acct-details-toggle"), Type("button"),
 						Attr("data-testid", "acct-details-toggle-"+a.ID),
 						AriaExpanded(detailsOpen.Get()),
+						// The panel is only in the document while open, so the relation is only stated then.
+						IfProp(detailsOpen.Get(), AriaControls("acct-details-"+a.ID)),
 						AriaLabel(uistate.T("accountsRedesign.detailsAria", a.Name)),
 						Title(detailsLabel), OnClick(toggleDetails),
 						uiw.Icon(icon.ChevronDown, css.Class("acct-details-chev", tw.ShrinkO, tw.W4, tw.H4))),
@@ -697,7 +699,7 @@ func AccountRow(props accountRowProps) ui.Node {
 				Button(ClassStr(amountClass(dispBal)+" acct-row-figure budget-limit-btn"), Type("button"),
 					Attr("data-testid", "acct-balance-btn-"+a.ID),
 					Title(uistate.T("accounts.balanceEditTitle")),
-					AriaLabel(uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
+					AriaLabel(uistate.T("accounts.balanceEditNamed", a.Name, fmtMoney(dispBal))),
 					OnClick(setBal),
 					fmtMoney(dispBal)),
 				Span(ClassStr(amountClass(dispBal)+" acct-row-figure"),
@@ -801,7 +803,7 @@ func ReconcileTxnRow(props reconcileTxnRowProps) ui.Node {
 	return Div(css.Class("row"), Attr("data-testid", "reconcile-txn-row"), Attr("data-id", t.ID),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), t.Desc),
-			Span(css.Class("row-meta"), t.Date.Format("2006-01-02")),
+			Span(css.Class("row-meta"), uistate.CurrentPrefs().FormatDate(t.Date)),
 		),
 		// Standard accounting figure — "$807.45" / "($620.00)" — to match the rest
 		// of the app, not a bare "807.45" / "-620.00".

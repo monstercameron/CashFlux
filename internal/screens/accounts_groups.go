@@ -110,9 +110,9 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	}
 	subtotalNote := ""
 	if props.Section.Incomplete {
-		subtotalNote = "Some account balances are excluded from this subtotal."
+		subtotalNote = uistate.T("accounts.subtotalExcluded")
 		if len(props.Section.ExcludedCurrencies) > 0 {
-			subtotalNote = "Missing exchange rates: " + strings.Join(props.Section.ExcludedCurrencies, ", ") + ". These balances are excluded."
+			subtotalNote = uistate.T("accounts.subtotalMissingRates", strings.Join(props.Section.ExcludedCurrencies, ", "))
 		}
 	}
 

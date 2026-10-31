@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // signedMoney renders a money value with an explicit leading sign and currency
@@ -27,8 +28,8 @@ func signedMoney(m money.Money, dec int) string {
 	return sign + sym + money.FormatMinor(amt, dec)
 }
 
-// fmtShortDate renders a date as a compact "Jan 2" label for the projected-balance
-// line and its driver list (AC13).
+// fmtShortDate renders a date for the projected-balance line and its driver list (AC13),
+// in the user's own date style so it matches every other date in the app.
 func fmtShortDate(t time.Time) string {
-	return t.Format("Jan 2")
+	return uistate.CurrentPrefs().FormatDate(t)
 }

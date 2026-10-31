@@ -179,7 +179,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		uistate.ClearReconcileDraft(a.ID)
 		reconUndo.Get().Forget() // a completed reconciliation keeps what it wrote
 		uistate.BumpDataRevision()
-		msg := uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006"))
+		msg := uistate.T("accounts.reconRecorded", uistate.CurrentPrefs().FormatDate(ev.Through()))
 		if retired > 0 {
 			msg += " " + uistate.T("accounts.reconCheckpointsRetired", retired)
 		}
@@ -289,7 +289,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			stmtDateS.Set(dateutil.FormatDate(removed.StatementDate))
 		}
 		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("accounts.reconReopened", removed.Through().Format("Jan 2, 2006")), false)
+		uistate.PostNotice(uistate.T("accounts.reconReopened", uistate.CurrentPrefs().FormatDate(removed.Through())), false)
 	}))
 	// Investigate: jump to this account's cleared transactions in the ledger so a
 	// stubborn discrepancy can be hunted where the rows live.
@@ -602,7 +602,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		}[provKind]
 		provText := uistate.T(provKey)
 		if !provAt.IsZero() {
-			provText += uistate.T("accounts.provAsOf", provAt.Format("Jan 2, 2006"))
+			provText += uistate.T("accounts.provAsOf", uistate.CurrentPrefs().FormatDate(provAt))
 		}
 		stmtStr := uistate.T("accounts.balNone")
 		if n := len(a.Reconciliations); n > 0 {
@@ -810,7 +810,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 		r := a.Reconciliations[i]
 		histRows = append(histRows, Div(css.Class("row"), Attr("data-testid", "reconcile-history-row"),
 			css.Class(css.New(css.Display.Flex, css.Justify.Between, css.Gap(css.Rem(1)))),
-			Span(r.Through().Format("Jan 2, 2006")),
+			Span(uistate.CurrentPrefs().FormatDate(r.Through())),
 			If(r.Forced, Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-history-forced"),
 				uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, dec)))),
 			Span(fmtMoney(r.StatementBalance)),
@@ -849,7 +849,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 			Div(css.Class("reconcile-header"), Attr("data-testid", "reconcile-header"),
 				If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
 					css.Class(css.New(css.Margin(css.Length("0 0 0.5rem")))),
-					uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
+					uistate.T("accounts.reconThrough", uistate.CurrentPrefs().FormatDate(through)))),
 				If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-draft-note"),
 					css.Class(css.New(css.Margin(css.Length("0 0 0.5rem")))),
 					uistate.T("accounts.reconDraftNote"))),
