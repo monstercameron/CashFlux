@@ -3216,7 +3216,7 @@ func registerGenerated() {
 	// rendered slightly grayed (like the select-tag icons) so the label leads. Applied to
 	// every page's toolbar action buttons for one consistent control language.
 	rule(".btn-tool",
-		minHeight("var(--control-h)"),
+		minHeight("var(--tool-h)"),
 		padding("var(--btn-py) var(--btn-px)"),
 		fontSize("var(--fs-body)"),
 		gap("0.4rem"),
@@ -4723,6 +4723,9 @@ func registerGenerated() {
 		customProp("--type-24", "calc(24px * var(--ui-scale, 1))"),
 		customProp("--type-32", "calc(32px * var(--ui-scale, 1))"),
 		customProp("--control-h", "36px"),
+		// The tool button is one height whether it carries a label or only a glyph, so every page
+		// action lines up with the Filters button.
+		customProp("--tool-h", "38px"),
 		// Section headings: one set of tokens, read by .card-title and every page that shows a
 		// card heading, so the same heading looks the same wherever it appears.
 		customProp("--heading-size", "1rem"),

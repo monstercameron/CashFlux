@@ -66,8 +66,8 @@ type OverflowMenuProps struct {
 	// glyph followed by this text) instead of the default icon-only ⋯. Use it in a
 	// labeled toolbar where a bare glyph would be ambiguous.
 	TriggerText string
-	// TriggerClass overrides the trigger button's class (default "btn"). Pass e.g.
-	// "btn btn-tool" so the overflow trigger matches a labeled toolbar's buttons.
+	// TriggerClass adds classes to the trigger for a page that needs one more. The trigger is
+	// always the shared tool button, so this does not replace its look.
 	TriggerClass string
 	// TriggerIcon overrides the ⋯ glyph. The default says "more actions", which is
 	// wrong for a menu that is not a grab-bag: a split button's second half means
@@ -110,37 +110,19 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		menu.Set(true)
 	})
 
-	trigClass := props.TriggerClass
-	if trigClass == "" {
-		trigClass = "btn"
-	}
-	// An open menu keeps its trigger highlighted, the same state the Filters button shows.
-	if menu.Open {
-		trigClass += " is-open"
-	}
 	trigIcon := props.TriggerIcon
 	if trigIcon == "" {
 		trigIcon = icon.MoreH
 	}
-	triggerArgs := []any{
-		css.Class(trigClass),
-		Type("button"),
-		Attr("title", triggerLabel),
-		Attr("aria-label", triggerLabel),
-		Attr("aria-haspopup", "menu"),
-		Attr("aria-expanded", boolAttr(menu.Open)),
-		OnKeyDown(openFromKeyboard),
-		OnClick(toggleOpen),
-		Icon(trigIcon, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-	}
-	// Labeled variant: append the visible text after the glyph, so the overflow reads as
-	// "⋯ More" rather than a bare, ambiguous dots button.
-	if props.TriggerText != "" {
-		triggerArgs = append(triggerArgs, Span(props.TriggerText))
-	}
-	if props.TriggerTestID != "" {
-		triggerArgs = append(triggerArgs, Attr("data-testid", props.TriggerTestID))
-	}
+	// The trigger is the shared ToolButton, so a More menu looks like the Filters button beside it.
+	// An open menu keeps it highlighted.
+	trigger := ToolButton(ToolButtonProps{
+		Label: props.TriggerText, Icon: trigIcon, Title: triggerLabel, AriaLabel: triggerLabel,
+		Open: menu.Open, Class: props.TriggerClass, TestID: props.TriggerTestID,
+	},
+		Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(menu.Open)),
+		OnKeyDown(openFromKeyboard), OnClick(toggleOpen),
+	)
 
 	// Menu children: role and class, then the actions. Sections (C572): a heading is emitted the
 	// first time a section name appears. It carries role="presentation" so it stays out of the
@@ -177,7 +159,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	if menu.Shown || props.ExtraContent != nil {
 		panel = Div(menuArgs...)
 	}
-	return Div(css.Class(menu.wrapClass("add-wrap")), Attr("id", id), Button(triggerArgs...), panel)
+	return Div(css.Class(menu.wrapClass("add-wrap")), Attr("id", id), trigger, panel)
 }
 
 // dismissOverflowMenu installs the menu-button keyboard and outside-pointer

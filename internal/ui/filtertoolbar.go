@@ -308,19 +308,11 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if props.ActiveAriaLabel != nil {
 		ariaLabel = props.ActiveAriaLabel(n)
 	}
-	// Standard labeled trigger (.btn-tool, matching the transactions/accounts toolbar):
-	// a filter glyph, an always-visible "Filters" label, and the active-filter count as
-	// an accent badge. Stays highlighted (is-open) while the filter panel is open.
-	triggerCls := "btn btn-tool filters-trigger"
+	// The Filters button is the reference ToolButton: a filter glyph, the label, and the active
+	// count as an accent badge. It stays highlighted while the panel is open.
+	badge := ""
 	if n > 0 {
-		triggerCls += " active"
-	}
-	if open.Get() {
-		triggerCls += " is-open"
-	}
-	expanded := "false"
-	if open.Get() {
-		expanded = "true"
+		badge = strconv.Itoa(n)
 	}
 	// C619: the search region's busy state, in the same string form this file
 	// already uses for aria-expanded.
@@ -330,18 +322,15 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		searchBusy = "true"
 		pendingCls = "fctrl-pending"
 	}
-	trigger := Button(css.Class(triggerCls), Type("button"),
-		// A disclosure, not a dialog: aria-expanded + aria-controls describe what this
-		// button actually does. aria-haspopup="dialog" told assistive tech to expect a
-		// modal — focus moving in, Escape closing it — none of which an inline panel
-		// with no backdrop does or should do.
-		Attr("id", "filter-trigger-"+uid), Attr("aria-expanded", expanded), Attr("aria-controls", "filter-inline-panel"),
-		Attr("aria-label", ariaLabel),
-		OnKeyDown(onPanelKey),
-		OnClick(func() { open.Set(!open.Get()) }),
-		Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(props.FiltersLabel),
-		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
+	// A disclosure, not a dialog: aria-expanded and aria-controls describe what this button does.
+	// aria-haspopup="dialog" would promise a modal that the inline panel never was.
+	trigger := ToolButton(ToolButtonProps{
+		Label: props.FiltersLabel, Icon: icon.Filter, Badge: badge, Active: n > 0, Open: open.Get(),
+		Title: ariaLabel, AriaLabel: ariaLabel,
+	},
+		Attr("id", "filter-trigger-"+uid), Attr("aria-expanded", boolAttr(open.Get())),
+		Attr("aria-controls", "filter-inline-panel"),
+		OnKeyDown(onPanelKey), OnClick(func() { open.Set(!open.Get()) }),
 	)
 
 	renderChip := func(c Chip) uic.Node {

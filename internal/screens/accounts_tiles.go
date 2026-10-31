@@ -737,34 +737,19 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 // "primary" accent, "stale" amber); open keeps a modal opener highlighted while its
 // modal is showing.
 func acctToolbarGlyph(testID string, ic icon.Name, label, title, kind, variant string, open bool, onClick ui.Handler) ui.Node {
-	cls := "btn btn-tool"
-	switch variant {
-	case "primary":
-		cls += " btn-primary"
-	case "stale":
-		cls += " bt-stale"
-	}
-	if open {
-		cls += " is-open"
-	}
-	// The hover tooltip explains what the action MEANS when the label alone is
-	// ambiguous (e.g. "Mark all updated" is a powerful global trust action); an empty
-	// title falls back to the label so the tooltip is never blank.
+	// The hover tooltip explains what the action MEANS when the label alone is ambiguous (e.g.
+	// "Mark all updated" is a powerful global trust action); an empty title falls back to the
+	// label. The accessible name stays the label.
 	if title == "" {
 		title = label
 	}
-	// A single leading glyph + the text label — no trailing kind badge (the button's
-	// behaviour is conveyed by aria + the label, not a second glyph on the right).
-	args := []any{
-		css.Class(cls), Type("button"), Attr("data-testid", testID),
-		Attr("aria-label", label), Attr("title", title), OnClick(onClick),
-		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(label),
-	}
+	extra := []any{OnClick(onClick)}
 	if kind == "modal" {
-		args = append(args, Attr("aria-haspopup", "dialog"), Attr("aria-expanded", boolStr(open)))
+		extra = append(extra, Attr("aria-haspopup", "dialog"), Attr("aria-expanded", boolStr(open)))
 	}
-	return Button(args...)
+	return uiw.ToolButton(uiw.ToolButtonProps{
+		Label: label, Icon: ic, Title: title, AriaLabel: label, Variant: variant, Open: open, TestID: testID,
+	}, extra...)
 }
 
 // markAllStalePrompt is the shared "Mark all updated" action (#77): it collects the
@@ -977,7 +962,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				TriggerText:   uistate.T("acctxn.acctSettingsMenu"),
 				TriggerLabel:  uistate.T("acctxn.acctSettingsMenuTitle"),
 				TriggerTestID: "acct-manage-btn",
-				TriggerClass:  "btn btn-tool",
 				Items: []uiw.OverflowMenuItem{
 					{Label: uistate.T("accounts.transferMoney"), Icon: icon.Repeat, TestID: "page-transfer-btn", OnSelect: openTransfer, Hidden: len(accounts) < 2},
 					// QA CF-27: the item's label matches what clicking DOES — with no
@@ -1361,12 +1345,10 @@ func acctListWidget(props acctListProps) ui.Node {
 	}
 	debtLink := If(hasLiab,
 		Div(css.Class(tw.Mt3),
-			A(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
-				Href(uistate.RoutePath("/debt")),
-				Attr("data-testid", debtLinkTestID),
+			uiw.ToolButton(uiw.ToolButtonProps{
+				Label: debtLinkText, Icon: icon.CreditCard, Href: uistate.RoutePath("/debt"), TestID: debtLinkTestID,
+			},
 				OnClick(goToDebt),
-				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				debtLinkText,
 			),
 		),
 	)
