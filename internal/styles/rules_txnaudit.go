@@ -8,6 +8,25 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// The cleared mark is a quiet inline glyph beside the description. It is not a control.
+	rule(".txn-row-glyph",
+		display("inline-flex"),
+		alignItems("center"),
+		flex("0 0 auto"),
+		color("var(--text-dim)"),
+	)
+	// The revealed note sits on its own line under the description, in the quiet meta size.
+	rule(".txn-row-note",
+		flex("0 0 100%"),
+		marginTop("0.35rem"),
+		padding("0.4rem 0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md)"),
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
+		fontSize("var(--fs-meta)"),
+		whiteSpace("pre-wrap"),
+	)
 	// The period control is the shared toolbar buttons around one select. Its custom-range
 	// editor is positioned against the control, so the control is the anchor.
 	rule(".txn-scopebar",

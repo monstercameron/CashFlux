@@ -170,7 +170,7 @@ func TestRowDerivation(t *testing.T) {
 	if got.Desc != "Coffee" || got.Date != "Oct 1" || got.Amount != "-125" || got.Category != "Food" || !got.Selected || !got.Reconciled || !got.HasNote || got.Receipts != 1 || got.Attachment.ArtifactID != "receipt" || !got.ShowBalance || got.MemberNames[0] != "Cam" || !got.ShowSuggestions {
 		t.Fatalf("%+v", got)
 	}
-	wantInfo := "uxt5.openFollowUp:1. uxt5.receipt:1. uxt5.hasNote. uxt5.cleared. uxt5.reconciled"
+	wantInfo := "uxt5.openFollowUp:1. uxt5.receipt:1. uxt5.reconciled"
 	if got.InfoText != wantInfo {
 		t.Fatalf("%q", got.InfoText)
 	}

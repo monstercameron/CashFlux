@@ -397,3 +397,39 @@ func txnSpikeEvidence(why string) ui.Node {
 		If(len(items) > 0, Ul(css.Class("txn-spike-evidence-facts"), items)),
 	)
 }
+
+// txnRowClearedGlyph marks a cleared row with a check glyph beside its description. The glyph is
+// named for assistive technology and in its tooltip, so the state needs no line of text.
+func txnRowClearedGlyph() ui.Node {
+	return Span(css.Class("txn-row-glyph txn-row-glyph-cleared"), Attr("data-testid", "txn-row-cleared"),
+		Attr("role", "img"), Attr("aria-label", uistate.T("uxt5.cleared")), Title(uistate.T("uxt5.cleared")),
+		uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
+}
+
+type txnRowNoteProps struct {
+	Note string
+}
+
+// txnRowNote is the note glyph. A click shows or hides the note text under the description. It
+// owns its open state and stops the click, so the row's editor does not open with it.
+func txnRowNote(props txnRowNoteProps) ui.Node {
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		e.PreventDefault()
+		open.Set(!open.Get())
+	})
+	title := uistate.T("transactions.showNote")
+	var body ui.Node = Fragment()
+	if open.Get() {
+		title = uistate.T("transactions.hideNote")
+		body = Div(css.Class("txn-row-note"), Attr("data-testid", "txn-row-note"), props.Note)
+	}
+	return Fragment(
+		uiw.ToolButton(uiw.ToolButtonProps{
+			Icon: icon.FileText, AriaLabel: uistate.T("uxt5.hasNote"), Title: title,
+			TestID: "txn-row-note-toggle", Open: open.Get(),
+		}, Attr("aria-expanded", ariaBool(open.Get())), OnClick(toggle)),
+		body,
+	)
+}

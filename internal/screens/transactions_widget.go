@@ -653,6 +653,7 @@ func txnFramePropsFromRow(r txntable.Row) txnFrameRowProps {
 		SubscriptionName:    r.SubscriptionName,
 		ExcludedFromReports: r.ExcludedFromReports,
 		HasNote:             r.HasNote,
+		Note:                r.Note,
 		HasSplits:           r.HasSplits,
 		IsTransfer:          r.IsTransfer,
 		TransferWith:        r.TransferWith,
@@ -996,6 +997,7 @@ type txnFrameRowProps struct {
 	// muted row affordance) and whether the row carries a memo (drives a note glyph).
 	ExcludedFromReports bool
 	HasNote             bool
+	Note                string
 	OnToggleExclude     func(txnID string)
 	// Follow-up tasks linked to this transaction: a row chip shows "open/total", opens a
 	// hover popover listing them, and links to the filtered To-do list. Total 0 = no chip.
@@ -1204,6 +1206,8 @@ func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
 					Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), r.Desc, r.Date, r.Amount)), OnClick(edit), r.Desc),
 				Span(ClassStr("txn-desc-account"), r.Account),
 				txnRowDescriptionBadge(r),
+				If(r.Cleared, txnRowClearedGlyph()),
+				If(r.HasNote, ui.CreateElement(txnRowNote, txnRowNoteProps{Note: r.Note})),
 				If(props.SaveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), props.SaveStatus)),
 				If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0,
 					OnReceipt: func() {

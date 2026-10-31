@@ -97,6 +97,7 @@ type Row struct {
 	SubscriptionName    string
 	ExcludedFromReports bool
 	HasNote             bool
+	Note                string
 	HasSplits           bool
 	IsTransfer          bool
 	TransferWith        string
@@ -167,6 +168,7 @@ func DeriveRow(c RowContext, in RowInput) Row {
 		SubscriptionName:    tx.SubscriptionName,
 		ExcludedFromReports: tx.ExcludeFromReports,
 		HasNote:             tx.Note != "",
+		Note:                tx.Note,
 		HasSplits:           tx.HasSplits(),
 		IsTransfer:          tx.IsTransfer(),
 		TransferWith:        c.Index.AccountNames[tx.TransferAccountID],
@@ -217,18 +219,12 @@ func rowInfo(t Translator, r Row, splitTooltip string) string {
 		}
 		info = Info(info, t(key, r.Receipts))
 	}
-	if r.HasNote {
-		info = Info(info, t("uxt5.hasNote"))
-	}
 	if r.AutoCategory {
 		key := "uxt5.autoAdded"
 		if r.Queued {
 			key = "uxt5.autoNeedsReview"
 		}
 		info = Info(info, t(key))
-	}
-	if r.Cleared {
-		info = Info(info, t("uxt5.cleared"))
 	}
 	if r.Reconciled {
 		info = Info(info, t("uxt5.reconciled"))
