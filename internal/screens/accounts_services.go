@@ -53,23 +53,88 @@ func servicesUnavailableText(err error, subject string) string {
 	return uistate.T("services.unavailableReason", reason)
 }
 
-// servicesBody lists the household's services under their monthly total. It is the body of the
-// Accounts list while the Services filter is on.
-func servicesBody(app *appstate.App, list []domain.Recurring, base string, rates currency.Rates) ui.Node {
-	if len(list) == 0 {
+// utilityAccounts returns the household's utility, HOA and service accounts. They are services in
+// the household's sense, so the Services view lists them with the repeating charges recorded
+// against them.
+func utilityAccounts(accounts []domain.Account) []domain.Account {
+	var out []domain.Account
+	for _, a := range accounts {
+		if a.Type == domain.TypeUtilities {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// utilityCharges groups the repeating charges recorded against each utility account by account.
+func utilityCharges(utilities []domain.Account, recs []domain.Recurring) map[string][]domain.Recurring {
+	ids := make(map[string]bool, len(utilities))
+	for _, a := range utilities {
+		ids[a.ID] = true
+	}
+	out := make(map[string][]domain.Recurring)
+	for _, r := range recs {
+		if ids[r.AccountID] {
+			out[r.AccountID] = append(out[r.AccountID], r)
+		}
+	}
+	return out
+}
+
+// servicesBody lists the household's services and utility accounts under their monthly total. A
+// utility account's charges count in that total. It is the body of the Accounts list while the
+// Services filter is on.
+func servicesBody(app *appstate.App, list []domain.Recurring, utilities []domain.Account, charges map[string][]domain.Recurring, base string, rates currency.Rates) ui.Node {
+	if len(list) == 0 && len(utilities) == 0 {
 		return uiw.Callout(uiw.CalloutProps{TestID: "acct-services-none", Body: Span(uistate.T("accounts.servicesNone"))})
 	}
+	all := append([]domain.Recurring(nil), list...)
+	for _, a := range utilities {
+		all = append(all, charges[a.ID]...)
+	}
 	var totalText string
-	if total, err := services.MonthlyTotal(list, base, rates); err != nil {
+	if total, err := services.MonthlyTotal(all, base, rates); err != nil {
 		totalText = servicesUnavailableText(err, "services total")
 	} else {
 		totalText = fmtMoney(money.New(total, base))
 	}
 	return Div(css.Class("acct-services"),
 		P(css.Class("acct-services-total"), Attr("data-testid", "acct-services-total"), uistate.T("accounts.servicesMonthly", totalText)),
-		Div(css.Class("rows"), MapKeyedComponent(list, func(r domain.Recurring) any { return r.ID }, func(r domain.Recurring) ui.Node {
-			return ui.CreateElement(serviceRow, serviceRowProps{App: app, Service: r, Base: base, Rates: rates})
-		})),
+		Div(css.Class("rows"),
+			MapKeyedComponent(list, func(r domain.Recurring) any { return r.ID }, func(r domain.Recurring) ui.Node {
+				return ui.CreateElement(serviceRow, serviceRowProps{App: app, Service: r, Base: base, Rates: rates})
+			}),
+			MapKeyedComponent(utilities, func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
+				return ui.CreateElement(utilityAccountRow, utilityAccountRowProps{Account: a, Charges: charges[a.ID], Base: base, Rates: rates})
+			})),
+	)
+}
+
+type utilityAccountRowProps struct {
+	Account domain.Account
+	Charges []domain.Recurring
+	Base    string
+	Rates   currency.Rates
+}
+
+// utilityAccountRow is one utility account in the Services view: its name, its type and currency,
+// and what its repeating charges cost a month.
+func utilityAccountRow(props utilityAccountRowProps) ui.Node {
+	a := props.Account
+	costText := uistate.T("accounts.servicesNoCharge")
+	if len(props.Charges) > 0 {
+		if monthly, err := services.MonthlyTotal(props.Charges, props.Base, props.Rates); err != nil {
+			costText = servicesUnavailableText(err, "utility "+a.ID)
+		} else {
+			costText = uistate.T("services.perMonth", fmtMoney(money.New(monthly, props.Base)))
+		}
+	}
+	return Div(css.Class("acct-entity"), Attr("data-testid", "acct-utility-"+a.ID),
+		uiw.EntityRow(uiw.EntityRowProps{
+			Title: a.Name,
+			Meta:  []string{uistate.T("accounts.metaLine", humanizeType(string(a.Type)), a.Currency)},
+			Value: Span(css.Class(tw.TextDim), Attr("data-testid", "acct-utility-cost-"+a.ID), costText),
+		}),
 	)
 }
 

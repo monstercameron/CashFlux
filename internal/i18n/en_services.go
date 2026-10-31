@@ -10,6 +10,7 @@ func init() {
 	english["accounts.addAccountItem"] = "Account: bank, card, loan or asset"
 	english["accounts.addServiceItem"] = "Service: a monthly bill, such as a utility"
 	english["accounts.servicesMonthly"] = "Monthly services: %s"
+	english["accounts.servicesNoCharge"] = "No charge yet"
 	english["accounts.servicesNone"] = "No services yet. Add a bill such as a utility or a subscription to track its monthly cost."
 	english["services.add"] = "Add a monthly service"
 	english["services.name"] = "Service"

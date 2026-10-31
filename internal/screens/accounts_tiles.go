@@ -1104,7 +1104,9 @@ func acctListWidget(props acctListProps) ui.Node {
 	// stays on once it is chosen, even before the household has any service, so its
 	// empty state can be seen.
 	serviceList := app.Services()
-	hasServices := len(serviceList) > 0
+	utilities := utilityAccounts(app.Accounts())
+	utilityCharged := utilityCharges(utilities, app.Recurring())
+	hasServices := len(serviceList) > 0 || len(utilities) > 0
 	list := accountview.List(accountview.ListInput{
 		Accounts: app.Accounts(), MemberID: activeMemberID, Class: f.Class,
 		ServicesClass: serviceClassView, Match: f.Matches,
@@ -1190,7 +1192,7 @@ func acctListWidget(props acctListProps) ui.Node {
 
 	bodyContent := ui.Match().
 		When(list.InServices, func() ui.Node {
-			return servicesBody(app, serviceList, props.Base, props.Rates)
+			return servicesBody(app, serviceList, utilities, utilityCharged, props.Base, props.Rates)
 		}).
 		When(len(list.Active) == 0, func() ui.Node {
 			return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
