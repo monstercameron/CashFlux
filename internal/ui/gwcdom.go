@@ -28,8 +28,8 @@ func domNode(id string) interop.Value {
 	return domValue(domDocument(), "getElementById", id)
 }
 
-// domRoot yields the document the helpers work against. Tests substitute a fake document here,
-// the same way the framework swaps its timer seam, so DOM traversal can be checked without a page.
+// domRoot yields the document the helpers work against. Tests replace it with a fake document
+// (see useFakeDocument), so DOM lookups can be checked without a page.
 var domRoot = func() interop.Value {
 	global, err := interop.GlobalThis()
 	if err != nil {

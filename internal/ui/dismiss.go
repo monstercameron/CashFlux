@@ -9,32 +9,26 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// DismissPopover wires WAI-ARIA menu-button dismissal for a popover (the
-// `.add-wrap` / `.add-menu` pattern) whose WRAPPER element carries `wrapID`:
+// DismissPopover closes a `.add-wrap` / `.add-menu` popover when the reader leaves it, and
+// handles its arrow-key navigation. wrapID is the id of the wrapper element that holds the
+// trigger and the menu. While isOpen is true:
 //
-//   - Escape closes the popover and returns focus to its trigger (the first
-//     <button> inside the wrapper);
-//   - a pointerdown outside the wrapper closes it;
-//   - ArrowDown/ArrowUp/Home/End rove focus among the wrapper's [role=menuitem]
-//     entries while focus is inside the popover (WAI-ARIA menu keyboard nav).
+//   - Escape calls onClose and moves focus back to the trigger (the first button in the wrapper);
+//   - a press outside the wrapper calls onClose;
+//   - ArrowDown, ArrowUp, Home and End move focus among the wrapper's [role=menuitem] entries.
+//     They do this only when focus is already inside the wrapper, so arrow keys are never
+//     taken from the page while the menu is merely open.
 //
-// Presses are told apart without comparing event targets: while the popover is
-// open, the wrapper element records its own pointerdown, and the document-level
-// listener, which runs after the wrapper's, closes the popover only when the press
-// did not start inside the wrapper. Keyboard roving is gated on
-// document.activeElement sitting inside the wrapper, so arrow keys are never
-// hijacked while the menu is merely open. The document listener is immune to the
-// stacking of the topbar's sticky header, which is why the `.add-backdrop` element
-// is not used.
+// A press inside the wrapper is recorded by the wrapper's own pointerdown listener, which is
+// attached only while the menu is open. The document listener runs after it, reads the
+// record and closes the menu only for a press that started outside. Targets are never
+// compared. Because the wrapper listener attaches after the opening click, that click cannot
+// close the menu it opened. The document listeners stay mounted and return early while the
+// menu is closed. They listen on the document rather than on a backdrop element, since a
+// backdrop would sit under the topbar's sticky header.
 //
-// It is a custom hook: it calls UseLayoutEffect and UseDocumentEvent, so invoke it
-// unconditionally at a stable render position (like any hook). The wrapper's listener
-// is attached only while open. The document listeners stay mounted and return early
-// while closed. Self-close on open is avoided because the listener attaches after
-// the opening click's pointerdown has already fired.
-//
-// `isOpen` is the popover's current open state; `wrapID` is the id set on the
-// wrapper element; `onClose` dismisses the popover (e.g. open.Set(false)).
+// DismissPopover is a custom hook: it calls UseLayoutEffect and UseDocumentEvent, so call it
+// unconditionally at a stable render position, like any hook.
 func DismissPopover(isOpen bool, wrapID string, onClose func()) {
 	pressedInside := uic.UseRef(false)
 	uic.UseLayoutEffect(func() func() {

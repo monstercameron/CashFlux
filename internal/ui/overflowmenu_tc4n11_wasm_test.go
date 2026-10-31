@@ -10,7 +10,9 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/interop"
 )
 
-func TestTC4N11OverflowSubmenuFocusUsesWrapper(t *testing.T) {
+// TestOverflowSubmenuFocusUsesWrapper checks that opening a submenu looks up its items from the
+// item's wrapper, and focuses the first one.
+func TestOverflowSubmenuFocusUsesWrapper(t *testing.T) {
 	lookups := []string{}
 	focused := false
 	child := fakeObject(t)

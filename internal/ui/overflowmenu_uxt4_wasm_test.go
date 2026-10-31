@@ -11,7 +11,9 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
-func TestUXT4OverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) {
+// TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames checks that a submenu does not
+// reorder the parent menu, and that menu items are named by their visible text only.
+func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
 	f.Render(OverflowMenu(OverflowMenuProps{
@@ -23,15 +25,15 @@ func TestUXT4OverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing
 			{Label: "Delete", Section: "Remove", Danger: true, TestID: "uxt4-delete"},
 		},
 	}))
-	trigger := uxt4MenuByTestID(f, "uxt4-trigger")
+	trigger := buttonByTestID(f, "uxt4-trigger")
 	trigger.Dispatch("onkeydown", render.Event{Key: "Enter"})
-	if uxt4MenuByTestID(f, "uxt4-split") == nil {
+	if buttonByTestID(f, "uxt4-split") == nil {
 		t.Fatal("Enter on the focused overflow trigger did not open its menu")
 	}
 	trigger.Click()
 	f.Stabilize()
 	trigger.Dispatch("onkeydown", render.Event{Key: " "})
-	if uxt4MenuByTestID(f, "uxt4-split") == nil {
+	if buttonByTestID(f, "uxt4-split") == nil {
 		t.Fatal("Space on the focused overflow trigger did not open its menu")
 	}
 	order := func() []string {
@@ -56,19 +58,19 @@ func TestUXT4OverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing
 		}
 	}
 	assertLabels(order())
-	link := uxt4MenuByTestID(f, "uxt4-link")
+	link := buttonByTestID(f, "uxt4-link")
 	if got := link.Attr("aria-label"); got != "" {
 		t.Fatalf("Link accessible label = %q, want visible text only", got)
 	}
 	link.Dispatch("onkeydown", render.Event{Key: "ArrowRight"})
-	if uxt4MenuByTestID(f, "uxt4-bill") == nil {
+	if buttonByTestID(f, "uxt4-bill") == nil {
 		t.Fatal("Right did not open the linked submenu")
 	}
 	assertLabels(order())
-	if got := uxt4MenuByTestID(f, "uxt4-delete").Text(); got != "Delete" {
+	if got := buttonByTestID(f, "uxt4-delete").Text(); got != "Delete" {
 		t.Fatalf("last parent action = %q, want Delete", got)
 	}
-	if got := uxt4MenuByTestID(f, "uxt4-delete").Attr("aria-label"); got != "" {
+	if got := buttonByTestID(f, "uxt4-delete").Attr("aria-label"); got != "" {
 		t.Fatalf("Delete accessible label = %q, want visible text only", got)
 	}
 	removeHeading, deleteButton := -1, -1
@@ -87,7 +89,7 @@ func TestUXT4OverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing
 	}
 }
 
-func uxt4MenuByTestID(f *render.Fixture, id string) *render.QueryNode {
+func buttonByTestID(f *render.Fixture, id string) *render.QueryNode {
 	for _, node := range f.AllByTag("button") {
 		if node.Attr("data-testid") == id {
 			return node
@@ -96,7 +98,8 @@ func uxt4MenuByTestID(f *render.Fixture, id string) *render.QueryNode {
 	return nil
 }
 
-func TestUXT4MenuFocusDoesNotScroll(t *testing.T) {
+// TestMenuFocusDoesNotScroll checks that focusing a menu item asks the browser not to scroll.
+func TestMenuFocusDoesNotScroll(t *testing.T) {
 	item := fakeObject(t)
 	called := false
 	preventScroll := false

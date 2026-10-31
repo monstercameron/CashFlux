@@ -26,10 +26,10 @@ type KebabMenuProps struct {
 	// ToggleClass overrides the ⋯ toggle button's class (default "btn"); e.g. pass a
 	// row's icon-button class so the trigger matches its neighbours.
 	ToggleClass string
-	// Items are the pre-built `.add-item` menu entries. The CALLER builds them (with
-	// its own UseEvent handlers) so no On* hook is registered inside a loop here —
-	// KebabMenu only supplies the container chrome. Selecting any item closes the menu
-	// (the click bubbles to the menu's own close handler).
+	// Items are the pre-built `.add-item` entries. The caller builds them with its own
+	// UseEvent handlers, because a loop in this component would register On* hooks in a
+	// variable-length list. KebabMenu supplies only the container. Selecting an item closes
+	// the menu, because the click bubbles up to the menu's close handler.
 	Items []uic.Node
 }
 

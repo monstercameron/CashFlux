@@ -35,12 +35,12 @@ type OverflowMenuItem struct {
 	// Preferred over conditional slice-building at the call site so the
 	// item order in the slice always matches intent.
 	Hidden bool
-	// Section, when set, opens a new labelled group starting at this item. A long
-	// menu that mixes routine organization with reporting changes and deletions
-	// reads as one flat list where every entry looks equally safe (C572); a section
-	// heading plus the separator it draws tells the user what KIND of action they
-	// are about to take before they take it. Repeat the same string on consecutive
-	// items to keep them in one group; the heading renders once, at the first.
+	// Section, when set, opens a labelled group that starts at this item. Repeat the same
+	// string on consecutive items to keep them in one group; the heading renders once, at
+	// the first. The heading and the separator it draws show the reader what kind of action
+	// a group holds, so a menu that mixes routine changes with reporting changes and
+	// deletions does not read as one flat list. The heading is aria-hidden, so it is a
+	// visual grouping only and is not part of any item's accessible name.
 	Section string
 	// Danger paints the item as destructive or reporting-altering, so Delete and
 	// Exclude never look like Rename. It is a visual tier, not a behaviour — the
@@ -67,31 +67,30 @@ type OverflowMenuProps struct {
 	// TriggerClass adds classes to the trigger for a page that needs one more. The trigger is
 	// always the shared tool button, so this does not replace its look.
 	TriggerClass string
-	// TriggerIcon overrides the ⋯ glyph. The default says "more actions", which is
-	// wrong for a menu that is not a grab-bag: a split button's second half means
-	// "choose a variant of the action next to me" and has to look like a chevron, or
-	// it reads as one more generic kebab and nobody finds the variants (C573).
+	// TriggerIcon overrides the ⋯ glyph. Use a chevron when the trigger picks a variant of the
+	// action beside it, as a split button's second half does. A ⋯ there would read as one more
+	// generic menu, and nobody would find the variants.
 	TriggerIcon icon.Name
-	// ExtraContent appends an optional group after the menu actions. It is intended
-	// for an existing screen component that needs to live inside this menu; nil keeps
-	// the historical menu DOM unchanged.
+	// ExtraContent is rendered after the menu actions, for an existing component that has to
+	// live inside this menu. Setting it keeps the panel mounted even while the menu is closed;
+	// the hidden-menu class keeps it off screen.
 	ExtraContent uic.Node
 }
 
-// OverflowMenu renders the standard CashFlux "⋯" overflow pattern: a trigger
-// button that opens a `.add-menu` popover (role=menu) with one `.add-item` per
-// entry. It unifies the hand-rolled `add-wrap`/`add-menu`/`add-backdrop` pattern
-// duplicated across accounts, artifacts, and other screens.
+// OverflowMenu renders the standard "⋯" overflow pattern: a trigger button that opens a
+// `.add-menu` popover (role=menu) with one `.add-item` per entry. Screens use it instead of
+// writing the add-wrap and add-menu markup by hand.
 //
-// OverflowMenu is its own component so its open-state hooks and per-item click
-// hooks remain at stable render positions — safe to embed inside any row.
+// OverflowMenu is its own component, so its open-state hooks and per-item click hooks sit at
+// stable render positions, and it is safe to embed inside any row.
 func OverflowMenu(props OverflowMenuProps) uic.Node {
 	return uic.CreateElement(overflowMenu, props)
 }
 
 func overflowMenu(props OverflowMenuProps) uic.Node {
-	// Stable per-instance id on the wrapper so the document-level dismissal listeners can tell
-	// clicks inside THIS menu from clicks in another instance (many can be on a page at once).
+	// Stable per-instance id on the wrapper. The document-level dismissal listeners use it to
+	// tell a click inside this menu from a click inside another instance, since several can be
+	// on the page at once.
 	id := uic.UseId()
 	menu := UseMenu(id)
 
@@ -122,10 +121,9 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		OnKeyDown(openFromKeyboard), OnClick(toggleOpen),
 	)
 
-	// Menu children: role and class, then the actions. Sections (C572): a heading is emitted the
-	// first time a section name appears. It carries role="presentation" so it stays out of the
-	// menu's owned children, and each item carries the same fact in its own accessible name, so
-	// the grouping survives for anyone who never sees the heading.
+	// Menu children: the panel's class and role, then the actions. A section heading is emitted
+	// the first time its section name appears. It has role="presentation" and aria-hidden, so it
+	// is visual only and is not part of the menu's accessible structure.
 	menuArgs := []any{ClassStr(menu.PanelClass()), Attr("role", "menu")}
 	if menu.Shown {
 		lastSection := ""
@@ -150,9 +148,9 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		menuArgs = append(menuArgs, props.ExtraContent)
 	}
 
-	// No backdrop click-catcher: the outside-press listener in dismissOverflowMenu closes the
-	// menu. A fixed, viewport-covering backdrop wins the hit-test over the menu items when the
-	// row sits inside a bento tile's stacking context, so clicks never reach the items.
+	// There is no backdrop element. DismissPopover's outside-press listener closes the menu.
+	// A viewport-covering backdrop would win the hit test over the menu items when the row sits
+	// inside a bento tile's stacking context, so the items would never receive clicks.
 	var panel uic.Node = Fragment()
 	if menu.Shown || props.ExtraContent != nil {
 		panel = Div(menuArgs...)
@@ -160,7 +158,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	return Div(css.Class(menu.WrapClass("add-wrap")), Attr("id", id), trigger, panel)
 }
 
-// menuPlacementClass names the flip classes an open menu takes.
+// menuPlacementClass returns the flip classes, open-left and open-up, that an open menu takes.
 func menuPlacementClass(openLeft, openUp bool) string {
 	class := ""
 	if openLeft {
@@ -191,10 +189,16 @@ func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
 	uic.UseWindowEvent("scroll", reposition, isOpen, wrapID)
 }
 
-// placeOverflowMenu measures an open menu against its trigger and the viewport, or the
+// Pixel spacing for an open menu. margin keeps the menu off the viewport edge, and gap is the
+// space between the trigger and the menu.
+const (
+	menuMargin = 8.0
+	menuGap    = 6.0
+)
+
+// placeOverflowMenu measures an open menu against its trigger and the viewport, or against the
 // transaction table around it, and reports the flip classes that fit.
 func placeOverflowMenu(wrapID string, setPlacement func(string)) {
-	const margin = 8.0
 	wrap := domNode(wrapID)
 	if !wrap.Truthy() {
 		return
@@ -213,34 +217,34 @@ func placeOverflowMenu(wrapID string, setPlacement func(string)) {
 	window := domDocument().Get("defaultView")
 	vw := window.Get("innerWidth").Float()
 	vh := window.Get("innerHeight").Float()
-	boundaryTop, boundaryBottom := margin, vh-margin
+	boundaryTop, boundaryBottom := menuMargin, vh-menuMargin
 	if table := domValue(wrap, "closest", ".txn-table"); table.Truthy() {
 		tableRect := domValue(table, "getBoundingClientRect")
-		boundaryTop = max(boundaryTop, tableRect.Get("top").Float()+margin)
-		boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-margin)
+		boundaryTop = max(boundaryTop, tableRect.Get("top").Float()+menuMargin)
+		boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-menuMargin)
 	}
 	// Decide the side from where the menu sits by default, not where it is now. The flip
 	// classes are already applied, so measuring the current rect would flip the answer on
 	// every open.
 	wrapRect := domValue(wrap, "getBoundingClientRect")
-	openLeft := wrapRect.Get("left").Float()+rect.Get("width").Float() > vw-margin
+	openLeft := wrapRect.Get("left").Float()+rect.Get("width").Float() > vw-menuMargin
 	fullHeight := max(rect.Get("height").Float(), menu.Get("scrollHeight").Float())
 	domSet(style, "animation", "")
-	openUp := wrapRect.Get("bottom").Float()+6+fullHeight > boundaryBottom
-	avail := boundaryBottom - wrapRect.Get("bottom").Float() - 6
+	openUp := wrapRect.Get("bottom").Float()+menuGap+fullHeight > boundaryBottom
+	available := boundaryBottom - wrapRect.Get("bottom").Float() - menuGap
 	if openUp {
-		avail = wrapRect.Get("top").Float() - boundaryTop - 6
+		available = wrapRect.Get("top").Float() - boundaryTop - menuGap
 	}
-	if fullHeight > avail && avail > 80 {
-		domSet(style, "maxHeight", fmt.Sprintf("%.0fpx", avail))
+	if fullHeight > available && available > 80 {
+		domSet(style, "maxHeight", fmt.Sprintf("%.0fpx", available))
 		domSet(style, "overflowY", "auto")
 	}
 	setPlacement(menuPlacementClass(openLeft, openUp))
 }
 
-// overflowMenuItemProps carries the item data plus the close callback into the
-// per-item sub-component. The sub-component owns its click hook so we never
-// call On* inside the item loop (the On*-in-loop rule).
+// overflowMenuItemProps carries an entry's data and its close callbacks into overflowMenuItemBtn.
+// Each entry is its own component and owns its OnClick and OnKeyDown hooks, so no On* option is
+// called inside the item loop.
 type overflowMenuItemProps struct {
 	Item         OverflowMenuItem
 	CloseMenu    func()
@@ -276,14 +280,13 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 				e.PreventDefault()
 				e.StopPropagation()
 				props.CloseSubmenu()
-				focusMenuItem(docMenuItem(itemID))
+				focusMenuItem(domNode(itemID))
 			}
 		}
 	})
 
-	// `.danger` is the app's existing destructive overflow-item class (the accounts
-	// kebab's Delete already uses it) — reused rather than forked, so every menu in
-	// the app paints risk the same way.
+	// `.danger` is the app's shared destructive menu-item class. Reusing it means every menu
+	// paints risk the same way.
 	cls := "add-item"
 	if item.Danger {
 		cls += " danger"
@@ -330,7 +333,7 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 			children = append(children, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
 				Item: child, CloseMenu: closeMenu, CloseSubmenu: func() {
 					submenuOpen.Set(false)
-					focusMenuItem(docMenuItem(itemID))
+					focusMenuItem(domNode(itemID))
 				},
 			}))
 		}
@@ -342,7 +345,7 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 // focusOverflowSubmenu moves focus into an opened submenu. The submenu is a
 // sibling of its parent button, so the lookup must start at the item's wrapper.
 func focusOverflowSubmenu(itemID string) {
-	wrap := docMenuItem(itemID + "-wrap")
+	wrap := domNode(itemID + "-wrap")
 	if !wrap.Truthy() {
 		return
 	}
@@ -350,11 +353,6 @@ func focusOverflowSubmenu(itemID string) {
 	if menu.Truthy() {
 		focusMenuItem(domValue(menu, "querySelector", `[role="menuitem"]`))
 	}
-}
-
-// docMenuItem returns the element with the given id, or the zero Value when it is not on the page.
-func docMenuItem(id string) interop.Value {
-	return domNode(id)
 }
 
 // focusMenuItem focuses a menu entry without scrolling the page to it.
