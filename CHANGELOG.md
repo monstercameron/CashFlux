@@ -37,6 +37,7 @@ and every commit updates this file under `Unreleased`.
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed
+- The Transactions Filters sheet opens from the right edge of the window, not from inside the toolbar tile. The shared Overlay portals it, so a tile transform no longer moves it. Escape and clicking outside close it, and focus returns to the Filters button.
 - The Transactions Ledger and Calendar switch is the shared radio group the Accounts page uses, with the same selected-state look and keyboard handling. The old segmented styles and the contrast rule written for them are removed.
 - The Transactions Review, Filters and More buttons are the shared ToolButton, with the same size, radius, border and tints as the Accounts buttons. Search, Filters and More sit on one row, as Accounts lays them out. The Review button keeps its attention tint.
 - The Transactions summary and toolbar bubbles are 10px apart, the same gap the page grid uses between widgets, and their padding and gaps use the Accounts 0.7rem tokens. The toolbar wrapper was a plain block, so its gap never applied.

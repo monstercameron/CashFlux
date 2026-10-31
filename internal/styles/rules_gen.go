@@ -2674,33 +2674,18 @@ func registerGenerated() {
 		prop("animation", "panel-fade-out 250ms ease-in both"),
 		prop("pointer-events", "none"),
 	)
-	// Transactions can opt into a right-side sheet without changing the shared
-	// toolbar's default inline disclosure on other pages.
+	// The shared Overlay portals the sheet to the page body and gives it the viewport, so the
+	// panel fills that surface rather than fixing itself to the window.
 	rule(".filter-inline-panel.filter-sheet",
-		position("fixed"),
-		top("3.5rem"),
-		right("0"),
-		bottom("0"),
-		zIndex("var(--z-modal)"),
-		width("min(380px, 100vw)"),
-		height("calc(100dvh - 3.5rem)"),
+		position("static"),
+		width("100%"),
+		height("100%"),
 		minHeight("0"),
 		margin("0"),
 		borderRadius("0"),
-		boxShadow("-12px 0 36px rgba(0,0,0,.22)"),
+		boxShadow("none"),
 		display("flex"),
 		flexDirection("column"),
-	)
-	// Bento tiles normally clip their contents and use will-change: transform.
-	// Both properties make a fixed descendant behave like it is fixed to that
-	// short tile, which clipped the sheet to roughly the toolbar height. Release
-	// the owning tile while its sheet is mounted so the panel uses the viewport.
-	rule(".w:has(.filter-sheet)",
-		overflow("visible"),
-		willChange("auto"),
-	)
-	rule(".w:not(.drag):has(.filter-sheet):hover",
-		transform("none"),
 	)
 	rule(".filter-inline-panel.filter-sheet .filter-inline-body",
 		flex("1 1 0"),

@@ -5,6 +5,14 @@ package styles
 // registerTV7F keeps the transaction filter sheet to one scroll area and
 // aligns the desktop bulk controls on the same 36 px baseline.
 func registerTV7F() {
+	// The Transactions sheet sits in the shared Overlay. Its body drops the overlay inset, so the
+	// filter panel fills the surface edge to edge.
+	rule(".cf-overlay__body:has(> .filter-inline-panel.filter-sheet)",
+		padding("0"),
+		display("flex"),
+		flexDirection("column"),
+		minHeight("0"),
+	)
 	rule(".filter-inline-panel.filter-sheet",
 		overflow("hidden"),
 	)

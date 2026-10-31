@@ -302,6 +302,50 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if props.FilterSheet {
 		panelTitle = props.FiltersLabel
 	}
+
+	// The panel is built once and placed two ways. A sheet portals to the page body, so it opens
+	// at the viewport edge. Inside the bento tile the toolbar sits in, a transformed tile would
+	// make the fixed sheet position against the tile instead.
+	panel := Div(ClassStr(filterPanelClass(props.FilterSheet, !open.Get())),
+		Attr("id", "filter-inline-panel"),
+		Attr("role", "region"), Attr("aria-label", panelTitle),
+		// Escape from anywhere inside the panel, not just from the trigger.
+		OnKeyDown(onPanelKey),
+		Div(css.Class("filter-inline-header"),
+			H3(css.Class("filter-inline-title", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(panelTitle)),
+			// This ✕ closes the panel and changes no filter. It sits among controls that do
+			// remove filters, so its label says what it does.
+			Button(css.Class("set-close"), Type("button"),
+				Attr("data-testid", "filter-panel-close"),
+				Attr("aria-label", uistate.T("filters.closePanel")),
+				Attr("title", uistate.T("filters.closePanel")),
+				OnClick(closePanel), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		),
+		Div(css.Class("filter-inline-body"), Attr("data-scroll-owner", "sheet"), props.FilterFields),
+		If(props.FilterSheet, Div(css.Class("filter-sheet-footer"),
+			Button(css.Class("btn-link filter-sheet-clear"), Type("button"),
+				Attr("data-testid", "filter-sheet-clear-all"),
+				OnClick(func() {
+					if props.OnClearAll != nil {
+						props.OnClearAll()
+					}
+				}),
+				uistate.T("transactions.clearAllFilters")),
+			Button(css.Class("btn btn-primary filter-sheet-done"), Type("button"),
+				Attr("data-testid", "filter-sheet-done"),
+				OnClick(closePanel),
+				uistate.T("action.done")),
+		)),
+	)
+	// The inline panel has no backdrop, so the table stays visible below while filters change.
+	// It stays mounted through its fade-out (UsePanelFade).
+	var panelNode uic.Node
+	if props.FilterSheet {
+		panelNode = Overlay(OverlayProps{Open: open.Get(), Kind: OverlaySheet, Label: panelTitle, OnClose: closePanel, Body: panel})
+	} else {
+		panelNode = If(open.Get() || panelMounted, panel)
+	}
 	return Div(
 		// Two rows. Row 1 holds the search field, the Filters trigger and the primary actions.
 		// Row 2 holds the remaining actions, so the buttons never wrap into a ragged line.
@@ -374,40 +418,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 				}),
 				props.ClearAllLabel)),
 		), Span(Attr("hidden", ""))),
-		// The inline panel has no backdrop, so the table stays visible below while filters change.
-		// It stays mounted through its fade-out (UsePanelFade).
-		If(open.Get() || panelMounted, Div(ClassStr(filterPanelClass(props.FilterSheet, !open.Get())),
-			Attr("id", "filter-inline-panel"),
-			Attr("role", "region"), Attr("aria-label", panelTitle),
-			// Escape from anywhere inside the panel, not just from the trigger.
-			OnKeyDown(onPanelKey),
-			Div(css.Class("filter-inline-header"),
-				H3(css.Class("filter-inline-title", tw.Flex, tw.ItemsCenter, tw.Gap2),
-					Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(panelTitle)),
-				// This ✕ closes the panel and changes no filter. It sits among controls that do
-				// remove filters, so its label says what it does.
-				Button(css.Class("set-close"), Type("button"),
-					Attr("data-testid", "filter-panel-close"),
-					Attr("aria-label", uistate.T("filters.closePanel")),
-					Attr("title", uistate.T("filters.closePanel")),
-					OnClick(closePanel), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
-			),
-			Div(css.Class("filter-inline-body"), Attr("data-scroll-owner", "sheet"), props.FilterFields),
-			If(props.FilterSheet, Div(css.Class("filter-sheet-footer"),
-				Button(css.Class("btn-link filter-sheet-clear"), Type("button"),
-					Attr("data-testid", "filter-sheet-clear-all"),
-					OnClick(func() {
-						if props.OnClearAll != nil {
-							props.OnClearAll()
-						}
-					}),
-					uistate.T("transactions.clearAllFilters")),
-				Button(css.Class("btn btn-primary filter-sheet-done"), Type("button"),
-					Attr("data-testid", "filter-sheet-done"),
-					OnClick(closePanel),
-					uistate.T("action.done")),
-			)),
-		)),
+		panelNode,
 	)
 }
 

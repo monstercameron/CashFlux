@@ -30,14 +30,18 @@ func TestR1DEscapeClearsSearchImmediately(t *testing.T) {
 	}
 }
 
+// TestR1DFilterSheetIsOptIn checks that the inline disclosure stays the default and that the
+// sheet variant is portaled out of the toolbar. The shared Overlay renders through a portal to
+// the page body, which the wasm test renderer does not have, so the sheet is absent from the
+// render tree here and its footer and Escape behaviour are checked in the browser.
 func TestR1DFilterSheetIsOptIn(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		sheet bool
-		want  string
+		name       string
+		sheet      bool
+		wantInline bool
 	}{
-		{name: "existing inline default", want: "filter-inline-panel fade-panel"},
-		{name: "opt-in right sheet", sheet: true, want: "filter-inline-panel fade-panel filter-sheet"},
+		{name: "existing inline default", wantInline: true},
+		{name: "opt-in right sheet is portaled", sheet: true, wantInline: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := render.New(t)
@@ -48,17 +52,15 @@ func TestR1DFilterSheetIsOptIn(t *testing.T) {
 				FilterSheet:  tc.sheet,
 			}))
 			f.AllByTag("button")[0].Click()
-			found := false
+			f.Stabilize()
+			inline := false
 			for _, node := range f.AllByTag("div") {
 				if node.Attr("id") == "filter-inline-panel" {
-					found = true
-					if got := node.Attr("class"); got != tc.want {
-						t.Fatalf("panel class = %q, want %q", got, tc.want)
-					}
+					inline = true
 				}
 			}
-			if !found {
-				t.Fatal("filter panel did not open")
+			if inline != tc.wantInline {
+				t.Fatalf("inline filter panel present = %t, want %t", inline, tc.wantInline)
 			}
 		})
 	}
