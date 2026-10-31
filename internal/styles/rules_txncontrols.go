@@ -35,8 +35,7 @@ func registerTxnControls() {
 		color("var(--text-dim)"),
 	)
 	rule(".txn-responsive-toolbar .fctrl-search:focus-within",
-		borderColor("var(--accent)"),
-		boxShadow("0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)"),
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
 	)
 	rule(".txn-responsive-toolbar .filter-toolbar-primary .filters-trigger",
 		minHeight("44px"),

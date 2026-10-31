@@ -7974,7 +7974,8 @@ func registerGenerated() {
 	// Focus shows on the search box, not on the borderless input inside it, so the
 	// field reads as one edge with the accent ring the other inputs use.
 	rule(".fctrl-search:focus-within",
-		boxShadow("0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)"),
+		// The same border the Filters button takes when it is open, so focus reads as one state.
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
 	)
 	rule(".fctrl-input:focus, .fctrl-input:focus-visible",
 		outline("0"),
