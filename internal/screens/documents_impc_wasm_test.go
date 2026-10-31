@@ -97,6 +97,7 @@ func TestDraftRowCategoryQuickAddOpensSharedPickerAndSelectsCreatedCategoryIMPC(
 	}
 	var updated extract.Row
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(DraftRow, draftRowProps{
 		Index:    0,
@@ -152,6 +153,7 @@ func TestDraftReviewPaginatesAll1240RowsAndKeepsGlobalCategoryIndexIMPC(t *testi
 	var updatedIndex int = -1
 	var updated extract.Row
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(draftReviewFixture, draftReviewTestProps{
 		rows: rows, page: page, start: start, end: end,

@@ -79,7 +79,7 @@ func TestTC3W4SaveStatusRegistryPrunesUnmountedRows(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
 	root := func() ui.Node {
-		useTxnSaveStatus(id)
+		_, _ = useTxnSaveStatus(id)
 		return Div()
 	}
 	f.Render(ui.CreateElement(root))

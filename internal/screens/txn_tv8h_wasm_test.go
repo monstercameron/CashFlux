@@ -192,7 +192,8 @@ func TestTV8HBulkBarReportsOnlyDurableWrites(t *testing.T) {
 			}
 			button.Click()
 			if mode == "zero" || mode == "write failure" {
-				if complete != nil || notice.Get().Undoable || (notice.Get().Text != "" && !notice.Get().Err) {
+				// Nothing to change says so in a notice that is not a success, so the only text allowed is that one.
+				if complete != nil || notice.Get().Undoable || (notice.Get().Text != "" && !notice.Get().Err && notice.Get().Text != uistate.T("transactions.bulkNothing")) {
 					t.Fatalf("zero/failed write posted success: %+v", notice.Get())
 				}
 				return

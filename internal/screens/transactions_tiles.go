@@ -1175,8 +1175,20 @@ type txnBulkController struct {
 	FinishTag   func()
 }
 
+// txnBulkRead reads the ledger for a bulk action. A failed read changes nothing and says so,
+// rather than reading as an empty ledger and doing nothing without a word.
+func txnBulkRead(app *appstate.App) ([]domain.Transaction, bool) {
+	txs, err := app.TransactionsChecked()
+	if err != nil {
+		uistate.PostNotice(uistate.T("transactions.readFailed"), true)
+		return nil, false
+	}
+	return txs, true
+}
+
 func txnBulkApply(c txnBulkController, label func(int) string, writes []domain.Transaction, done func()) {
 	if len(writes) == 0 {
+		uistate.PostNotice(uistate.T("transactions.bulkNothing"), false)
 		return
 	}
 	_ = CommitUndoableCounted(c.App, label, txntoolbar.IDs(writes), func() error { return c.App.PutTransactionsAtomic(writes) }, func(err error) {
@@ -1192,8 +1204,12 @@ func txnBulkApply(c txnBulkController, label func(int) string, writes []domain.T
 }
 
 func txnBulkSimple(c txnBulkController, edit txntoolbar.Edit, key string) {
+	txs, ok := txnBulkRead(c.App)
+	if !ok {
+		return
+	}
 	selected := txnExpandedSelection(c.App, c.Selection())
-	writes := txntoolbar.Draft(c.App.Transactions(), selected, edit)
+	writes := txntoolbar.Draft(txs, selected, edit)
 	txnBulkApply(c, func(n int) string { return uistate.T(key, n) }, writes, nil)
 }
 
@@ -1209,7 +1225,11 @@ func txnBulkCategory(c txnBulkController, cid string) {
 			uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
 			return
 		}
-		writes := txntoolbar.Draft(c.App.Transactions(), selected, txntoolbar.Edit{Kind: txntoolbar.Category, Text: cid})
+		txs, ok := txnBulkRead(c.App)
+		if !ok {
+			return
+		}
+		writes := txntoolbar.Draft(txs, selected, txntoolbar.Edit{Kind: txntoolbar.Category, Text: cid})
 		label := func(n int) string {
 			if cid != "" {
 				return uistate.T("transactions.bulkCatApplied", n, bulkCatLabel(c.App, cid))
@@ -1225,7 +1245,10 @@ func txnBulkDelete(c txnBulkController) {
 		return
 	}
 	sel := c.Selection()
-	count := len(sel)
+	// The prompt counts what the delete removes, so a selected transfer leg that takes its
+	// partner with it is reported as the pair it is.
+	doomed := c.App.ExpandTransferPairs(txntoolbar.SelectionIDs(sel))
+	count := len(doomed)
 	uistate.ConfirmModalLabeled(uistate.TN("uxt4.deleteOne", "uxt4.deleteMany", count), uistate.T("uxt4.delete"), true, func(ok bool) {
 		if !ok {
 			return
@@ -1237,7 +1260,6 @@ func txnBulkDelete(c txnBulkController) {
 				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
 				return
 			}
-			doomed := c.App.ExpandTransferPairs(txntoolbar.SelectionIDs(sel))
 			_ = CommitUndoableCounted(c.App, func(n int) string { return uistate.T("transactions.bulkOpDeleted", n) }, doomed, func() error { _, err := c.App.DeleteTransactionsBulkExpanded(doomed); return err }, func(err error) {
 				if err != nil {
 					uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
@@ -1250,7 +1272,11 @@ func txnBulkDelete(c txnBulkController) {
 }
 
 func txnBulkGroup(c txnBulkController) {
-	ids := txntoolbar.IDs(txntoolbar.SelectedRows(c.App.Transactions(), c.Selection(), true))
+	txs, ok := txnBulkRead(c.App)
+	if !ok {
+		return
+	}
+	ids := txntoolbar.IDs(txntoolbar.SelectedRows(txs, c.Selection(), true))
 	if len(ids) < 2 {
 		uistate.PostNotice(uistate.T("txnlinks.groupNeedTwo"), true)
 		return
@@ -1269,7 +1295,11 @@ func txnBulkExport(c txnBulkController) {
 	if len(selected) == 0 {
 		return
 	}
-	txnExportRows(c.App, txntoolbar.SelectedRows(c.App.Transactions(), selected, false), "transactions-selected.csv")
+	txs, ok := txnBulkRead(c.App)
+	if !ok {
+		return
+	}
+	txnExportRows(c.App, txntoolbar.SelectedRows(txs, selected, false), "transactions-selected.csv")
 }
 
 func txnBulkTag(c txnBulkController, raw string) {
@@ -1277,7 +1307,11 @@ func txnBulkTag(c txnBulkController, raw string) {
 	if tag == "" {
 		return
 	}
-	writes := txntoolbar.Draft(c.App.Transactions(), txnExpandedSelection(c.App, c.Selection()), txntoolbar.Edit{Kind: txntoolbar.Tag, Text: tag})
+	txs, ok := txnBulkRead(c.App)
+	if !ok {
+		return
+	}
+	writes := txntoolbar.Draft(txs, txnExpandedSelection(c.App, c.Selection()), txntoolbar.Edit{Kind: txntoolbar.Tag, Text: tag})
 	txnBulkApply(c, func(n int) string { return uistate.T("r1c.tagged", n, tag) }, writes, c.FinishTag)
 }
 
@@ -1484,11 +1518,16 @@ type txnBulkOwnerPickerProps struct {
 func txnBulkOwnerPicker(props txnBulkOwnerPickerProps) ui.Node {
 	open := ui.UseState(false)
 	selected := ui.UseState([]string(nil))
-	close := func() {
+	// Escape, the close button and an outside click cancel the staged choice. Done applies it,
+	// and an empty stage applies nothing, so a dismissal never rewrites the selected rows.
+	cancel := func() { open.Set(false) }
+	done := func() {
 		if !open.Get() {
 			return
 		}
-		commitTxnBulkOwnerPick(selected.Get(), props.OnApply)
+		if len(selected.Get()) > 0 {
+			commitTxnBulkOwnerPick(selected.Get(), props.OnApply)
+		}
 		open.Set(false)
 	}
 	onToggle := ui.UseEvent(Prevent(func() {
@@ -1518,11 +1557,11 @@ func txnBulkOwnerPicker(props txnBulkOwnerPickerProps) ui.Node {
 	// button both commit the selection.
 	sheet := If(open.Get(), uiw.PortalFlipPanel(uiw.FlipPanelProps{
 		Title: props.Label, Width: uiw.FlipSmallW, Height: uiw.FlipSmallH,
-		NoFooter: true, FlushBody: true, OnClose: close,
+		NoFooter: true, FlushBody: true, OnClose: cancel,
 		Back: Div(css.Class("modal-scroll"), listbox,
 			Div(css.Class("modal-foot"),
-				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", props.TestID+"-done"), OnClick(close), uistate.T("action.done")))),
-	}, props.ID+"-surface"))
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", props.TestID+"-done"), OnClick(done), uistate.T("action.done")))),
+	}, props.ID+"-surface", ui.PortalTarget{}))
 	return Fragment(trigger, sheet)
 }
 

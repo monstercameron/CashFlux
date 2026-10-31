@@ -122,9 +122,15 @@ type CategoryPickerProps struct {
 	InitialQuery string
 	// OnPick receives the chosen (or newly created) category id.
 	OnPick func(categoryID string)
+	// Target is where the picker portals. It is the page body unless a test supplies its root.
+	Target ui.PortalTarget
 	// OnClose dismisses the picker without choosing.
 	OnClose func()
 }
+
+// categoryPickerPortal is where the picker's panel portals when its caller gives no target. It is
+// the page body in the app. A test swaps in its fixture root so the panel is visible to it.
+var categoryPickerPortal = ui.PortalTarget{Selector: "body"}
 
 // CategoryPicker is a search-and-create overlay over the category tree. It is
 // mounted by whichever surface needs it and dismissed via OnClose.
@@ -143,6 +149,10 @@ type categoryPickerComponentProps struct {
 
 func categoryPickerComponent(componentProps categoryPickerComponentProps) ui.Node {
 	props := componentProps.Props
+	target := props.Target
+	if target.Selector == "" && target.Node == nil {
+		target = categoryPickerPortal
+	}
 	app := componentProps.App
 	defer txnPerfStart("category-picker")()
 	_ = uistate.UseDataRevision().Get()
@@ -249,7 +259,7 @@ func categoryPickerComponent(componentProps categoryPickerComponentProps) ui.Nod
 					OnClick(dismiss), uistate.T("catpick.close")),
 			),
 		),
-	}, "catpick-surface")
+	}, "catpick-surface", target)
 }
 
 // catPickRowProps drives one selectable category row.

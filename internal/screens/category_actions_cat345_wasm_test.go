@@ -26,6 +26,7 @@ func TestSplitLineNewCategoryCreatesIntoOpeningLine(t *testing.T) {
 	}
 	var saved domain.Transaction
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	f.Render(ui.CreateElement(SplitEditor, splitEditorProps{
 		Txn: txn, Categories: app.Categories(), OnSave: func(updated domain.Transaction) { saved = updated },
 	}))
@@ -66,6 +67,7 @@ func TestCatSuggestNewCategorySelectsCreatedCategory(t *testing.T) {
 		t.Fatalf("PutTransaction: %v", err)
 	}
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	f.Render(ui.CreateElement(CatSuggestBody, struct{}{}))
 	uistate.SetCatSuggest(txn.ID)
 	f.Stabilize()
@@ -98,6 +100,7 @@ func TestCatSuggestNewCategorySelectsCreatedCategory(t *testing.T) {
 func TestRuleFormNewCategoryAndKindFilteredPaths(t *testing.T) {
 	app := pickerTestApp(t)
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	f.Render(ui.CreateElement(RuleAddForm, RuleAddFormProps{}))
 	byTestID(f, "button", "rule-add-new-category").Click()
 	f.Stabilize()

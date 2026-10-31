@@ -430,14 +430,18 @@ func slugifyTitle(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// PortalFlipPanel shows a flip panel at the page body. A panel built inside a bento tile or
-// another transformed ancestor would resolve its fixed backdrop against that ancestor, so a
-// panel opened from a tile portals out. The panel keeps its own backdrop, focus and Escape
-// handling; the portal only lifts it out of the tree and makes the page behind inert.
-func PortalFlipPanel(props FlipPanelProps, surfaceID string) uic.Node {
+// PortalFlipPanel shows a flip panel out of the tree that opened it. A panel built inside a
+// bento tile or another transformed ancestor would resolve its fixed backdrop against that
+// ancestor, so a panel opened from a tile portals out. The target is the page body unless a
+// test supplies its own root. The panel keeps its own backdrop, focus and Escape handling; the
+// portal only lifts it out of the tree and makes the page behind inert.
+func PortalFlipPanel(props FlipPanelProps, surfaceID string, target uic.PortalTarget) uic.Node {
 	props.NoEntrance = true
+	if target.Selector == "" && target.Node == nil {
+		target = uic.PortalTarget{Selector: "body"}
+	}
 	return uic.AccessibleOverlay(uic.AccessibleOverlayProps{
-		Open: true, Target: uic.PortalTarget{Selector: "body"}, SurfaceID: surfaceID,
+		Open: true, Target: target, SurfaceID: surfaceID,
 		Kind: uic.OverlayKindDialog, Role: "dialog", Modal: true, BackgroundInert: true,
 		LockScroll: true, BaseZIndex: 3000, Child: FlipPanel(props),
 	})

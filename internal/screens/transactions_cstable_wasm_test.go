@@ -75,7 +75,7 @@ func TestCSTABLEDescriptionCellOwnsEditAndInfoActions(t *testing.T) {
 		}
 		receipts++
 	}
-	f.Render(Table(Tbody(Tr(ui.CreateElement(txnRowDescriptionCell, txnFrameRowCellsProps{Row: r, SaveStatus: "Saving..."})))))
+	f.Render(Table(Tbody(Tr(ui.CreateElement(txnRowDescriptionCell, txnFrameRowCellsProps{Row: r, SaveStatus: "Saving...", Saving: true})))))
 	edit := findByTestID(f, "button", "txn-description-edit")
 	if edit == nil || edit.Name() != txnRowActionName(uistate.T("transactions.rowEdit"), r.Desc, r.Date, r.Amount) {
 		t.Fatal("edit label changed")
@@ -208,7 +208,7 @@ func TestCSTABLERowCellsRetainColumnOrderAndARIA(t *testing.T) {
 	r.ShowBalance = true
 	r.Balance = "$100.00"
 	r.GroupSize = 2
-	f.Render(Table(Tbody(ui.CreateElement(txnFrameRowCells, txnFrameRowCellsProps{Row: r, SaveStatus: "Saving..."}))))
+	f.Render(Table(Tbody(ui.CreateElement(txnFrameRowCells, txnFrameRowCellsProps{Row: r, SaveStatus: "Saving...", Saving: true}))))
 	row := findByTestID(f, "tr", "txn-row-"+r.ID)
 	if row == nil || row.Attr("aria-rowindex") != "42" || row.Attr("aria-busy") != "true" {
 		t.Fatal("row markers changed")

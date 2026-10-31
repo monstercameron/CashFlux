@@ -44,6 +44,7 @@ func TestTxnBulkCreateOpensPrefilledPickerAndPicksCreatedCategoryOnce(t *testing
 
 	picked := make([]string, 0, 1)
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(txnBulkCategoryPicker("Fresh category", domain.KindExpense,
 		func(id string) { picked = append(picked, id) }, func() {}))

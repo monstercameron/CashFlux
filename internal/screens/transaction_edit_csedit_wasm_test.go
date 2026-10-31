@@ -64,6 +64,7 @@ func TestCSEDITDirectionChild(t *testing.T) {
 func TestCSEDITCategoryChild(t *testing.T) {
 	newR3EEditApp(t)
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	opened := 0
 	selected := ""

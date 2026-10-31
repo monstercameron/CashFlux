@@ -23,6 +23,7 @@ func TestTCW4EditCategoryUsesItsApp(t *testing.T) {
 		t.Fatal("fixture revisions differ")
 	}
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(txnEditCategory, txnEditCategoryProps{App: owner, Open: true, Kind: domain.KindExpense,
 		OnOpen: func() {}, OnClose: func() {}, OnSelect: func(string) {}, OnPick: func(string) {}}))
@@ -141,6 +142,7 @@ func TestTCW4EditCategoryDismissAndCreate(t *testing.T) {
 				t.Fatal(err)
 			}
 			f := render.New(t)
+			pickerFixtureTarget(t, f)
 			defer f.Cleanup()
 			f.Render(ui.CreateElement(TransactionEditForm, TransactionEditFormProps{App: app, TxnID: row.ID}))
 			for attempt := 0; attempt < 2; attempt++ {

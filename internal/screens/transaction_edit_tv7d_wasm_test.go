@@ -15,6 +15,7 @@ import (
 func TestEditTV7DShowsAmountOnlyInItsField(t *testing.T) {
 	app, txn := reviewTestApp(t)
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(TransactionEditForm, TransactionEditFormProps{App: app, TxnID: txn.ID}))
 

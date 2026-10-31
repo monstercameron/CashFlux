@@ -265,7 +265,7 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 	}
 	return uiw.PortalFlipPanel(uiw.FlipPanelProps{Title: uistate.T("transactions.previewReceipt"), Width: uiw.FlipLargeW, Height: uiw.FlipLargeH,
 		NoFooter: true, FlushBody: true, OnClose: dismiss,
-		Back: Div(css.Class("modal-scroll"), Attr("data-testid", "receipt-preview"), body)}, "receipt-preview-surface")
+		Back: Div(css.Class("modal-scroll"), Attr("data-testid", "receipt-preview"), body)}, "receipt-preview-surface", ui.PortalTarget{})
 }
 
 // txnTableProps carries the engine-hydrated ledger frame and the data the table tile
@@ -1119,7 +1119,7 @@ func txnTagChip(props txnTagChipProps) ui.Node {
 }
 
 func txnFrameRow(props *txnFrameRowProps) ui.Node {
-	saveStatus := useTxnSaveStatus(props.ID)
+	saveStatus, saving := useTxnSaveStatus(props.ID)
 	defer txnPerfStart("row")()
 	pickerOpen := ui.UseState(false)
 	useTxnRowFlash(props.ID, props.FlashKey)
@@ -1138,10 +1138,10 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 			target = ui.PortalTarget{Selector: "body"}
 		}
 		picker = ui.Portal(ui.PortalProps{Target: target, Child: ui.CreateElement(CategoryPicker, CategoryPickerProps{
-			Kind: txnCategoryKind(props.AmountMoney), Selected: props.CategoryID, OnPick: apply, OnClose: func() { pickerOpen.Set(false) },
+			Kind: txnCategoryKind(props.AmountMoney), Selected: props.CategoryID, OnPick: apply, OnClose: func() { pickerOpen.Set(false) }, Target: target,
 		})})
 	}
-	return Fragment(ui.CreateElement(txnFrameRowCells, txnFrameRowCellsProps{Row: props, SaveStatus: saveStatus, Choose: choose}), picker)
+	return Fragment(ui.CreateElement(txnFrameRowCells, txnFrameRowCellsProps{Row: props, SaveStatus: saveStatus, Saving: saving, Choose: choose}), picker)
 }
 
 func useTxnRowFlash(id, key string) {
@@ -1162,6 +1162,7 @@ func useTxnRowFlash(id, key string) {
 type txnFrameRowCellsProps struct {
 	Row        *txnFrameRowProps
 	SaveStatus string
+	Saving     bool
 	Choose     func(ui.Event)
 }
 
@@ -1171,7 +1172,7 @@ func txnFrameRowCells(props txnFrameRowCellsProps) ui.Node {
 	if r.GroupSize > 1 {
 		rowClass += " txn-row-grouped"
 	}
-	args := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+r.ID), Attr("aria-busy", strconv.FormatBool(props.SaveStatus == "Saving..."))}
+	args := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+r.ID), Attr("aria-busy", strconv.FormatBool(props.Saving))}
 	if r.RowIndex > 0 {
 		args = append(args, Attr("aria-rowindex", strconv.Itoa(r.RowIndex)))
 	}

@@ -47,6 +47,7 @@ var txnAuditKeys = Catalog{
 	"transactions.excludeConfirm":    "Exclude “%s” from budgets and reports? The account balance stays the same. This transaction is left out of budgets and reports.",
 	"transactions.excludeConfirmBtn": "Exclude from budgets and reports",
 	"transactions.readFailed":        "Your transactions could not be read, so nothing was changed. Reload the page and try again.",
+	"transactions.bulkNothing":       "None of the selected transactions needs this change.",
 	"transactions.excludedOne":       "“%s” is left out of budgets and reports",
 	"transactions.includedOne":       "“%s” is included in budgets and reports again",
 

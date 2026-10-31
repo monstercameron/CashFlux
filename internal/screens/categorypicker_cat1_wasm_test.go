@@ -32,6 +32,7 @@ func TestEditCategoryPickerCreatesAndSelectsSubcategoryCAT1(t *testing.T) {
 	}
 
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(TransactionEditForm, TransactionEditFormProps{TxnID: txn.ID}))
 	selectNode := findByTestID(f, "select", "txn-edit-category")

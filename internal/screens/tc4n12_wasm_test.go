@@ -56,6 +56,7 @@ func TestSplitNewCategoryDismissalRestoresSelectionAndCanReopenSplit(t *testing.
 	t.Cleanup(func() { appstate.Default = previous })
 
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(SplitEditor, splitEditorProps{
 		Txn: domain.Transaction{
@@ -101,6 +102,7 @@ func TestSplitNewCategoryDismissalRestoresEmptySelection(t *testing.T) {
 	t.Cleanup(func() { appstate.Default = previous })
 
 	f := render.New(t)
+	pickerFixtureTarget(t, f)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(SplitEditor, splitEditorProps{
 		Txn: domain.Transaction{

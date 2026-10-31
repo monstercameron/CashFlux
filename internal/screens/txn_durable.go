@@ -100,7 +100,7 @@ func observeTxnDurability(app *appstate.App) {
 	})
 }
 
-func useTxnSaveStatus(id string) string {
+func useTxnSaveStatus(id string) (text string, pending bool) {
 	observeTxnDurability(appstate.Default)
 	status := txnSaveStatuses[id]
 	atom := state.UseAtom(fmt.Sprintf("transaction:durable:%d:%s", txnDurabilityNamespace, id), status.value)
@@ -121,7 +121,8 @@ func useTxnSaveStatus(id string) string {
 			delete(txnSaveStatuses, id)
 		}
 	}, id)
-	return txnSaveStatusText(atom.Get())
+	state := atom.Get()
+	return txnSaveStatusText(state), state == txnSavePending
 }
 
 func txnSaveStatusText(status txnSaveState) string {
