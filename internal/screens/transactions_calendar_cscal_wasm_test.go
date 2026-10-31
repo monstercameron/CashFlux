@@ -106,8 +106,8 @@ func TestCSCALWeekRowKeepsDayEventsStableAcrossChangingRows(t *testing.T) {
 			t.Fatalf("days=%d want %d", len(buttons), count)
 		}
 		picked = ""
-		if buttons[0].Property("onclick") != nil {
-			t.Fatal("padding day acquired a click handler")
+		if buttons[0].Property("onclick") == nil {
+			t.Fatal("padding day is not clickable; every day opens its date")
 		}
 		if !strings.Contains(buttons[0].Attr("class"), " out") {
 			t.Fatal("padding day lost its out-of-month class")

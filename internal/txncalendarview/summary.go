@@ -129,7 +129,8 @@ type CellSummary struct {
 
 // CellSummary prepares density, schedule markers and the complete day name.
 func (l Labels) CellSummary(day Day) CellSummary {
-	out := CellSummary{ShowNet: day.NetStr != "", ShowMoved: day.MovedStr != "", Class: "cal-cell txn-cal-cell", DayText: strconv.Itoa(day.Day), Dots: DotCount(day.Count), Pickable: day.InMonth, Current: day.InMonth && day.Today}
+	// Every day in the grid opens its date in the ledger, including the days from the neighbouring months.
+	out := CellSummary{ShowNet: day.NetStr != "", ShowMoved: day.MovedStr != "", Class: "cal-cell txn-cal-cell", DayText: strconv.Itoa(day.Day), Dots: DotCount(day.Count), Pickable: true, Current: day.InMonth && day.Today}
 	if !day.InMonth {
 		out.Class += " out"
 	}

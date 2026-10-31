@@ -42,8 +42,8 @@ func registerTxnCalendar() {
 	)
 	rule(".txn-cal-weeks",
 		prop("display", "grid"),
-		prop("grid-template-columns", "repeat(7,minmax(7rem,1fr)) 9rem"),
-		prop("min-width", "956px"),
+		prop("grid-template-columns", "repeat(8,minmax(7rem,1fr))"),
+		prop("min-width", "56rem"),
 		prop("gap", "4px"),
 	)
 	rule(".txn-cal-week-head, .txn-cal-week-row",
@@ -65,7 +65,7 @@ func registerTxnCalendar() {
 		prop("gap", "4px"),
 		prop("box-sizing", "border-box"),
 		prop("min-width", "0"),
-		prop("height", "128px"),
+		prop("height", "8rem"),
 		prop("overflow", "hidden"),
 		prop("padding", "6px 8px"),
 		prop("border", "1px solid var(--border)"),
@@ -100,7 +100,7 @@ func registerTxnCalendar() {
 		prop("gap", "2px"),
 		prop("box-sizing", "border-box"),
 		prop("min-width", "0"),
-		prop("height", "128px"),
+		prop("height", "8rem"),
 		prop("overflow", "hidden"),
 		prop("padding", "6px 8px"),
 		prop("border", "1px solid var(--border)"),
@@ -120,7 +120,7 @@ func registerTxnCalendar() {
 	)
 	rule(".txn-cal-cell.out",
 		prop("opacity", "0.4"),
-		prop("cursor", "default"),
+		prop("cursor", "pointer"),
 		prop("background", "transparent"),
 	)
 	rule(".txn-cal-cell.today",

@@ -12,10 +12,10 @@ func TestR9CCalendarWeekCellsUseStylesheetRules(t *testing.T) {
 	registerTxnCalendar()
 	css := Build()
 	for _, want := range []string{
-		".txn-cal-weeks{display:grid;grid-template-columns:repeat(7,minmax(7rem,1fr)) 9rem;min-width:956px;gap:4px;}",
+		".txn-cal-weeks{display:grid;grid-template-columns:repeat(8,minmax(7rem,1fr));min-width:56rem;gap:4px;}",
 		".txn-cal-viewport{max-width:100%;overflow-x:auto;",
 		"@container (max-width: 960px){.txn-cal-scroll-hint{display:inline}}",
-		"height:128px;overflow:hidden;",
+		"height:8rem;overflow:hidden;",
 		".txn-cal-week-head, .txn-cal-week-row{display:contents;}",
 		".txn-cal-week-total{display:flex;flex-direction:column;",
 		".txn-cal-week-spent{font-weight:600;white-space:nowrap;}",

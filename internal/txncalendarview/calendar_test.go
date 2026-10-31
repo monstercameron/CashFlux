@@ -225,7 +225,7 @@ func TestGhostAndCellSummaries(t *testing.T) {
 	}{
 		{"default", Day{Day: 22, InMonth: true, NetStr: "$1.00"}, "22", true, false, "cal-cell txn-cal-cell"},
 		{"today", Day{Day: 22, InMonth: true, Today: true, AriaLabel: "explicit", MovedStr: "Transferred $1.00"}, "explicit", true, true, "cal-cell txn-cal-cell today"},
-		{"padding", Day{Day: 30, MonthName: "September 2026", Today: true}, "September 2026", false, false, "cal-cell txn-cal-cell out today"},
+		{"padding", Day{Day: 30, MonthName: "September 2026", Today: true}, "September 2026", true, false, "cal-cell txn-cal-cell out today"},
 		{"ghosts", Day{Day: 22, InMonth: true, Rates: currency.Rates{Base: "USD"}, Ghosts: []txncalendar.Ghost{{Label: "One", Currency: "USD"}, {Label: "Two", Currency: "USD"}}}, "; ", true, false, "cal-cell txn-cal-cell"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

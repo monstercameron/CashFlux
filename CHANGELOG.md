@@ -91,6 +91,7 @@ and every commit updates this file under `Unreleased`.
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed
+- Every day in the transaction calendar is clickable, including the days from the neighbouring months, and the week-total column is one of eight equal columns, so every cell is the same width.
 - Cleared rows show a check glyph beside the description instead of the word "Cleared". A row with a note shows a note glyph; clicking it reveals the note under the description without opening the editor.
 - The Transactions row Edit and ⋯ buttons, and the bulk bar actions, are the shared ToolButton at the standard 38px, the same component the Accounts rows and toolbars use. The bulk pickers and the clear control are standard buttons too. The row actions column is wide enough for both.
 - The Transactions period control is shared toolbar buttons around one select. The previous and next steps and the clear control are the shared ToolButton, and the select takes the same height, radius, border and fill, so the row matches Filters and More.
