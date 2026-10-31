@@ -6,6 +6,7 @@ package ui
 
 import (
 	"strings"
+	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -324,6 +325,17 @@ func flipPanelInitialFocusSelector(surfaceID string) string {
 // nothing focusable stops after the last one.
 const focusRetryFrames = 4
 
+// nextFrame runs fn on the next animation frame. A host without requestAnimationFrame
+// (a bare JavaScript runtime such as the Node test runner) runs fn at once, so the
+// focus pass still lands and its retries stay bounded.
+func nextFrame(fn func(float64)) func() {
+	if !js.Global().Get("requestAnimationFrame").Truthy() {
+		fn(0)
+		return func() {}
+	}
+	return interop.RequestAnimationFrame(fn)
+}
+
 // useFlipPanelInitialFocus moves focus to the panel's first body control once that control is
 // in the DOM. The panel mounts before its body child renders, so the first attempt can find
 // nothing. The attempt is retried over a few frames and stops at once when it succeeds. If the
@@ -341,10 +353,10 @@ func useFlipPanelInitialFocus(surfaceID string) {
 				return
 			}
 			if attempts < focusRetryFrames {
-				cancelFrame = interop.RequestAnimationFrame(attempt)
+				cancelFrame = nextFrame(attempt)
 			}
 		}
-		cancelFrame = interop.RequestAnimationFrame(attempt)
+		cancelFrame = nextFrame(attempt)
 		return func() {
 			if cancelFrame != nil {
 				cancelFrame()
