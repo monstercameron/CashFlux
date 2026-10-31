@@ -85,6 +85,32 @@ These are the rules a new change should follow. Most are already in the code.
 - **Unused CSS is removed when found.** Dead dialog-scrim and dialog-backdrop rules were removed
   once nothing used them (`2119d707`).
 
+### Render helpers
+
+Markup is built with the framework's helpers, not with Go `if` blocks around a variable.
+
+- **`If`, `Unless`, `IfElse`, `Show` (shorthand, eager)** for a single expression that is cheap
+  and needs no guard. Both branches of `IfElse` are built before the call, so keep them simple.
+- **`ui.If` (lazy, `ui/branching.go`)** when a branch needs statements, a guard, or work that
+  should not run when hidden. It takes `NodeFactory` closures, so only the chosen branch is built.
+  `IfLazy` was a local copy of this and was removed in `472d21d8`. Do not add another.
+- **`ClassNames` and `When`** for conditional classes. `ClassMap` is the same from a map.
+- **`Map` and `MapKeyed`** for lists. Use `MapKeyed` when items can reorder or change, so each
+  row keeps its identity. Use `MapKeyedComponent` when a row needs its own hooks or handlers,
+  because it gives each row its own hook state.
+- **`Match()` chains** when more than two branches depend on one value. Do not write an
+  `if` / `else if` ladder that assigns a node.
+- **Keep `On*` options out of variable-length loops.** Use `MapKeyedComponent` for per-row handlers.
+
+Anti-pattern: `var x ui.Node = Fragment()`, then `if cond { x = ... }`, then `x` used in markup.
+Replace it with `ui.If` or `If`. This was done for the Accounts row and its notes, valuation change
+and delta (`22b9fedb`, `78c67d88`).
+
+**Still open:** about 11 sites on the Accounts pages keep the assign-in-an-`if` pattern:
+`accounts_edit_form.go` (balances, line), `accounts_forward.go` (read),
+`accounts_recurring.go` (body), `accounts_row.go` (projection, driver, details, chart) and
+`accounts_tiles.go` (body content, class segment). Each needs a browser check after it changes.
+
 ### Comments
 
 - A comment describes the current design, not the history. No ticket tags, no "used to" lines.
