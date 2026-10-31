@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- `docs/CLEANUP_METHODOLOGY.md` records the method, standards, bugs and open items from the last 73 commits, so the same cleanup can be repeated on other pages.
 - One z-index scale on `:root`, for every layer above the page content: `--z-base`, `--z-raised`, `--z-sticky`, `--z-dropdown`, `--z-overlay`, `--z-popover`, `--z-modal`, `--z-dialog`, `--z-toast`, `--z-banner` and `--z-lock`. The app lock gate, the save-failure and update banners, the help and shortcut overlays, and the widget builder's status note now use these tokens instead of literal values. The app lock gate and banners keep a fallback value so they still stack without the stylesheet.
 
 ### Fixed
