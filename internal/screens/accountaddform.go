@@ -232,11 +232,19 @@ func (t draftText) Set(v string) { t.set(v) }
 // accountAddForm is the add-an-account form. Its state is one typed draft; the presentation toggles
 // (advanced, split ownership, the currency reveal) stay as separate state because they are not
 // account data.
+//
+// Hidden sections are not built. Each one is a native Go condition, so its nodes and props exist
+// only while it is shown, and the components inside keep their hooks in stable positions.
 func accountAddForm(props AccountAddFormProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
+
+	// One snapshot of the accounts and members for this render. Handlers read the live lists instead,
+	// so a submit never works from a stale copy.
+	accounts := app.Accounts()
+	members := app.Members()
 
 	baseCur := app.Settings().BaseCurrency
 	if baseCur == "" {
@@ -249,7 +257,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		if len(app.Settings().FXRates) > 0 {
 			return false
 		}
-		for _, a := range app.Accounts() {
+		for _, a := range accounts {
 			if a.Currency != "" && a.Currency != baseCur {
 				return false
 			}
@@ -284,6 +292,30 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	onToggleAsLiab := ui.UseEvent(func() {
 		form.Update(func(d accountDraft) accountDraft {
 			d.AsLiability = !d.AsLiability
+			return d
+		})
+	})
+
+	// The field setters the child controls call. Each is memoized so a control's props keep their
+	// identity from one keystroke to the next. The setters capture only the form, whose state is
+	// stable, so an empty dependency list is correct.
+	onTypeChange := ui.UseCallback(func(v string) {
+		draftTextOf(form, func(d *accountDraft) *string { return &d.Type }).Set(v)
+	})
+	onCurrencyChange := ui.UseCallback(func(v string) {
+		draftTextOf(form, func(d *accountDraft) *string { return &d.Currency }).Set(strings.ToUpper(v))
+	})
+	onInstitutionChange := ui.UseCallback(func(v string) {
+		draftTextOf(form, func(d *accountDraft) *string { return &d.Institution }).Set(v)
+	})
+	onCustom := ui.UseCallback(func(key, value string) {
+		form.Update(func(d accountDraft) accountDraft {
+			nm := make(map[string]string, len(d.Custom)+1)
+			for k, v := range d.Custom {
+				nm[k] = v
+			}
+			nm[key] = value
+			d.Custom = nm
 			return d
 		})
 	})
@@ -373,13 +405,76 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		message = form.FieldMessage("Name")
 	}
 
-	return Form(css.Class("form-grid"), Attr("id", "account-add-form"), Attr("data-testid", "account-add-form"), OnSubmit(add),
+	// Each optional section is built only when it is shown.
+	var firstRun, copyStarter, otherToggle, ownership, currency, useOtherCurrency ui.Node
+	var liability, advanced, assetFields, lockUntil ui.Node
+	if len(accounts) == 0 {
 		// C7: first-run framing — when this is the household's very first account,
 		// explain in one friendly line what an account is and that nothing leaves the
 		// device. Disappears once any account exists, so it never nags returning users.
-		If(len(app.Accounts()) == 0,
-			P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
-				uistate.T("accounts.firstRunHint"))),
+		firstRun = P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
+			uistate.T("accounts.firstRunHint"))
+	}
+	if len(accounts) > 0 {
+		// G5: the copy-existing starter (only once accounts exist to copy), demoted
+		// below the name field.
+		copyStarter = Div(css.Class("acct-add-wide"),
+			labeledField(uistate.T("accounts.copyExisting"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: copyOptions, Selected: "", TestID: "account-copy-existing",
+					OnChange: copyFrom, AriaLabel: uistate.T("accounts.copyExisting"),
+				})))
+	}
+	if isOther {
+		// "Other" has no natural class — let the user mark it a liability (debt) so the
+		// net-worth/debt formulas count it.
+		otherToggle = Div(css.Class("acct-add-wide"),
+			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), CheckedIf(d.AsLiability), OnChange(onToggleAsLiab)),
+				Div(css.Class("row-main"),
+					Span(uistate.T("accounts.countAsLiability")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint")))))
+	}
+	ownership = ui.CreateElement(accountOwnershipFields, accountOwnershipProps{
+		Form: form, Members: members, Owner: ownerOptions, Split: splitOwn, OnToggleSplit: onToggleSplitOwn,
+	})
+	if !singleCurrency || revealCurr.Get() {
+		currency = labeledField(uistate.T("accounts.currency"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   currencyOpts,
+				Selected:  d.Currency,
+				OnChange:  onCurrencyChange,
+				AriaLabel: uistate.T("accounts.currency"),
+				TestID:    "account-currency-select",
+			}))
+	}
+	// C78: reveal the currency picker on demand for single-currency households.
+	if singleCurrency && !revealCurr.Get() {
+		useOtherCurrency = Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "account-use-other-currency"),
+			OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))
+	}
+	if isLiab {
+		liability = ui.CreateElement(accountLiabilityFields, accountLiabilityProps{Form: form})
+	}
+	if advOpen.Get() {
+		advanced = ui.CreateElement(accountAdvancedFields, accountAdvancedProps{Form: form, EV: ev, Accounts: accounts, Name: d.Name})
+	}
+	if !isLiab && advOpen.Get() {
+		assetFields = ui.CreateElement(accountAssetFields, accountAssetProps{Form: form})
+	}
+	// C74: lock-until is surfaced directly for lockable asset types (savings /
+	// investment / retirement / crypto / other) — no Advanced toggle required.
+	// Liquid everyday accounts (checking / debit / cash) can still reach it via
+	// Advanced when it's genuinely useful (e.g. a locked flex-savings account
+	// classified loosely as "checking"). Liabilities never show this field.
+	if isLockableAsset || (!isLiab && advOpen.Get()) {
+		lockUntil = labeledField(uistate.T("accounts.lockUntil"),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")),
+				BindFunc(draftTextOf(form, func(d *accountDraft) *string { return &d.LockUntil }).Get, draftTextOf(form, func(d *accountDraft) *string { return &d.LockUntil }).Set)))
+	}
+
+	return Form(css.Class("form-grid"), Attr("id", "account-add-form"), Attr("data-testid", "account-add-form"), OnSubmit(add),
+		firstRun,
 		// Name leads the form — the main path. (The "Copy an existing account…"
 		// shortcut is a secondary convenience, so it sits BELOW the name, not above
 		// it: an edge case shouldn't be the first field a new user meets.)
@@ -388,44 +483,18 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				Input(append(append([]any{css.Class("field"), Type("text"), Attr("id", nameID), Attr("data-testid", "account-add-name"),
 					Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs(errID, message)...),
 					uiw.FieldValue(name.Get()))...))),
-		// G5: the copy-existing starter (only once accounts exist to copy), demoted
-		// below the name field.
-		If(len(app.Accounts()) > 0, Div(css.Class("acct-add-wide"),
-			labeledField(uistate.T("accounts.copyExisting"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: copyOptions, Selected: "", TestID: "account-copy-existing",
-					OnChange: func(v string) { copyFrom(v) }, AriaLabel: uistate.T("accounts.copyExisting"),
-				})))),
+		copyStarter,
 		labeledField(uistate.T("accounts.typeLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   typeOptions,
 				Selected:  d.Type,
-				OnChange:  func(v string) { draftTextOf(form, func(d *accountDraft) *string { return &d.Type }).Set(v) },
+				OnChange:  onTypeChange,
 				AriaLabel: uistate.T("accounts.typeLabel"),
 			})),
-		// "Other" has no natural class — let the user mark it a liability (debt) so the
-		// net-worth/debt formulas count it.
-		If(isOther, Div(css.Class("acct-add-wide"),
-			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), CheckedIf(d.AsLiability), OnChange(onToggleAsLiab)),
-				Div(css.Class("row-main"),
-					Span(uistate.T("accounts.countAsLiability")),
-					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint")))))),
-		ui.CreateElement(accountOwnershipFields, accountOwnershipProps{Form: form, Members: app.Members(), Owner: ownerOptions, Split: splitOwn, OnToggleSplit: onToggleSplitOwn}),
-		If(!singleCurrency || revealCurr.Get(), labeledField(uistate.T("accounts.currency"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:  currencyOpts,
-				Selected: d.Currency,
-				OnChange: func(v string) {
-					draftTextOf(form, func(d *accountDraft) *string { return &d.Currency }).Set(strings.ToUpper(v))
-				},
-				AriaLabel: uistate.T("accounts.currency"),
-				TestID:    "account-currency-select",
-			}))),
-		// C78: reveal the currency picker on demand for single-currency households.
-		If(singleCurrency && !revealCurr.Get(),
-			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "account-use-other-currency"),
-				OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))),
+		otherToggle,
+		ownership,
+		currency,
+		useOtherCurrency,
 		labeledField(uistate.T("accounts.openingBalance"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"),
 				BindFunc(draftTextOf(form, func(d *accountDraft) *string { return &d.Amount }).Get, draftTextOf(form, func(d *accountDraft) *string { return &d.Amount }).Set))),
@@ -437,41 +506,24 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			}
 			return uistate.T("accounts.openingBalanceHint")
 		}()),
-		If(isLiab, ui.CreateElement(accountLiabilityFields, accountLiabilityProps{Form: form})),
+		liability,
 		// MIA-extend (#445-10): institution field shown for all account types.
 		labeledField(uistate.T("accounts.institution"),
 			uiw.Combobox(uiw.SuggestProps{
 				Value:       d.Institution,
 				Placeholder: uistate.T("accounts.institutionHint"),
 				AriaLabel:   uistate.T("accounts.institution"),
-				OnInput:     func(v string) { draftTextOf(form, func(d *accountDraft) *string { return &d.Institution }).Set(v) },
+				OnInput:     onInstitutionChange,
 				Options:     institutionNames,
 				ListID:      "inst-list-add",
 			})),
 		Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "account-add-advanced"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
 			IfElse(advOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
-		If(advOpen.Get(), ui.CreateElement(accountAdvancedFields, accountAdvancedProps{Form: form, EV: ev, Accounts: app.Accounts(), Name: d.Name})),
-		If(!isLiab && advOpen.Get(), ui.CreateElement(accountAssetFields, accountAssetProps{Form: form})),
-		// C74: lock-until is surfaced directly for lockable asset types (savings /
-		// investment / retirement / crypto / other) — no Advanced toggle required.
-		// Liquid everyday accounts (checking / debit / cash) can still reach it via
-		// Advanced when it's genuinely useful (e.g. a locked flex-savings account
-		// classified loosely as "checking"). Liabilities never show this field.
-		If(isLockableAsset || (!isLiab && advOpen.Get()), labeledField(uistate.T("accounts.lockUntil"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")),
-				BindFunc(draftTextOf(form, func(d *accountDraft) *string { return &d.LockUntil }).Get, draftTextOf(form, func(d *accountDraft) *string { return &d.LockUntil }).Set)))),
+		advanced,
+		assetFields,
+		lockUntil,
 		MapKeyed(accDefs, func(def customfields.Def) any { return def.ID }, func(def customfields.Def) ui.Node {
-			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: def, Value: d.Custom[def.Key], OnChange: func(key, value string) {
-				form.Update(func(d accountDraft) accountDraft {
-					nm := make(map[string]string, len(d.Custom)+1)
-					for k, v := range d.Custom {
-						nm[k] = v
-					}
-					nm[key] = value
-					d.Custom = nm
-					return d
-				})
-			}})
+			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: def, Value: d.Custom[def.Key], OnChange: onCustom})
 		}),
 		errText(errID, message),
 		announce.Region(),
@@ -488,26 +540,29 @@ type accountOwnershipProps struct {
 }
 
 // accountOwnershipFields is the owner picker and, with two or more members, the split-ownership
-// disclosure. Each member's share row is its own component, so no On* handler is built inside the
-// keyed loop (CLAUDE.md §gotchas).
+// disclosure. The disclosure is built only when there are members to split between.
 func accountOwnershipFields(props accountOwnershipProps) ui.Node {
 	owner := draftTextOf(props.Form, func(d *accountDraft) *string { return &d.Owner })
 	// C30: the owner picker only offers "Everyone/Group" until members exist, so in
 	// a 0-member household it's noise that defaults to a meaningless group. Hide it
 	// (owner stays GroupOwnerID = shared) until at least one member is added.
-	return Fragment(
-		If(len(props.Members) > 0, labeledField(uistate.T("common.owner"),
+	var ownerPicker, split ui.Node
+	if len(props.Members) > 0 {
+		ownerPicker = labeledField(uistate.T("common.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.Owner,
 				Selected:  props.Form.Get().Owner,
 				OnChange:  func(v string) { owner.Set(v) },
 				AriaLabel: uistate.T("common.owner"),
-			}))),
-		// Split-ownership disclosure: available when there are 2+ members.
-		If(len(props.Members) >= 2, ui.CreateElement(accountSplitFields, accountSplitProps{
+			}))
+	}
+	// Split-ownership disclosure: available when there are 2+ members.
+	if len(props.Members) >= 2 {
+		split = ui.CreateElement(accountSplitFields, accountSplitProps{
 			Form: props.Form, Members: props.Members, Split: props.Split, OnToggleSplit: props.OnToggleSplit,
-		})),
-	)
+		})
+	}
+	return Fragment(ownerPicker, split)
 }
 
 // accountSplitProps configures the split-ownership editor.
@@ -518,16 +573,13 @@ type accountSplitProps struct {
 	OnToggleSplit ui.Handler
 }
 
-// accountSplitFields is the split-ownership disclosure and, once open, one share row per member.
+// accountSplitFields is the split-ownership disclosure. Once it is open, it builds one share row per
+// member; while it is closed, the rows are not built at all.
 func accountSplitFields(props accountSplitProps) ui.Node {
-	shares := props.Form.Get().OwnerShares
-	shareSum := 0
-	for _, v := range shares {
-		shareSum += v
-	}
-	// onShareChange is a plain func — not an On* hook — so it is safe to capture as a prop inside
-	// MapKeyed.
-	onShareChange := func(memberID string, valStr string) {
+	open := props.Split.Get()
+	// onShareChange is a plain func, not an On* hook, so it is safe to pass as a prop inside MapKeyed.
+	// It is memoized so the share rows keep their identity between keystrokes.
+	onShareChange := ui.UseCallback(func(memberID string, valStr string) {
 		n, _ := strconv.Atoi(valStr)
 		props.Form.Update(func(d accountDraft) accountDraft {
 			nm := make(map[string]int, len(d.OwnerShares)+1)
@@ -538,15 +590,15 @@ func accountSplitFields(props accountSplitProps) ui.Node {
 			d.OwnerShares = nm
 			return d
 		})
-	}
-	return Div(
-		Button(css.Class("btn cf-adv-toggle"), Type("button"),
-			Attr("aria-expanded", ariaBool(props.Split.Get())),
-			OnClick(props.OnToggleSplit),
-			IfElse(props.Split.Get(),
-				Text(uistate.T("account.splitOwnership")+" ▴"),
-				Text(uistate.T("account.splitOwnership")+" ▾"))),
-		If(props.Split.Get(), Div(
+	})
+	var editor ui.Node
+	if open {
+		shares := props.Form.Get().OwnerShares
+		shareSum := 0
+		for _, v := range shares {
+			shareSum += v
+		}
+		editor = Div(
 			P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
 			MapKeyed(props.Members,
 				func(m domain.Member) any { return m.ID },
@@ -557,10 +609,19 @@ func accountSplitFields(props accountSplitProps) ui.Node {
 						OnChange: onShareChange,
 					})
 				}),
-			If(shareSum != 100 && props.Split.Get(),
+			If(shareSum != 100,
 				P(css.Class("err"), Attr("role", "alert"),
 					uistate.T("account.shareSumError", shareSum))),
-		)),
+		)
+	}
+	return Div(
+		Button(css.Class("btn cf-adv-toggle"), Type("button"),
+			Attr("aria-expanded", ariaBool(open)),
+			OnClick(props.OnToggleSplit),
+			IfElse(open,
+				Text(uistate.T("account.splitOwnership")+" ▴"),
+				Text(uistate.T("account.splitOwnership")+" ▾"))),
+		editor,
 	)
 }
 
