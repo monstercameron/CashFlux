@@ -718,7 +718,7 @@ func txnToolbarReview(props txnToolbarRenderProps) ui.Node {
 	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	summary := props.Summary
 	return If(summary.review > 0, uiw.ToolButton(uiw.ToolButtonProps{
-		Label: uistate.T("uxt4.review"), Badge: strconv.Itoa(summary.review), Variant: "stale",
+		Label: uistate.T("uxt4.review"), Icon: icon.CheckCircle, Badge: strconv.Itoa(summary.review), Variant: "stale",
 		AriaLabel: uistate.T("r1c.reviewCallout", summary.review), TestID: "txn-review-btn",
 	}, OnClick(openReview)))
 }
