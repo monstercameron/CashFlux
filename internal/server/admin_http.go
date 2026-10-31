@@ -9,10 +9,12 @@ import (
 
 // AdminUsageResponse is a read-only support view of the authenticated user's daily usage.
 type AdminUsageResponse struct {
-	UserID   string `json:"userId"`
-	Day      string `json:"day"`
-	Requests int64  `json:"requests"`
-	Tokens   int64  `json:"tokens"`
+	UserID               string `json:"userId"`
+	Day                  string `json:"day"`
+	Requests             int64  `json:"requests"`
+	Tokens               int64  `json:"tokens"`
+	EstimatedCostNanoUSD int64  `json:"estimatedCostNanoUsd"`
+	CostIncomplete       bool   `json:"costIncomplete"`
 }
 
 func handleAdminUsage(cfg Config, store *Store) http.HandlerFunc {
@@ -39,10 +41,12 @@ func handleAdminUsage(cfg Config, store *Store) http.HandlerFunc {
 			usage = Usage{UserID: user.ID, Day: usageDay(day)}
 		}
 		writeJSON(w, AdminUsageResponse{
-			UserID:   usage.UserID,
-			Day:      usage.Day,
-			Requests: usage.Requests,
-			Tokens:   usage.Tokens,
+			UserID:               usage.UserID,
+			Day:                  usage.Day,
+			Requests:             usage.Requests,
+			Tokens:               usage.Tokens,
+			EstimatedCostNanoUSD: usage.EstimatedCostNanoUSD,
+			CostIncomplete:       usage.CostIncomplete,
 		})
 	}
 }
