@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Bill matching builds month-based occurrences from the rule's own due date, so a bill due on the 31st no longer drifts to the 1st of the next month.
 - README.md is restored from the brand-poster version. Commit ca42d69d had replaced it with NUL bytes.
 - The receipt preview shows the synced image from the encrypted blob store again. It keeps the flip panel the Transactions modals now use, after the rebase onto main.
 - Goal write and FX display tests now compare with a saved goal baseline, so UTC runners still detect real persisted-money changes after JSON normalizes the original local timestamp.

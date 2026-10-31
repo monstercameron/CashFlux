@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/billmatch"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -21,12 +22,17 @@ const (
 )
 
 // recurringOccurrences expands one recurring rule into its concrete due dates
-// within [from, to] (inclusive), stepping the cadence. NextDue anchors the walk;
-// the cadence is stepped backward to cover the past window and forward to the
-// end. Iterations are capped so a stale NextDue can't loop unbounded.
+// within [from, to] (inclusive). Month-based cadences are anchored on NextDue, so a
+// rule due on the 31st keeps its day and clamps only in shorter months. Other
+// cadences step by a fixed number of days from NextDue, stepping back to cover the
+// past window and forward to the end. Iterations are capped so a stale NextDue
+// can't loop unbounded.
 func recurringOccurrences(r domain.Recurring, from, to time.Time) []time.Time {
 	if r.Cadence == "" || r.NextDue.IsZero() {
 		return nil
+	}
+	if step := calendarMonthStep(r.Cadence); step > 0 {
+		return monthlyOccurrences(r.NextDue, step, from, to)
 	}
 	// Step the cadence back to an anchor at or before `from`, then emit forward.
 	anchor := r.NextDue
@@ -48,6 +54,39 @@ func recurringOccurrences(r domain.Recurring, from, to time.Time) []time.Time {
 			break
 		}
 		cur = next
+	}
+	return out
+}
+
+// calendarMonthStep returns how many calendar months separate occurrences of a
+// month-based cadence, or 0 for a cadence measured in days or weeks.
+func calendarMonthStep(c domain.RecurringCadence) int {
+	switch c {
+	case domain.CadenceMonthly:
+		return 1
+	case domain.CadenceQuarterly:
+		return 3
+	case domain.CadenceYearly:
+		return 12
+	}
+	return 0
+}
+
+// monthlyOccurrences returns the occurrences of a month-based rule anchored on
+// `anchor` (the rule's NextDue) that fall within [from, to]. Each occurrence is
+// computed from the anchor, not from the previous one, so the day never drifts.
+func monthlyOccurrences(anchor time.Time, step int, from, to time.Time) []time.Time {
+	monthsBetween := func(a, b time.Time) int {
+		return (b.Year()-a.Year())*12 + int(b.Month()-a.Month())
+	}
+	first := monthsBetween(anchor, from)/step - 2
+	last := monthsBetween(anchor, to)/step + 2
+	var out []time.Time
+	for k := first; k <= last; k++ {
+		due := dateutil.AddMonthsClamped(anchor, k*step)
+		if !due.Before(from) && !due.After(to) {
+			out = append(out, due)
+		}
 	}
 	return out
 }
