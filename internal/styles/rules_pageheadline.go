@@ -99,8 +99,8 @@ func registerPageHeadline() {
 		display("flex"), alignItems("center"), justifyContent("flex-end"), flexWrap("wrap"), gap("0.5rem"),
 	)
 	rule(".txn-bubble",
-		display("flex"), flexDirection("column"), gap("0.6rem"), minWidth("0"),
-		background("var(--bg-card)"), border("1px solid var(--border)"), borderRadius("var(--radius-xl)"), padding("0.75rem"),
+		display("flex"), flexDirection("column"), gap("0.7rem"), minWidth("0"),
+		background("var(--bg-card)"), border("1px solid var(--border)"), borderRadius("var(--radius-xl)"), padding("0.7rem"),
 	)
 	rule(".txn-summary-frame",
 		position("relative"),

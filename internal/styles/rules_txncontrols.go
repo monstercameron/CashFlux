@@ -15,10 +15,12 @@ func registerTxnControls() {
 		marginBottom("0"),
 	)
 	rule(".txn-responsive-toolbar",
-		gap("0.5rem"),
+		display("flex"),
+		flexDirection("column"),
+		gap("10px"),
 	)
 	rule(".txn-responsive-toolbar .filter-toolbar-primary",
-		gap(".65rem"),
+		gap(".7rem"),
 	)
 	rule(".txn-responsive-toolbar .filter-toolbar-primary .fctrl-search",
 		boxSizing("border-box"),
@@ -44,13 +46,13 @@ func registerTxnControls() {
 		padding("0 1rem"),
 	)
 	rule(".txn-responsive-toolbar .filter-toolbar-actions",
-		gap(".75rem"),
+		gap(".7rem"),
 		minWidth("0"),
 	)
 	rule(".txn-toolbar-context, .txn-toolbar-commands",
 		display("flex"),
 		alignItems("center"),
-		gap(".75rem"),
+		gap(".7rem"),
 		minWidth("0"),
 	)
 	rule(".txn-toolbar-context",
