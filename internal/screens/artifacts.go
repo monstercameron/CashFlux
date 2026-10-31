@@ -102,11 +102,21 @@ func Artifacts() ui.Node {
 				Bytes: data, CreatedAt: time.Now(),
 			}
 			art.Size = artifacts.Size(art)
-			if err := app.PutArtifact(art); err != nil {
-				notify(err.Error())
-				return
-			}
-			refresh()
+			// IndexedDB completes asynchronously; leave the FileReader callback before
+			// waiting for its encrypted write, then save the metadata and persist.
+			go func() {
+				stored, err := app.StoreBlobForArtifact(art)
+				if err == nil {
+					err = app.PutArtifact(stored)
+				}
+				if err != nil {
+					notify(err.Error())
+					return
+				}
+				app.RefreshBlobUsage()
+				refresh()
+				uistate.RequestPersist()
+			}()
 		})
 	}
 	importCSV := func() {
@@ -531,6 +541,12 @@ func artifactFileLimit(name, mime string) int {
 	}
 	if strings.HasSuffix(strings.ToLower(name), ".csv") || mime == "text/csv" {
 		return 25 * 1024 * 1024
+	}
+	// The hosted blob service defaults to 32 MiB per encrypted payload. Its
+	// JSON envelope base64-encodes the ciphertext, expanding it by about 4/3.
+	// Leave room for that expansion so an accepted PDF can sync by default.
+	if strings.HasSuffix(strings.ToLower(name), ".pdf") || mime == "application/pdf" {
+		return 23 * 1024 * 1024
 	}
 	return 45 * 1024 * 1024
 }
