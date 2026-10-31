@@ -9,6 +9,11 @@ package styles
 func registerAccountsSurface() {
 	// The add-account form's full-width rows (the liability and ownership sub-forms, the
 	// advanced section) span both columns of the form grid.
+	// A name field with a validation message is outlined in the danger colour, so the error reads
+	// before the message is read. ClassIf and AttrIf set the marker from the form's error state.
+	rule(".field.field-invalid",
+		borderColor("var(--danger, #e5484d)"),
+	)
 	rule(".acct-add-wide",
 		gridColumn("1 / -1"),
 	)

@@ -480,8 +480,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		// it: an edge case shouldn't be the first field a new user meets.)
 		Div(css.Class("acct-add-wide"),
 			labeledField(uistate.T("common.name"),
-				Input(append(append([]any{css.Class("field"), Type("text"), Attr("id", nameID), Attr("data-testid", "account-add-name"),
-					Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs(errID, message)...),
+				Input(append([]any{css.Class("field"), Type("text"), Attr("id", nameID), Attr("data-testid", "account-add-name"),
+					Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName), ClassIf(message != "", "field-invalid"), AttrIf(message != "", "aria-invalid", "true"), AttrIf(message != "", "aria-describedby", errID)},
 					uiw.FieldValue(name.Get()))...))),
 		copyStarter,
 		labeledField(uistate.T("accounts.typeLabel"),
@@ -490,6 +490,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				Selected:  d.Type,
 				OnChange:  onTypeChange,
 				AriaLabel: uistate.T("accounts.typeLabel"),
+				TestID:    "account-type-select",
 			})),
 		otherToggle,
 		ownership,
