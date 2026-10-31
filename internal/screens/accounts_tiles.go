@@ -601,7 +601,10 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 		}
 		return dashboardview.BuildNetWorthTrend(accounts, txns, props.Rates, now).Spark
 	}, rev, settled, now.Format(dateutil.Layout), nw.Complete())
-	trendVisual := uiw.PageHeadlineTrend(uiw.PageHeadlineTrendProps{Values: spark, Label: uistate.T("dashboard.netWorth"), GradientID: "acct-headline-trend"})
+	trendVisual := uiw.PageHeadlineTrend(uiw.PageHeadlineTrendProps{
+		Values: spark, Label: uistate.T("dashboard.netWorth"), GradientID: "acct-headline-trend",
+		Pending: nw.Complete() && !settled, PendingLabel: uistate.T("accounts.trendLoading"),
+	})
 
 	body := Div(
 		acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,

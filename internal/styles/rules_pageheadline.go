@@ -111,4 +111,28 @@ func registerPageHeadline() {
 	ruleMedia("(max-width: 720px)", ".txn-summary-frame > .page-headline",
 		paddingRight("0"),
 	)
+	// The trend draws in from the left, rising a few pixels as it fades up, so a chart
+	// that arrives after its series is worked out reads as loaded rather than spawned.
+	keyframes("pageHeadlineDraw",
+		at("from", prop("clip-path", "inset(0 100% 0 0)"), opacity("0"), transform("translateY(6px)")),
+		at("to", prop("clip-path", "inset(0 0 0 0)"), opacity("1"), transform("translateY(0)")),
+	)
+	keyframes("pageHeadlineSpin",
+		at("from", transform("rotate(0deg)")),
+		at("to", transform("rotate(360deg)")),
+	)
+	rule(".page-headline-trend-enter",
+		prop("animation", "pageHeadlineDraw 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
+	)
+	rule(".page-headline-spinner",
+		display("block"), width("18px"), height("18px"), marginTop("0.4rem"),
+		borderRadius("50%"), border("2px solid var(--border)"), borderTopColor("var(--accent)"),
+		prop("animation", "pageHeadlineSpin 900ms linear infinite"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".page-headline-trend-enter",
+		prop("animation", "none"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".page-headline-spinner",
+		prop("animation", "pageHeadlineSpin 2400ms linear infinite"),
+	)
 }

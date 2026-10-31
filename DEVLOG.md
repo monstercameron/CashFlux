@@ -1,3 +1,7 @@
+## 2026-10-30 - Trend spinner and draw-in on the accounts header
+
+The accounts trend waits one settle, so its chart used to appear all at once. The shared trend now takes a pending state that shows a spinner in the trend slot, and the drawn line reveals from left to right with a short rise. Both are CSS keyframes in the headline stylesheet, and both respect prefers-reduced-motion.
+
 ## 2026-10-30 - Transactions follows the Accounts order
 
 The Transactions page now opens with its two actions, then the period summary (net, a running-total line, spent and income) built on the shared page headline, then the search and filter bubble above the list. The summary keeps the existing count line as its footer, so its interactive figures and their tests stay put. The running total is a pure helper, txntoolbar.RunningTotal, with table tests.

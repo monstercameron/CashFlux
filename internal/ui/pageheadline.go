@@ -82,22 +82,31 @@ type PageHeadlineTrendProps struct {
 	Label string
 	// GradientID keeps the gradient unique when a page shows more than one trend.
 	GradientID string
+	// Pending shows a spinner in the trend's place while its series is still being
+	// worked out. PendingLabel names what is loading for assistive technology.
+	Pending      bool
+	PendingLabel string
 }
 
 // PageHeadlineTrend draws a trend picture for the right of a PageHeadline. It is the
 // shared AreaChart at headline size, with both ends faded into the card so the line
-// reads as a shape rather than a box.
+// reads as a shape rather than a box. The line draws in from the left once it has a
+// series, and a spinner holds the space while the series is pending.
 func PageHeadlineTrend(props PageHeadlineTrendProps) uic.Node {
 	if len(props.Values) < 2 {
+		if props.Pending {
+			return Span(css.Class("page-headline-spinner"), Attr("role", "status"), Attr("aria-label", props.PendingLabel))
+		}
 		return Fragment()
 	}
 	gid := props.GradientID
 	if gid == "" {
 		gid = "page-headline-trend"
 	}
-	return AreaChart(AreaChartProps{
-		Values: props.Values, GradientID: gid, Width: 420, Height: 96, Label: props.Label,
-	})
+	return Div(css.Class("page-headline-trend-enter"),
+		AreaChart(AreaChartProps{
+			Values: props.Values, GradientID: gid, Width: 420, Height: 96, Label: props.Label,
+		}))
 }
 
 // PageHeadlineFigureProps configures the large figure of a PageHeadline.
