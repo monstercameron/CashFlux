@@ -144,3 +144,51 @@ func TestRemoveAccountDocumentReturnsStorageErrorAndKeepsArtifact(t *testing.T) 
 		t.Fatalf("a storage failure was reported as a missing account: %v", err)
 	}
 }
+
+func TestRemoveAccountDocumentDeletesTheBlobOfAnUnreferencedFile(t *testing.T) {
+	app := newApp(t, false)
+	blobs := newMemBlobStore()
+	app.SetBlobStore(blobs)
+	ac := docTestAccount(t, app)
+	if err := app.AttachAccountDocument(ac.ID, AccountDocumentInput{Name: "a.png", MIME: "image/png", Data: pngTestBytes}); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	artID := app.Artifacts()[0].ID
+	if _, _, ok, _ := blobs.Get(artID); !ok {
+		t.Fatal("precondition: the attached file's blob is not in the blob store")
+	}
+	if err := app.RemoveAccountDocument(ac.ID, artID); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if n := len(app.Artifacts()); n != 0 {
+		t.Fatalf("%d artifact rows left after removal", n)
+	}
+	if _, _, ok, _ := blobs.Get(artID); ok {
+		t.Fatal("the removed document's blob is still in the blob store")
+	}
+}
+
+func TestRemoveAccountDocumentKeepsTheBlobOfAStillReferencedFile(t *testing.T) {
+	app := newApp(t, false)
+	blobs := newMemBlobStore()
+	app.SetBlobStore(blobs)
+	ac := docTestAccount(t, app)
+	if err := app.AttachAccountDocument(ac.ID, AccountDocumentInput{Name: "a.png", MIME: "image/png", Data: pngTestBytes}); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	artID := app.Artifacts()[0].ID
+	other := domain.Account{ID: "other-acct", Name: "Boat", Currency: "USD", Class: domain.ClassAsset, Type: domain.TypeOther, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		DocRefs: []domain.AccountDocRef{{ArtifactID: artID, Label: "shared"}}}
+	if err := app.PutAccount(other); err != nil {
+		t.Fatalf("put second account: %v", err)
+	}
+	if err := app.RemoveAccountDocument(ac.ID, artID); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if n := len(app.Artifacts()); n != 1 {
+		t.Fatalf("artifact rows = %d, want the shared row kept", n)
+	}
+	if _, _, ok, _ := blobs.Get(artID); !ok {
+		t.Fatal("a blob still referenced by another account was deleted")
+	}
+}

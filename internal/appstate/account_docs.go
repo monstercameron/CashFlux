@@ -287,7 +287,8 @@ func (a *App) AttachAccountDocument(accountID string, in AccountDocumentInput) e
 // RemoveAccountDocument drops the reference to one document (by artifact id) from an
 // account and reconciles the renewal-reminder tasks, so the document's reminder, if
 // any, resolves itself. The stored file is deleted in the same commit when no other
-// account document or transaction attachment still points at it. The returned error
+// account document or transaction attachment still points at it, and its blob leaves the blob
+// store once that commit succeeds; a failed blob delete is logged, not returned. The returned error
 // wraps ErrAccountNotFound or ErrAccountDocumentNotFound for those causes.
 func (a *App) RemoveAccountDocument(accountID, artifactID string) error {
 	if err := a.roleGuard(); err != nil {
@@ -321,6 +322,11 @@ func (a *App) RemoveAccountDocument(accountID, artifactID string) error {
 	}
 	if err := a.commitAccountDocRefs(ac, updated, changes); err != nil {
 		return fmt.Errorf("remove account document: %w", err)
+	}
+	if !referenced && a.blobs != nil {
+		if err := a.blobs.Delete(artifactID); err != nil {
+			a.log.Warn("delete removed document blob", "id", artifactID, "err", err)
+		}
 	}
 	a.reconcileDocExpiry(a.clock())
 	return nil
