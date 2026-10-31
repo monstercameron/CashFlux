@@ -119,7 +119,7 @@ func RefundPairBody(_ struct{}) ui.Node {
 	}
 
 	return Div(css.Class(tw.FlexCol, tw.Gap3),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlinks.pairIntro")),
+		P(css.Class("muted", tw.Text13, "txn-hint-flush"), uistate.T("txnlinks.pairIntro")),
 		summary,
 		body,
 		Div(css.Class("modal-sticky-foot"),

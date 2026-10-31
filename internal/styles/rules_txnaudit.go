@@ -224,4 +224,19 @@ func registerTxnAudit() {
 	ruleMedia("(prefers-reduced-motion: reduce)", ".data-table.is-search-stale tbody, .data-table[aria-busy=\"true\"] tbody",
 		transition("none"),
 	)
+
+	// A row that belongs to a split group carries an accent bar on its leading edge.
+	rule(".row.txn-ledger-row.txn-row-grouped",
+		boxShadow("inset 3px 0 0 0 var(--accent)"),
+	)
+	// The "Scheduled" pill on a ghost row reads as plain 12px text.
+	rule(".txn-scheduled-pill.txn-scheduled-pill-plain",
+		fontSize("12px"),
+		textTransform("none"),
+	)
+	// One entry in the transaction history panel.
+	rule(".rows > .row.txn-history-entry",
+		display("block"),
+		padding("0.5rem 0"),
+	)
 }

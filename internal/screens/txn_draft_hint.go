@@ -89,7 +89,7 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 			ui.CreateElement(txnDraftAIAction, txnDraftAIActionProps{Visible: view.ShowAsk, Loading: loading.Get(), LabelKey: view.AskKey, OnAsk: ask}),
 		),
 		ui.CreateElement(txnDraftOffer, txnDraftOfferProps{View: view, Settings: settings, FormatDate: pr.FormatDate, OnApply: apply}),
-		If(errText.Get() != "", P(css.Class("err", tw.Text12), Attr("role", "alert"), errText.Get())),
+		If(errText.Get() != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(css.Class(tw.Text12), errText.Get())})),
 	)
 }
 

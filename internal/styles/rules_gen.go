@@ -517,9 +517,12 @@ func registerGenerated() {
 			transform("none"),
 		),
 	)
-	// Page-content transitions run at the Layout token (spec §2: 240ms).
+	// Page-content transitions run at the Layout token (spec §2: 240ms). The fill is
+	// backwards, not both: a forwards fill keeps the page's identity transform after the
+	// entrance, and a transform makes the page the containing block for fixed overlays
+	// such as the bulk bar. The end state matches the page's base style.
 	rule("#cf-page-view.page-enter",
-		animation("wonder-page-enter var(--motion-layout) var(--ease-enter) both"),
+		animation("wonder-page-enter var(--motion-layout) var(--ease-enter) backwards"),
 	)
 	rule("[data-wonder=\"off\"] #cf-page-view.page-enter",
 		animation("none"),

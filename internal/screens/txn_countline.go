@@ -77,7 +77,8 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 	}, scope)
 
 	filter, _ = filter.WithOwnerLens(memberLens)
-	futurePeriod, scheduledCount := txnFutureScheduleCount(filter, time.Now())
+	schedule := ui.UseMemo(func() txnFutureSchedule { return txnFutureScheduleFor(filter, time.Now()) },
+		revKey(appstate.Default), filter.From, filter.To, time.Now().Format("2006-01-02"))
 	onSpent := ui.UseEvent(Prevent(func() {
 		setTxFilterOn(filterAtom, func(f *uistate.TxFilter) {
 			*f = txntoolbar.ToggleFlow(*f, "out")
@@ -94,21 +95,20 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		})
 	}))
 	searchWidenClick := OnClick(onSearchAllDates)
-	if props.Total == 0 && !futurePeriod {
-		return Span(css.Class("txn-countline-slot"), Attr("aria-hidden", "true"), Style(map[string]string{"display": "none"}))
+	if props.Total == 0 && !schedule.period {
+		return Span(css.Class("txn-countline-slot"), Attr("aria-hidden", "true"))
 	}
 
 	period := txnCountPeriod(filter)
-	if futurePeriod && props.Shown == 0 {
-		items := txnFutureScheduledItems(filter, time.Now())
+	if schedule.period && props.Shown == 0 {
 		base, rates := txnCountCurrency()
-		total, unconverted := txnFutureTotal(items, rates, base)
+		total, unconverted := txnFutureTotal(schedule.items, rates, base)
 		parts := []ui.Node{Span(css.Class("txn-count-main"), uistate.T("tv7b.due", fmtMoney(total)))}
-		parts = append(parts, txnSecondaryFact("txn-count-future-scheduled", "tv7b.scheduled", txnCountNumber(scheduledCount)))
+		parts = append(parts, txnSecondaryFact("txn-count-future-scheduled", "tv7b.scheduled", txnCountNumber(schedule.count)))
 		if unconverted > 0 {
 			parts = append(parts, txnSecondaryFact("txn-count-unconverted", "transactions.scopeUnconverted", unconverted))
 		}
-		accessibleFuture := uistate.T("tv7b.futureAccessible", txnCountNumber(props.Shown), txnCountNumber(scheduledCount), fmtMoney(total))
+		accessibleFuture := uistate.T("tv7b.futureAccessible", txnCountNumber(props.Shown), txnCountNumber(schedule.count), fmtMoney(total))
 		return txnCountRoot(announceFilterChange, accessibleFuture,
 			Div(css.Class("txn-countline txn-countline-future", tw.MinW0), Attr("data-testid", "txn-count-line"), Div(css.Class("txn-count-band", "txn-count-future-band"), parts)))
 	}
@@ -238,6 +238,7 @@ type txnCategoryBreakdownProps struct {
 
 func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
 	expanded := ui.UseState(false)
+	popoverID := ui.UseId()
 	onToggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 	toggleClick := OnClick(onToggle)
 	layout := txntoolbar.Presentation{Text: uistate.T}.CategoryLayout(props.Categories, props.Selected)
@@ -258,7 +259,7 @@ func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
 		if expanded.Get() {
 			label = uistate.T("tv8c.closeList")
 		}
-		items = append(items, Button(css.Class("txn-category-more"), Type("button"), Attr("data-testid", "txn-category-more"), Attr("aria-controls", "txn-category-popover"), Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(expanded.Get())), toggleClick, label))
+		items = append(items, Button(css.Class("txn-category-more"), Type("button"), Attr("data-testid", "txn-category-more"), Attr("aria-controls", popoverID), Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(expanded.Get())), toggleClick, label))
 	}
 	breakdownClass := "txn-category-breakdown"
 	if props.Selected != "" {
@@ -273,7 +274,7 @@ func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
 		for _, item := range layout.All {
 			allItems = append(allItems, ui.CreateElement(txnCategoryPopoverItem, item))
 		}
-		popover = Div(css.Class("txn-category-popover"), Attr("id", "txn-category-popover"), Attr("role", "dialog"), Attr("aria-label", uistate.T("tv8c.categoryList")), Attr("data-testid", "txn-category-popover"), allItems)
+		popover = Div(css.Class("txn-category-popover"), Attr("id", popoverID), Attr("role", "dialog"), Attr("aria-label", uistate.T("tv8c.categoryList")), Attr("data-testid", "txn-category-popover"), allItems)
 	}
 	return Div(css.Class(breakdownClass), Div(css.Class("txn-category-bar"), Attr("role", "group"), Attr("aria-label", uistate.T("uxt1.categoryBreakdown")), segments), Div(css.Class("txn-category-list"), items), popover, Div(css.Class("sr-only", "txn-category-accessible-list"), Attr("role", "list"), accessibleItems))
 }
@@ -310,7 +311,7 @@ func txnCategorySegment(props txnCategorySegmentProps) ui.Node {
 			toggleTxnCategoryFilter(filterAtom, props.Category.ID)
 		}
 	}))
-	return Button(css.Class(class), Type("button"), Attr("data-testid", "txn-category-segment"), Attr("data-category-id", props.Category.ID), Attr("aria-hidden", "true"), Attr("tabindex", "-1"), Attr("title", label), Style(map[string]string{"width": strconvTxnPercent(props.Category.Share)}), OnClick(onClick))
+	return Button(css.Class(class), Type("button"), Attr("data-testid", "txn-category-segment"), Attr("data-category-id", props.Category.ID), Attr("aria-hidden", "true"), Attr("tabindex", "-1"), Attr("title", label), Attr("style", "--txn-seg-width: "+strconvTxnPercent(props.Category.Share)), OnClick(onClick))
 }
 
 func txnCategoryListItem(props txnCategorySegmentProps) ui.Node {
@@ -386,6 +387,19 @@ func txnCountCategories(filter txnfilter.Criteria, memberLens []string) []txnCat
 
 func txnCategoryTopFive(categories []txnCategoryTotal, selected string) []txnCategoryTotal {
 	return txntoolbar.Presentation{Text: uistate.T, Money: fmtMoney, Date: uistate.LoadPrefs().FormatDate}.CategoryTopFive(categories, selected)
+}
+
+// txnFutureSchedule is the scheduled-bill view of a future date range. It is
+// computed once per data revision, day and range, not on every render.
+type txnFutureSchedule struct {
+	period bool
+	count  int
+	items  []bills.Bill
+}
+
+func txnFutureScheduleFor(filter uistate.TxFilter, now time.Time) txnFutureSchedule {
+	period, count := txnFutureScheduleCount(filter, now)
+	return txnFutureSchedule{period: period, count: count, items: txnFutureScheduledItems(filter, now)}
 }
 
 func txnCountCurrency() (string, currency.Rates) {

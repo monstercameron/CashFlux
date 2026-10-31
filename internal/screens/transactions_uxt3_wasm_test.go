@@ -69,7 +69,7 @@ func TestUXT3ToolbarHasPrimaryAndActionsRows(t *testing.T) {
 		OnSearch: func(string) {},
 		Actions: []ui.Node{
 			shorthand.Div(shorthand.ClassStr("txn-period-control")),
-			shorthand.Div(shorthand.ClassStr("txn-view-toggle")),
+			shorthand.Div(shorthand.ClassStr("txn-viewtoggle")),
 			shorthand.Div(shorthand.ClassStr("txn-toolbar-add")),
 		},
 	})
@@ -102,7 +102,7 @@ func TestUXT3ToolbarHasPrimaryAndActionsRows(t *testing.T) {
 		t.Fatal("toolbar is missing its responsive layout scope")
 	}
 	if len(actions.Children()) != 3 || !hasClass(actions.Children()[0].Attr("class"), "txn-period-control") ||
-		!hasClass(actions.Children()[1].Attr("class"), "txn-view-toggle") ||
+		!hasClass(actions.Children()[1].Attr("class"), "txn-viewtoggle") ||
 		!hasClass(actions.Children()[2].Attr("class"), "txn-toolbar-add") {
 		t.Fatalf("period, view, and Add are not together in the actions row: %#v", actions.Children())
 	}

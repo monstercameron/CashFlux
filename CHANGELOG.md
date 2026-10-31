@@ -15,6 +15,9 @@ and every commit updates this file under `Unreleased`.
 - The set-institution prompt lists the institutions already in the household as quick picks under its entry. Choosing one fills the entry, and the person can still type a new name. The list is empty, and not shown, when the household has no institutions yet.
 
 ### Changed
+- The Transactions page uses the shared components where they fit. The toolbar and bulk-bar buttons are shared tool buttons, the period control is a shared select, and the scheduled-row menu is the shared overflow menu. The receipt preview is the shared accessible overlay, so it has a name, traps focus, closes on Escape and backdrop click, and returns focus to the button that opened it. The edit form's draft lives in one shared form, and a refused save focuses the first invalid field. Fixed element ids come from the framework's id helper. The category select stays native, because choosing "New category" remounts it and the shared select cannot do that. Shared overflow menu entries can link to a route with the new `Href` option.
+- A payment linked to a bill saves its transaction and repeating rule in one write, so a failed rule save no longer leaves a half-saved payment. The Transactions page's brittle class-list and vacuous absence assertions are now real checks.
+- The Transactions page follows the page cleanup checklist. Its hand-built notices (not ready, not found, empty, error and status messages) are shared callouts with the same text, test ids and live-region roles, and its static inline styles are named rules in internal/styles. The ledger's columns, sorting, selection, bulk actions, paging, totals, calendar and engine wiring are unchanged. Disclosures that take their open state from the page stay controlled.
 - The page cleanup checklist (docs/CLEANUP_METHODOLOGY.md) covers the last 300 commits: the read-first list, framework and library checks before writing code, shared components, GWC features, performance rules, pitfalls, data and form checks, tests, browser checks and shipping.
 - The boot loading skeleton fills the full width from the first frame. The skeleton shell sets its own width, so it no longer shrinks to its content when the stylesheet arrives.
 - Accounts balances render green for assets and red for liabilities again, and the balance figure drops the Budgets button's card background. Group, document-removal and project reads now return storage errors instead of treating them as missing.
@@ -35,6 +38,10 @@ and every commit updates this file under `Unreleased`.
 
 ### Fixed
 - Each overflow menu entry names its section as its accessible description, so a screen reader hears which group an entry is in. Section headings stay hidden from the accessibility tree.
+- The bulk bar on the Transactions page sits at the bottom of the screen when rows are selected. The page entrance animation now fills backwards, so the page no longer keeps a transform that made it the container for the fixed bar. The bar wraps its actions and clears the phone tab bar on narrow screens.
+- Excluding or deleting a transaction reads the ledger with a checked read. If the ledger cannot be read, the confirm does not open and the person is told nothing was changed.
+- Saving a payment link reports when its repeating rule could not be saved, after the payment itself saved, and keeps the form open instead of reporting success.
+- Template chips on the Transactions page have their delete control beside the pick button, not nested inside it, and the recategorise offer keeps its buttons outside its live status message.
 
 ### Changed
 - The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.

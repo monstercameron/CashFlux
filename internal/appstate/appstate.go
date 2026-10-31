@@ -1278,6 +1278,18 @@ func (a *App) PutRule(r rules.Rule) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
+	if err := validateRule(r); err != nil {
+		return err
+	}
+	if err := a.store.PutRule(r); err != nil {
+		return err
+	}
+	a.log.Info("rule saved", "id", r.ID)
+	return nil
+}
+
+// validateRule rejects a rule that has no id, no way to match, or no action.
+func validateRule(r rules.Rule) error {
 	if r.ID == "" {
 		return fmt.Errorf("appstate: rule needs an id")
 	}
@@ -1289,10 +1301,6 @@ func (a *App) PutRule(r rules.Rule) error {
 	if r.SetCategoryID == "" && r.SetBillAccountID == "" && strings.TrimSpace(r.RenameDesc) == "" && len(r.SetTags) == 0 {
 		return fmt.Errorf("appstate: rule needs at least one action")
 	}
-	if err := a.store.PutRule(r); err != nil {
-		return err
-	}
-	a.log.Info("rule saved", "id", r.ID)
 	return nil
 }
 

@@ -23,6 +23,10 @@ func registerTxnEditSurface() {
 		flex("1 1 auto"),
 		minWidth("0"),
 	)
+	// The keyed wrapper that remounts the category select adds no box of its own.
+	rule(".txn-cat-row > .txn-cat-select",
+		display("contents"),
+	)
 	rule(".txn-cat-new",
 		flexShrink("0"),
 		whiteSpace("nowrap"),
@@ -39,5 +43,23 @@ func registerTxnEditSurface() {
 	)
 	rule(".txn-cat-add .btn",
 		flexShrink("0"),
+	)
+
+	// The receipt note above the split editor.
+	rule(".txn-split-note",
+		marginBottom("0.5rem"),
+	)
+	// A hint paragraph that sits flush against the control it explains.
+	rule(".muted.txn-hint-flush",
+		margin("0"),
+	)
+	// A checkbox row whose whole label is the click target.
+	rule(".txn-check-row",
+		cursor("pointer"),
+	)
+	// The receipt thumbnail in the edit form fills its square and rounds its corners.
+	rule("img.txn-receipt-thumb-img",
+		prop("object-fit", "cover"),
+		borderRadius("4px"),
 	)
 }

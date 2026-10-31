@@ -9,6 +9,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/validate"
 )
 
 // TxnLinks returns every persisted transaction-link (order groups and refund
@@ -186,6 +188,37 @@ func (a *App) DeleteTxnLink(linkID string) error {
 		return err
 	}
 	a.SyncTxnLinkNetting()
+	return nil
+}
+
+// PutTransactionWithRule saves a transaction and a repeating rule together: the
+// transaction and the rule are validated first, then written in one commit, so a
+// rejected rule leaves the transaction untouched and a failed write stores
+// neither. Post-save effects match PutTransaction.
+func (a *App) PutTransactionWithRule(t domain.Transaction, r rules.Rule) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	t.Date = normalizeTransactionDate(t.Date)
+	if is := validate.ValidateTransaction(t, a.Accounts()...); !is.OK() {
+		return is
+	}
+	if err := a.validateCustom("transaction", t.Custom); err != nil {
+		return err
+	}
+	if err := validateRule(r); err != nil {
+		return err
+	}
+	_, existed, _ := a.store.GetTransaction(t.ID)
+	var overBefore map[string]bool
+	if !existed && !a.triggersSuspended {
+		overBefore = a.overBudgetIDs()
+	}
+	if err := a.store.PutTransactionWithRule(t, r); err != nil {
+		return err
+	}
+	a.log.Info("rule saved", "id", r.ID)
+	a.afterTransactionSaved(t, existed, overBefore)
 	return nil
 }
 

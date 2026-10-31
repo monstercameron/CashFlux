@@ -29,6 +29,9 @@ type OverflowMenuItem struct {
 	// The menu closes when an entry is chosen, whether or not OnSelect is set. An entry with a
 	// Submenu opens that submenu instead and does not run OnSelect.
 	OnSelect func()
+	// Href makes the entry a link to a route instead of a button. It keeps the menu item role, so
+	// the entry still reads as a menu action. An entry with a Submenu ignores Href.
+	Href string
 	// TestID is the data-testid of the entry, for tests. Empty adds none.
 	TestID string
 	// Title is the hover tooltip of the entry, rendered as its title attribute. Empty adds none.
@@ -315,7 +318,6 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	}
 	btnArgs := []any{
 		ClassStr(cls),
-		Type("button"),
 		Attr("id", itemID),
 		Attr("role", "menuitem"),
 		OnKeyDown(onKey),
@@ -350,7 +352,12 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		btnArgs = append(btnArgs, Icon(item.Icon, css.Class(tw.W4, tw.H4)))
 	}
 	btnArgs = append(btnArgs, item.Label)
-	parent := Button(btnArgs...)
+	var parent uic.Node
+	if item.Href != "" && len(item.Submenu) == 0 {
+		parent = A(append([]any{Href(item.Href)}, btnArgs...)...)
+	} else {
+		parent = Button(append([]any{Type("button")}, btnArgs...)...)
+	}
 	children := []any{ClassStr("add-submenu"), Attr("role", "menu")}
 	if submenuOpen.Get() {
 		for _, child := range item.Submenu {

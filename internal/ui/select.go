@@ -39,6 +39,10 @@ type SelectInputProps struct {
 	// ID is the element id of the select, so a Field label can name it in its for attribute.
 	// Empty adds none.
 	ID string
+	// SyncValue also sets the select's value property to Selected. Set it when the select has to
+	// follow Selected after the reader has picked an option, because the per-option selected
+	// attribute alone does not change what a picked select shows.
+	SyncValue bool
 }
 
 // SelectInput renders a native <select> element from a typed option list. It
@@ -75,6 +79,9 @@ func selectInputWidget(props SelectInputProps) uic.Node {
 			onChange(e.GetValue())
 		}
 	}))
+	if props.SyncValue {
+		args = append(args, sh.Value(props.Selected))
+	}
 
 	for _, o := range props.Options {
 		args = append(args, sh.Option(sh.Value(o.Value), sh.SelectedIf(props.Selected == o.Value), o.Label))

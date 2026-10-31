@@ -46,6 +46,7 @@ var txnAuditKeys = Catalog{
 	// --- C562: excluding from reports is a reporting change, so it asks ---------
 	"transactions.excludeConfirm":    "Exclude “%s” from budgets and reports? The account balance stays the same. This transaction is left out of budgets and reports.",
 	"transactions.excludeConfirmBtn": "Exclude from budgets and reports",
+	"transactions.readFailed":        "Your transactions could not be read, so nothing was changed. Reload the page and try again.",
 	"transactions.excludedOne":       "“%s” is left out of budgets and reports",
 	"transactions.includedOne":       "“%s” is included in budgets and reports again",
 

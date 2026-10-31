@@ -45,15 +45,4 @@ func registerFUT2() {
 		prop("display", "flex"),
 		prop("justify-content", "center"),
 	)
-	rule(".txn-scheduled-menu-item",
-		prop("position", "absolute"),
-		prop("right", "0"),
-		prop("top", "100%"),
-		prop("z-index", "5"),
-		prop("min-width", "13rem"),
-		prop("padding", ".5rem"),
-		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "var(--radius-md)"),
-		prop("background", "var(--bg-card)"),
-	)
 }

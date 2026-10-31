@@ -61,9 +61,7 @@ func TestTxnCountLineNamesExcludedRows(t *testing.T) {
 	if !strings.Contains(got, "3 transactions") {
 		t.Errorf("count line = %q, want transaction count", got)
 	}
-	if byTestID(f, "div", "txn-count-secondary") != nil {
-		t.Error("transaction facts should be rendered beside the table, not in the summary band")
-	}
+	requireBandWithoutSecondaryFacts(t, f)
 	if !strings.Contains(got, "left out of budgets") {
 		t.Errorf("accessible summary = %q, want excluded rows named", got)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
@@ -75,7 +76,7 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "txn-history-followup"),
 			OnClick(onFollowUp), uistate.T("transactions.followUpTask")))
 	if app == nil {
-		return P(css.Class("empty"), uistate.T("common.notReady"))
+		return uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("common.notReady"))})
 	}
 	// Configurable timeframe (feedback #7): the history can be scoped to a recent
 	// window instead of always showing everything. Persisted so it holds across reopens.
@@ -137,8 +138,7 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 		if who == "user" {
 			who = uistate.T("txnhistory.actorYou")
 		}
-		rows = append(rows, Div(css.Class("row"), Attr("data-testid", "txn-history-entry"),
-			Style(map[string]string{"display": "block", "padding": "0.5rem 0"}),
+		rows = append(rows, Div(css.Class("row", "txn-history-entry"), Attr("data-testid", "txn-history-entry"),
 			Div(css.Class(tw.Flex, tw.JustifyBetween, tw.Gap2),
 				Span(e.Summary),
 				Span(css.Class(tw.TextFaint, tw.Text12, tw.ShrinkO), uistate.LoadPrefs().FormatDate(e.At.Local())+" "+e.At.Local().Format("3:04 PM"))),

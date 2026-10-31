@@ -7,6 +7,7 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
@@ -90,7 +91,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		return ui.CreateElement(splitSuggestHint, splitSuggestProps{Txn: txn, OnUse: suggestionUse})
 	}, app, revision, props.TxnID, txn.Amount, txn.Payee, txn.Desc, draftGeneration.Get())
 	if app == nil {
-		return P(css.Class("empty"), uistate.T("common.notReady"))
+		return uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("common.notReady"))})
 	}
 	if !found {
 		return Fragment()
@@ -136,10 +137,9 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		// Keep suggestion handlers in their own component.
 		suggestionNode,
 		If(proposedNote.Get() != "",
-			Div(css.Class("callout"), Attr("role", "status"), Attr("data-testid", "receipt-split-note"),
-				Style(map[string]string{"margin-bottom": "0.5rem", "padding": "0.6rem 0.75rem",
-					"border": "1px solid var(--border)", "border-radius": "8px", "background": "var(--bg-elev)"}),
-				P(css.Class("t-body"), proposedNote.Get()))),
+			Div(css.Class("txn-split-note"),
+				uiw.Callout(uiw.CalloutProps{Live: uiw.CalloutLiveStatus, TestID: "receipt-split-note",
+					Body: P(css.Class("t-body"), proposedNote.Get())}))),
 		ui.CreateElement(SplitEditor, splitEditorProps{
 			Txn:          editorTxn,
 			Categories:   app.Categories(),

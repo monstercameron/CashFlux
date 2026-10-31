@@ -212,7 +212,9 @@ func registerTxnScope() {
 		display("flex"),
 		alignItems("center"),
 		gap("0.3rem"),
+		width("100%"),
 		minWidth("0"),
+		minHeight("1.5rem"),
 		flexWrap("nowrap"),
 	)
 	rule(".td-cat-name",
@@ -267,5 +269,15 @@ func registerTxnScope() {
 		lineHeight("1"),
 		color("var(--text-dim)"),
 		cursor("help"),
+	)
+
+	// The count line renders an empty hidden slot when the ledger has no rows.
+	rule(".txn-countline-slot",
+		display("none"),
+	)
+	// A segment's width is its category's share of spending, set per element as
+	// --txn-seg-width.
+	rule(".txn-category-segment",
+		width("var(--txn-seg-width)"),
 	)
 }

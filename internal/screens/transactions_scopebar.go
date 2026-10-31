@@ -59,6 +59,8 @@ func txnDateScope(_ struct{}) ui.Node {
 	}
 	preset := txnScopePreset(f, now)
 	customOpen := ui.UseState(false)
+	idBase := ui.UseId()
+	controlID, customID := idBase+"-control", idBase+"-custom"
 	draftFrom := ui.UseState(f.From)
 	draftTo := ui.UseState(f.To)
 	prev := ui.UseEvent(Prevent(func() {
@@ -73,7 +75,7 @@ func txnDateScope(_ struct{}) ui.Node {
 		customOpen.Set(false)
 		setRange("", "", txnfilter.PeriodAllDates)
 	}))
-	onPreset := ui.UseEvent(func(value string) {
+	onPreset := func(value string) {
 		if value == "custom" {
 			draftFrom.Set(f.From)
 			draftTo.Set(f.To)
@@ -84,7 +86,7 @@ func txnDateScope(_ struct{}) ui.Node {
 		if from, to, key, ok := txnScopePresetRange(value, now); ok {
 			setRange(from, to, key)
 		}
-	})
+	}
 	editDates := ui.UseEvent(Prevent(func() {
 		draftFrom.Set(f.From)
 		draftTo.Set(f.To)
@@ -119,7 +121,7 @@ func txnDateScope(_ struct{}) ui.Node {
 			if !target.Truthy() {
 				return false
 			}
-			control := doc.Call("getElementById", "txn-period-control")
+			control := doc.Call("getElementById", controlID)
 			return control.Truthy() && control.Call("contains", target).Bool()
 		}
 		onPointerDown := js.FuncOf(func(_ js.Value, args []js.Value) any {
@@ -168,6 +170,17 @@ func txnDateScope(_ struct{}) ui.Node {
 	if scope.Kind == txnscope.Day {
 		customLabel = txnScopeLabel(scope)
 	}
+	periodOptions := []uiw.SelectOption{
+		{Value: "this-month", Label: uistate.T("txnperiod.thisMonth")},
+		{Value: "last-month", Label: uistate.T("txnperiod.lastMonth")},
+		{Value: "last-three-months", Label: uistate.T("txnperiod.lastThreeMonths")},
+		{Value: "this-year", Label: uistate.T("txnperiod.thisYear")},
+		{Value: "all-dates", Label: uistate.T("txnperiod.allDates")},
+	}
+	if selectedPreset == "shown-month" {
+		periodOptions = append(periodOptions, uiw.SelectOption{Value: "shown-month", Label: monthLabel(scope.Anchor)})
+	}
+	periodOptions = append(periodOptions, uiw.SelectOption{Value: "custom", Label: customLabel})
 	controlClass := "txn-period-control"
 	if selectedPreset == "custom" {
 		controlClass += " has-edit"
@@ -183,22 +196,21 @@ func txnDateScope(_ struct{}) ui.Node {
 			Disabled(prevDisabled),
 			Attr("aria-label", uistate.T("txnperiod.prev")), Title(uistate.T("txnperiod.prev")),
 			OnClick(prev), uiw.Icon(icon.ChevronLeft, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		Div(ClassStr(controlClass), Attr("id", "txn-period-control"),
-			Select(css.Class("txn-period-select"), Attr("data-testid", "txn-period-select"),
-				Attr("aria-label", uistate.T("txnperiod.periodLabel")), OnChange(onPreset),
-				Option(Value("this-month"), SelectedIf(selectedPreset == "this-month"), uistate.T("txnperiod.thisMonth")),
-				Option(Value("last-month"), SelectedIf(selectedPreset == "last-month"), uistate.T("txnperiod.lastMonth")),
-				Option(Value("last-three-months"), SelectedIf(selectedPreset == "last-three-months"), uistate.T("txnperiod.lastThreeMonths")),
-				Option(Value("this-year"), SelectedIf(selectedPreset == "this-year"), uistate.T("txnperiod.thisYear")),
-				Option(Value("all-dates"), SelectedIf(selectedPreset == "all-dates"), uistate.T("txnperiod.allDates")),
-				If(selectedPreset == "shown-month", Option(Value("shown-month"), Selected(true), monthLabel(scope.Anchor))),
-				Option(Value("custom"), SelectedIf(selectedPreset == "custom"), customLabel)),
+		Div(ClassStr(controlClass), Attr("id", controlID),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   periodOptions,
+				Selected:  selectedPreset,
+				AriaLabel: uistate.T("txnperiod.periodLabel"),
+				Class:     "txn-period-select",
+				TestID:    "txn-period-select",
+				OnChange:  onPreset,
+			}),
 			If(selectedPreset == "custom", Button(css.Class("txn-period-edit"), Type("button"),
 				Attr("data-testid", "txn-period-edit"), Attr("aria-label", uistate.T("txnperiod.editDates")),
-				Title(uistate.T("txnperiod.editDates")), Attr("aria-expanded", ariaBool(custom)), Attr("aria-controls", "txn-period-custom"),
+				Title(uistate.T("txnperiod.editDates")), Attr("aria-expanded", ariaBool(custom)), Attr("aria-controls", customID),
 				OnClick(editDates), uiw.Icon(icon.Calendar, css.Class(tw.W4, tw.H4)))),
 			If(custom, Div(css.Class("txn-period-custom"),
-				Attr("id", "txn-period-custom"), Attr("data-testid", "txn-period-custom"), Attr("role", "group"), Attr("aria-label", uistate.T("txnperiod.chooseDates")),
+				Attr("id", customID), Attr("data-testid", "txn-period-custom"), Attr("role", "group"), Attr("aria-label", uistate.T("txnperiod.chooseDates")),
 				Span(css.Class("txn-period-custom-title"), uistate.T("txnperiod.chooseDates")),
 				Label(css.Class("txn-period-date"), Span(uistate.T("txnperiod.from")),
 					Input(Type("date"), Attr("data-testid", "txn-period-from"), Attr("aria-label", uistate.T("txnperiod.from")), Value(draftFrom.Get()), OnInput(onFrom))),
