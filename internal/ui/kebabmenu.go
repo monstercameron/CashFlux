@@ -6,8 +6,6 @@ package ui
 
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
-	"github.com/monstercameron/GoWebComponents/v7/css"
 	sh "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
@@ -48,7 +46,7 @@ func kebabMenu(props KebabMenuProps) uic.Node {
 	if id == "" {
 		id = autoID
 	}
-	menu := useMenu(id)
+	menu := UseMenu(id)
 	toggle := uic.UseEvent(sh.Prevent(func() { menu.Toggle() }))
 	// An item click bubbles up to the menu, which closes it.
 	closeM := uic.UseEvent(sh.Prevent(func() { menu.Set(false) }))
@@ -61,33 +59,24 @@ func kebabMenu(props KebabMenuProps) uic.Node {
 	if props.WrapClass != "" {
 		wrapCls += " " + props.WrapClass
 	}
-	toggleClass := props.ToggleClass
-	if toggleClass == "" {
-		toggleClass = "btn"
-	}
-	if menu.Open {
-		toggleClass += " is-open"
-	}
-	toggleArgs := []any{
-		css.Class(toggleClass), sh.Type("button"),
-		sh.Attr("title", aria), sh.Attr("aria-label", aria),
+	// The trigger is the shared ToolButton, the same button the More menu opens from.
+	trigger := ToolButton(ToolButtonProps{
+		Icon: icon.MoreH, Title: aria, AriaLabel: aria, Open: menu.Open,
+		Class: props.ToggleClass, TestID: props.ToggleTestID,
+	},
 		sh.Attr("aria-haspopup", "menu"), sh.Attr("aria-expanded", boolAttr(menu.Open)),
 		sh.OnClick(toggle),
-	}
-	if props.ToggleTestID != "" {
-		toggleArgs = append(toggleArgs, sh.Attr("data-testid", props.ToggleTestID))
-	}
-	toggleArgs = append(toggleArgs, Icon(icon.MoreH, css.Class(tw.W4, tw.H4)))
+	)
 
 	// The items are pre-built by the caller, so the panel is always mounted and its class
 	// carries the open, fading and hidden states.
-	menuChildren := []any{sh.ClassStr(menu.panelClass()), sh.Attr("role", "menu"), sh.OnClick(closeM)}
+	menuChildren := []any{sh.ClassStr(menu.PanelClass()), sh.Attr("role", "menu"), sh.OnClick(closeM)}
 	for _, it := range props.Items {
 		menuChildren = append(menuChildren, it)
 	}
 
-	return sh.Div(sh.ClassStr(menu.wrapClass(wrapCls)), sh.Attr("id", id),
-		sh.Button(toggleArgs...),
+	return sh.Div(sh.ClassStr(menu.WrapClass(wrapCls)), sh.Attr("id", id),
+		trigger,
 		sh.Div(menuChildren...),
 	)
 }

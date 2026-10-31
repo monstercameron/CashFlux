@@ -1575,11 +1575,8 @@ func ThemeToggle() uic.Node {
 		uistate.ApplyTheme(uistate.LoadTheme())
 	})
 	label := uistate.T("tv7h.themeLabel", uistate.T("settings.theme"+themeWord(p.Theme)))
-	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
-		Type("button"), Attr("title", label), Attr("aria-label", label),
-		Attr("data-testid", "theme-toggle"), Attr("data-theme-current", string(p.Theme)),
-		OnClick(cycle),
-		ui.Icon(icon.Appearance, css.Class(tw.W5, tw.H5)),
+	return ui.ToolButton(ui.ToolButtonProps{Icon: icon.Appearance, Title: label, TestID: "theme-toggle"},
+		Attr("data-theme-current", string(p.Theme)), OnClick(cycle),
 	)
 }
 
@@ -1600,11 +1597,7 @@ func themeWord(t prefs.Theme) string {
 // visible affordance. Routes to /help (topics, what's-new, setup checklist, and the
 // bug-report path), keeping support one obvious click away on every screen.
 func HelpButton() uic.Node {
-	return A(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
-		Attr("href", uistate.RoutePath("/help")), Attr("title", uistate.T("nav.help")), Attr("aria-label", uistate.T("nav.help")),
-		Attr("data-testid", "help-button"),
-		ui.Icon(icon.HelpCircle, css.Class(tw.W5, tw.H5)),
-	)
+	return ui.ToolButton(ui.ToolButtonProps{Icon: icon.HelpCircle, Title: uistate.T("nav.help"), TestID: "help-button", Href: uistate.RoutePath("/help")})
 }
 
 // DashCustomizeButton is the top-bar "Customize" icon (dashboard only): a quiet,
@@ -1612,12 +1605,7 @@ func HelpButton() uic.Node {
 // tile styles), grouped with the other page-level top-bar actions instead of a
 // floating bar above the bento. Icon-only to stay out of the way.
 func DashCustomizeButton() uic.Node {
-	return A(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
-		Attr("href", uistate.RoutePath("/widget-manager")),
-		Attr("title", uistate.T("dashboard.customizeAria")), Attr("aria-label", uistate.T("dashboard.customizeAria")),
-		Attr("data-testid", "dash-customize"),
-		ui.Icon(icon.Customize, css.Class(tw.W5, tw.H5)),
-	)
+	return ui.ToolButton(ui.ToolButtonProps{Icon: icon.Customize, Title: uistate.T("dashboard.customizeAria"), TestID: "dash-customize", Href: uistate.RoutePath("/widget-manager")})
 }
 
 // OfflineIndicator shows a calm "Offline · saved on this device" pill in the top
@@ -1709,12 +1697,8 @@ func MuzakToggle() uic.Node {
 		titleKey = "muzak.turnOn"
 		glyph = icon.VolumeMute
 	}
-	return Button(ClassStr(cls), Type("button"),
-		Attr("title", uistate.T(titleKey)),
-		Attr("aria-label", uistate.T(titleKey)),
-		Attr("aria-pressed", fmt.Sprintf("%v", enabled)),
-		OnClick(toggle),
-		ui.Icon(glyph, css.Class(tw.W18px, tw.H18px)),
+	return ui.ToolButton(ui.ToolButtonProps{Icon: glyph, Title: uistate.T(titleKey), Class: cls},
+		Attr("aria-pressed", fmt.Sprintf("%v", enabled)), OnClick(toggle),
 	)
 }
 
@@ -1739,13 +1723,7 @@ func LockToggle() uic.Node {
 	_ = uistate.UseDataRevision().Get()
 	enabled := loadAppLock().Enabled
 	lock := func() { showAppLockGate() }
-	lockBtn := Button(ClassStr("muzak-btn"), Type("button"),
-		Attr("title", uistate.T("applock.cmdLock")),
-		Attr("aria-label", uistate.T("applock.cmdLock")),
-		Attr("data-testid", "topbar-lock-btn"),
-		OnClick(lock),
-		ui.Icon(icon.Lock, css.Class(tw.W18px, tw.H18px)),
-	)
+	lockBtn := ui.ToolButton(ui.ToolButtonProps{Icon: icon.Lock, Title: uistate.T("applock.cmdLock"), TestID: "topbar-lock-btn", Class: "muzak-btn"}, OnClick(lock))
 	slot := []any{ClassStr("lock-toggle-slot")}
 	if !enabled {
 		slot = append(slot, Attr("style", "display:none"))

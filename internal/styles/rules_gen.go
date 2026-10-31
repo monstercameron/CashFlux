@@ -978,7 +978,7 @@ func registerGenerated() {
 	// Standalone action buttons (bell, ⋯ More) wear the standard .btn/.btn-tool
 	// chrome — bordered bg-elev squares at the shared control height — so the
 	// header uses the same control language as every page toolbar.
-	rule(".topbar .tb-actions .icon-btn,\n      .topbar .tb-actions .more-btn,\n      .topbar .tb-actions .notify-btn,\n      .topbar .tb-actions .muzak-btn",
+	rule(".topbar .tb-actions .notify-btn",
 		width("var(--tb-h)"),
 		height("var(--tb-h)"),
 		borderRadius("var(--radius-lg)"),
@@ -990,7 +990,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
 	)
-	rule(".topbar .tb-actions .icon-btn:hover,\n      .topbar .tb-actions .more-btn:hover,\n      .topbar .tb-actions .notify-btn:hover,\n      .topbar .tb-actions .muzak-btn:hover",
+	rule(".topbar .tb-actions .notify-btn:hover",
 		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
 		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
 		color("var(--text)"),
@@ -3215,6 +3215,13 @@ func registerGenerated() {
 	// 38px height as the pill controls next to it, a tidy gap, and a SINGLE leading glyph
 	// rendered slightly grayed (like the select-tag icons) so the label leads. Applied to
 	// every page's toolbar action buttons for one consistent control language.
+	// An icon-only tool button is a square the height of the tool row, so the header's ⋯,
+	// theme, music and profile buttons sit at the same size as the Filters button.
+	rule(".btn-tool.is-icon-only",
+		width("var(--tool-h)"),
+		padding("0"),
+		justifyContent("center"),
+	)
 	rule(".btn-tool",
 		minHeight("var(--tool-h)"),
 		padding("var(--btn-py) var(--btn-px)"),

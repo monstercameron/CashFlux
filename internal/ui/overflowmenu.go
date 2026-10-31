@@ -95,7 +95,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	// Stable per-instance id on the wrapper so the document-level dismissal listeners can tell
 	// clicks inside THIS menu from clicks in another instance (many can be on a page at once).
 	id := uic.UseId()
-	menu := useMenu(id)
+	menu := UseMenu(id)
 
 	triggerLabel := props.TriggerLabel
 	if triggerLabel == "" {
@@ -128,7 +128,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	// first time a section name appears. It carries role="presentation" so it stays out of the
 	// menu's owned children, and each item carries the same fact in its own accessible name, so
 	// the grouping survives for anyone who never sees the heading.
-	menuArgs := []any{ClassStr(menu.panelClass()), Attr("role", "menu")}
+	menuArgs := []any{ClassStr(menu.PanelClass()), Attr("role", "menu")}
 	if menu.Shown {
 		lastSection := ""
 		for _, item := range props.Items {
@@ -159,7 +159,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	if menu.Shown || props.ExtraContent != nil {
 		panel = Div(menuArgs...)
 	}
-	return Div(css.Class(menu.wrapClass("add-wrap")), Attr("id", id), trigger, panel)
+	return Div(css.Class(menu.WrapClass("add-wrap")), Attr("id", id), trigger, panel)
 }
 
 // dismissOverflowMenu installs the menu-button keyboard and outside-pointer

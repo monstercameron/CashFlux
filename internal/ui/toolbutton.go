@@ -53,6 +53,9 @@ func ToolButton(props ToolButtonProps, extra ...any) uic.Node {
 	case "stale":
 		class += " bt-stale"
 	}
+	if props.Label == "" && props.Badge == "" {
+		class += " is-icon-only"
+	}
 	if props.Active {
 		class += " active"
 	}

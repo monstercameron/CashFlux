@@ -309,42 +309,35 @@ func AccountRow(props accountRowProps) ui.Node {
 
 	// Secondary actions live in a "⋯" overflow menu so each row stays uncluttered
 	// (primary: Transactions / Edit / ✕); selecting one closes the menu (C9).
-	menuOpen := ui.UseState(false)
 	menuID := ui.UseId()
-	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
-	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
-	// WAI-ARIA dismissal for the ⋯ actions menu: Escape (refocus trigger) + outside
-	// pointerdown. The `.add-backdrop` can't be relied on (fixed inside the topbar's
-	// sticky stacking context, so it doesn't paint over page content). See uiw.DismissPopover.
-	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
-	// Keep the ⋯ menu inside the viewport: the trigger sits near the right edge of the
-	// row, so flip the menu to open leftward / upward when it would otherwise overflow.
-	uiw.AnchorPopover(menuOpen.Get(), menuID)
+	// The shared menu state: the same fade, placement, dismissal and stacking as the More menu.
+	menu := uiw.UseMenu(menuID)
+	toggleMenu := ui.UseEvent(Prevent(func() { menu.Toggle() }))
 
-	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(a.ID) }))
-	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
-	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
-	view := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnView(a.ID) }))
+	del := ui.UseEvent(Prevent(func() { menu.Set(false); props.OnDelete(a.ID) }))
+	arch := ui.UseEvent(Prevent(func() { menu.Set(false); props.OnArchive(a) }))
+	refresh := ui.UseEvent(Prevent(func() { menu.Set(false); props.OnRefresh(a) }))
+	view := ui.UseEvent(Prevent(func() { menu.Set(false); props.OnView(a.ID) }))
 	setHouseholdDefault := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		menu.Set(false)
 		if props.OnSetDefaultHousehold != nil {
 			props.OnSetDefaultHousehold(a.ID)
 		}
 	}))
 	clearHouseholdDefault := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		menu.Set(false)
 		if props.OnClearDefaultHousehold != nil {
 			props.OnClearDefaultHousehold()
 		}
 	}))
 	setMemberDefault := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		menu.Set(false)
 		if props.OnSetDefaultMember != nil && props.DefaultMemberID != "" {
 			props.OnSetDefaultMember(a.ID, props.DefaultMemberID)
 		}
 	}))
 	clearMemberDefault := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		menu.Set(false)
 		if props.OnClearDefaultMember != nil && props.DefaultMemberID != "" {
 			props.OnClearDefaultMember(props.DefaultMemberID)
 		}
@@ -358,7 +351,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	nav := router.UseNavigate()
 	isInvest := isInvestmentAccount(a.Type) && !a.Archived
 	openHoldings := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		menu.Set(false)
 		uistate.SetDeepLinkFocus(`[data-testid="invest-acct-` + a.ID + `"]`)
 		nav.Navigate(uistate.RoutePath("/investments"))
 	}))
@@ -413,7 +406,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	acctEditAtom := uistate.UseAccountEdit()
 	openEditor := func(mode string) func() {
 		return func() {
-			menuOpen.Set(false)
+			menu.Set(false)
 			acctEditAtom.Set(uistate.AccountEdit{ID: a.ID, Mode: mode})
 		}
 	}
@@ -423,11 +416,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	startTransfer := ui.UseEvent(Prevent(openEditor(uistate.AcctEditModeTransfer)))
 	// The encrypted credential vault opens in its own shell-root modal (CredentialVaultHost).
 	acctCredsAtom := uistate.UseAccountCredentials()
-	startCredentials := ui.UseEvent(Prevent(func() { menuOpen.Set(false); acctCredsAtom.Set(a.ID) }))
+	startCredentials := ui.UseEvent(Prevent(func() { menu.Set(false); acctCredsAtom.Set(a.ID) }))
 	// G8: quick institution assignment from the row — a prompt seeded with the current
 	// value, normalised the same way the add form normalises it. No modal round-trip.
 	setInstitution := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		menu.Set(false)
 		uistate.PromptModal(uistate.T("accounts.setInstitutionPrompt", a.Name), a.Institution, func(v string) {
 			ac := a
 			ac.Institution = titleCaseWords(strings.TrimSpace(v))
@@ -469,10 +462,6 @@ func AccountRow(props accountRowProps) ui.Node {
 	// problem for the same reason.
 	if a.Type.IsReconcilable() && props.Cleared.Amount != props.Balance.Amount {
 		meta += uistate.T("accounts.clearedSuffix", fmtMoney(dispCleared))
-	}
-	menuHidden := ""
-	if !menuOpen.Get() {
-		menuHidden = " hidden-menu"
 	}
 
 	// Month-to-date value change for illiquid-asset accounts (home / car /
@@ -722,15 +711,14 @@ func AccountRow(props accountRowProps) ui.Node {
 				},
 					OnClick(view),
 				),
-				Div(css.Class("add-wrap"), Attr("id", menuID),
+				Div(css.Class(menu.WrapClass("add-wrap")), Attr("id", menuID),
 					uiw.ToolButton(uiw.ToolButtonProps{
 						Icon: icon.MoreH, Title: uistate.T("accounts.moreActions"),
-						AriaLabel: uistate.T("accounts.moreActions") + " — " + a.Name, Open: menuOpen.Get(),
+						AriaLabel: uistate.T("accounts.moreActions") + " — " + a.Name, Open: menu.Open,
 					},
-						Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu),
+						Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menu.Open)), OnClick(toggleMenu),
 					),
-					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+					Div(ClassStr(menu.PanelClass()), Attr("role", "menu"),
 						If(!a.Archived && !props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-default-household-"+a.ID), OnClick(setHouseholdDefault), uistate.T("defaultAccount.makeHousehold"))),
 						If(!a.Archived && props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-clear-household-default-"+a.ID), OnClick(clearHouseholdDefault), uistate.T("defaultAccount.clearHousehold"))),
 						If(!a.Archived && props.DefaultMemberID != "" && !containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-default-member-"+a.ID), OnClick(setMemberDefault), uistate.T("defaultAccount.makeMember", props.DefaultMemberName))),
