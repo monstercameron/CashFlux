@@ -951,15 +951,9 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		OnClearAll:    clearAll,
 		ClearAllLabel: uistate.T("accounts.clearFilters"),
 		RemoveLabel:   uistate.T("accounts.removeFilter"),
-		Actions: []ui.Node{
-			// 2026-07-17 audit: the everyday actions stay labeled buttons — Mark-all
-			// (contextual, amber), Transfer money, and the primary "+ Add account" —
-			// while the setup/management surfaces (Groups, Institutions, Sweep rules,
-			// Exchange rates) fold into ONE labeled "Account settings" menu (renamed
-			// from the vague "Manage"), so the row before the account list stops
-			// presenting seven equally weighted verbs.
-			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
-				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
+		// The More menu sits on the search row, beside Filters, so the setup actions are
+		// one click away from where the list is filtered.
+		PrimaryActions: []ui.Node{
 			If(len(accounts) >= 1, uiw.OverflowMenu(uiw.OverflowMenuProps{
 				TriggerText:   uistate.T("acctxn.acctSettingsMenu"),
 				TriggerLabel:  uistate.T("acctxn.acctSettingsMenuTitle"),
@@ -981,6 +975,16 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 					{Label: uistate.T("accounts.manageFXRates"), Icon: icon.Scale, TestID: "acct-fx-btn", OnSelect: openFX, Hidden: !showFX},
 				},
 			})),
+		},
+		Actions: []ui.Node{
+			// 2026-07-17 audit: the everyday actions stay labeled buttons — Mark-all
+			// (contextual, amber), Transfer money, and the primary "+ Add account" —
+			// while the setup/management surfaces (Groups, Institutions, Sweep rules,
+			// Exchange rates) fold into ONE labeled "Account settings" menu (renamed
+			// from the vague "Manage"), so the row before the account list stops
+			// presenting seven equally weighted verbs.
+			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
+				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{
