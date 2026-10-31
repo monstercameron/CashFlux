@@ -12,7 +12,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -24,10 +23,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // nameSlug returns a stable, lowercase, hyphen-separated slug from a subscription
@@ -156,15 +155,31 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	settings, settingsErr := app.SettingsChecked()
+	if settingsErr != nil {
+		settingsErr = fmt.Errorf("read subscription settings: %w", settingsErr)
+	}
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 
 	// C166: load detection preferences and filter transactions before detection so
 	// charges from ignored categories or account types are never considered. This
 	// lets users tune out noisy spending (e.g. "Dining" one-offs or investment
 	// account transfers) without touching the per-subscription ignore list.
 	detectPrefs := uistate.LoadSubsDetectPrefs()
-	allTxns := app.Transactions()
-	allAccts := app.Accounts()
+	allTxns, txnReadErr := app.TransactionsChecked()
+	detectErr := settingsErr
+	if txnReadErr != nil && detectErr == nil {
+		detectErr = fmt.Errorf("read subscription transactions: %w", txnReadErr)
+	}
+	allAccts, readErr := app.Store().ListAccounts()
+	if readErr != nil && detectErr == nil {
+		detectErr = fmt.Errorf("read subscription accounts: %w", readErr)
+	}
+	recurringRows := app.Recurring()
+	categoryRows, readErr := app.CategoriesChecked()
+	if readErr != nil && detectErr == nil {
+		detectErr = readErr
+	}
 
 	// Build accountID → AccountType map for the account-type filter.
 	acctTypeByID := make(map[string]string, len(allAccts))
@@ -196,7 +211,10 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 	}
 
-	rawSubs, _ := subscriptions.Detect(filteredTxns, rates, detectPrefs.MinOccurrencesOrDefault()) // C166: user-tunable sensitivity
+	var rawSubs []subscriptions.Subscription
+	if detectErr == nil {
+		rawSubs, detectErr = subscriptions.Detect(filteredTxns, rates, detectPrefs.MinOccurrencesOrDefault()) // C166: user-tunable sensitivity
+	}
 
 	// Build a lookup of ignored subscriptions by lower-case name so we can
 	// filter them out of the active detected list and show them in a separate
@@ -217,7 +235,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// listing it here produced nonsense like "How to cancel HOA dues subscription".
 	// Cross-check detected names against the recurring labels and drop matches.
 	recurringNames := make(map[string]bool)
-	for _, r := range app.Recurring() {
+	for _, r := range recurringRows {
 		if n := strings.ToLower(strings.TrimSpace(r.Label)); n != "" {
 			recurringNames[n] = true
 		}
@@ -227,7 +245,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// Gas, Cigarettes, Pharmacy recur like subscriptions but are everyday
 	// spending; listing them with "How to cancel" inflated the counts and costs.
 	catNames := make(map[string]string)
-	for _, c := range app.Categories() {
+	for _, c := range categoryRows {
 		catNames[c.ID] = c.Name
 	}
 	catNameOf := func(id string) string { return catNames[id] }
@@ -274,7 +292,10 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// filter, so Cigarettes/Gas/Pharmacy "price changes" survived the M5 cleanup.
 	// It now shares the exact rule the active list applies (essential spend,
 	// liability payments, planned recurring flows all excluded).
-	rawChanges, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
+	rawChanges, priceChangeErr := subscriptions.DetectPriceChanges(allTxns, rates, 3)
+	if detectErr == nil && priceChangeErr != nil {
+		detectErr = priceChangeErr
+	}
 	changes := rawChanges[:0:0]
 	for _, pc := range rawChanges {
 		if subscriptions.IsRealSubscriptionName(pc.Name, allTxns, allAccts, catNameOf, recurringNames) {
@@ -296,7 +317,6 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	var reviewSubs []subscriptions.Subscription
 	reviewNames := map[string]bool{}
 	countedSubs := subs[:0:0]
-	var annual int64
 	for _, s := range subs {
 		if assess(s).Level == subscriptions.ConfidenceReview {
 			reviewSubs = append(reviewSubs, s)
@@ -304,7 +324,25 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 			continue
 		}
 		countedSubs = append(countedSubs, s)
-		annual += s.AnnualAmount()
+	}
+	// Prepare checked subscription totals and the trailing spend denominator once,
+	// before constructing any row or summary markup.
+	modelNow := app.ClockNow()
+	trailingSpend, shareErr := subscriptions.TrailingSpendChecked(allTxns, txnReadErr, modelNow, rates)
+	trailingExpense, trailingMonths := trailingSpend.TotalExpense, trailingSpend.EligibleMonths
+	if shareErr != nil {
+		trailingExpense, trailingMonths = 0, 0
+	}
+	var financialSummary subscriptions.FinancialSummary
+	summaryErr := detectErr
+	if summaryErr == nil {
+		financialSummary, summaryErr = subscriptions.BuildFinancialSummary(subs, countedSubs, selectedState.Get(), trailingExpense, trailingMonths)
+	}
+	annual := financialSummary.CountedAnnual
+	if shareErr != nil && summaryErr == nil {
+		// Keep the independently known monthly and annual totals while marking the
+		// spending-share denominator unavailable below.
+		financialSummary.HasSpendingShare = false
 	}
 	changesKept := changes[:0:0]
 	for _, pc := range changes {
@@ -444,7 +482,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 
 	// Derive savings and count from current selection for the summary bar.
 	sel := selectedState.Get()
-	savings := subscriptions.AnnualSavings(subs, sel)
+	savings := financialSummary.SelectedAnnual
 	selectedCount := 0
 	for _, v := range sel {
 		if v {
@@ -476,6 +514,9 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		if selectedCount > 1 {
 			savingsLabel = uistate.T("subs.cancelSavingsMany", selectedCount, fmtMoney(money.New(savings, base)))
 		}
+		if summaryErr != nil {
+			savingsLabel = uistate.T("common.notReady")
+		}
 		savingsSummary = Div(
 			css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1)+" savings-summary"),
 			Attr("data-testid", "subs-cancel-savings"),
@@ -496,10 +537,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		savingsSummary = Fragment()
 	}
 
-	// Monthly total drives the per-row share-bar width (G10 follow-up).
-	monthlyTotal := subscriptions.MonthlyTotal(subs)
-
-	now := time.Now()
+	now := modelNow
 
 	// Compute page-level smart insights once (not per row). Current subscription
 	// engines do not set RelatedID (they use subscription names), so byEntity is
@@ -544,38 +582,44 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	rows := MapKeyed(displayMain,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
+			monthlyAmount, amountKnown := financialSummary.MonthlyByName[s.Name]
+			sharePercent := financialSummary.SharePercentByName[s.Name]
 			cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]
 			cancelledDate := ""
 			if isCancelled {
 				cancelledDate = pr.FormatDate(cancelledOn)
 			}
 			return ui.CreateElement(SubscriptionRow, subscriptionRowProps{
-				Sub:            s,
-				Base:           base,
-				NextDate:       pr.FormatDate(s.NextRenewal),
-				Cancelled:      isCancelled,
-				CancelledOn:    cancelledDate,
-				Selected:       sel[s.Name],
-				NeedsReview:    !isCancelled && subscriptions.NeedsReview(s, now),
-				Conf:           assess(s),
-				MonthlyTotal:   monthlyTotal,
-				OnRemind:       remind,
-				OnGuide:        guide,
-				OnDrill:        viewCharges,
-				OnCancel:       doCancel,
-				OnUncancel:     doUncancel,
-				OnToggleSelect: toggle,
-				OnIgnore:       doIgnore,
-				SmartSettings:  subSmartSettings,
-				SmartByEntity:  subByEntity,
-				SubPayment:     ledger.SubscriptionPaymentForName(s.Name, allTxns),
-				OnViewPayments: viewSubPayments,
+				Sub:                s,
+				Base:               base,
+				NextDate:           pr.FormatDate(s.NextRenewal),
+				Cancelled:          isCancelled,
+				CancelledOn:        cancelledDate,
+				Selected:           sel[s.Name],
+				NeedsReview:        !isCancelled && subscriptions.NeedsReview(s, now),
+				Conf:               assess(s),
+				MonthlyAmount:      monthlyAmount,
+				SharePercent:       sharePercent,
+				FinancialAvailable: summaryErr == nil && amountKnown,
+				OnRemind:           remind,
+				OnGuide:            guide,
+				OnDrill:            viewCharges,
+				OnCancel:           doCancel,
+				OnUncancel:         doUncancel,
+				OnToggleSelect:     toggle,
+				OnIgnore:           doIgnore,
+				SmartSettings:      subSmartSettings,
+				SmartByEntity:      subByEntity,
+				SubPayment:         ledger.SubscriptionPaymentForName(s.Name, allTxns),
+				OnViewPayments:     viewSubPayments,
 			})
 		},
 	)
 
 	var body ui.Node
-	if len(subs) == 0 {
+	if detectErr != nil {
+		body = P(css.Class("row-meta"), Attr("role", "status"), uistate.T("common.notReady"))
+	} else if len(subs) == 0 {
 		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("subs.empty"), CTALabel: uistate.T("subs.addFirst"), Href: "/transactions"})
 	} else {
 		selectAllLabel := uistate.T("subs.selectAll")
@@ -645,18 +689,10 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// early in the month (on the 5th the ratio read 233%), so compare against
 	// the average of the last three full months instead.
 	shareStat := Fragment()
-	var trailingExpense int64
-	trailingMonths := 0
-	for k := 1; k <= 3; k++ {
-		ms, me := dateutil.MonthRange(time.Now().AddDate(0, -k, 0))
-		if _, expense, err := ledger.PeriodTotals(app.Transactions(), ms, me, rates); err == nil && expense.Amount > 0 {
-			trailingExpense += expense.Amount
-			trailingMonths++
-		}
-	}
-	if trailingMonths > 0 {
-		pct := subscriptions.MonthlyTotal(countedSubs) * 100 * int64(trailingMonths) / trailingExpense
-		shareStat = stat(uistate.T("subs.shareOfSpending"), fmt.Sprintf("%d%%", pct), "")
+	if shareErr != nil || summaryErr != nil {
+		shareStat = stat(uistate.T("subs.shareOfSpending"), uistate.T("common.notReady"), "")
+	} else if financialSummary.HasSpendingShare {
+		shareStat = stat(uistate.T("subs.shareOfSpending"), fmt.Sprintf("%d%%", financialSummary.SpendingSharePercent), "")
 	}
 
 	// Build the charged-after-cancel alert section. Each late charge gets its
@@ -703,11 +739,26 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				uistate.T("subs.monthlyBurden"),
 				smartTooltipFor(subSmartSettings, "subs-monthly", uistate.T("subs.monthlyBurden"), uistate.T("smart.tipSubsMonthly")),
 			),
-			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(countedSubs), base))),
+			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-down")), func() string {
+				if summaryErr != nil {
+					return uistate.T("common.notReady")
+				}
+				return fmtMoney(money.New(financialSummary.CountedMonthly, base))
+			}()),
 		),
 		Div(css.Class("debt-chips"),
-			recurStatChip(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
-			recurStatChip(uistate.T("subs.count"), fmt.Sprintf("%d", len(countedSubs)), ""),
+			recurStatChip(uistate.T("subs.annualBurden"), func() string {
+				if summaryErr != nil {
+					return uistate.T("common.notReady")
+				}
+				return fmtMoney(money.New(annual, base))
+			}(), ""),
+			recurStatChip(uistate.T("subs.count"), func() string {
+				if detectErr != nil {
+					return uistate.T("common.notReady")
+				}
+				return fmt.Sprintf("%d", len(countedSubs))
+			}(), ""),
 			shareStat,
 		),
 		// #52 headline honesty: needs-review detections are excluded from every
@@ -726,7 +777,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 			Div(css.Class("rows rec-cardrows"), lateChargeRows),
 		))),
 		recurTile("subs-prefs", detectPrefsPanel),
-		If(len(subs) > 0, recurTile("subs-hero", subsHero)),
+		If(len(subs) > 0 || summaryErr != nil, recurTile("subs-hero", subsHero)),
 		recurTile("subs-list", recurSection("sec-subs", uistate.T("nav.subscriptions"),
 			// CSV export and smart section action share the header (G10 §7).
 			Fragment(
@@ -784,26 +835,28 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 						cancelledDate = pr.FormatDate(cancelledOn)
 					}
 					return ui.CreateElement(SubscriptionRow, subscriptionRowProps{
-						Sub:            s,
-						Base:           base,
-						NextDate:       pr.FormatDate(s.NextRenewal),
-						Cancelled:      isCancelled,
-						CancelledOn:    cancelledDate,
-						Selected:       sel[s.Name],
-						NeedsReview:    false, // renewing soon ≠ stale
-						Conf:           assess(s),
-						MonthlyTotal:   monthlyTotal,
-						OnRemind:       remind,
-						OnGuide:        guide,
-						OnDrill:        viewCharges,
-						OnCancel:       doCancel,
-						OnUncancel:     doUncancel,
-						OnToggleSelect: toggle,
-						OnIgnore:       doIgnore,
-						SmartSettings:  subSmartSettings,
-						SmartByEntity:  subByEntity,
-						SubPayment:     ledger.SubscriptionPaymentForName(s.Name, allTxns),
-						OnViewPayments: viewSubPayments,
+						Sub:                s,
+						Base:               base,
+						NextDate:           pr.FormatDate(s.NextRenewal),
+						Cancelled:          isCancelled,
+						CancelledOn:        cancelledDate,
+						Selected:           sel[s.Name],
+						NeedsReview:        false, // renewing soon ≠ stale
+						Conf:               assess(s),
+						MonthlyAmount:      financialSummary.MonthlyByName[s.Name],
+						SharePercent:       financialSummary.SharePercentByName[s.Name],
+						FinancialAvailable: summaryErr == nil,
+						OnRemind:           remind,
+						OnGuide:            guide,
+						OnDrill:            viewCharges,
+						OnCancel:           doCancel,
+						OnUncancel:         doUncancel,
+						OnToggleSelect:     toggle,
+						OnIgnore:           doIgnore,
+						SmartSettings:      subSmartSettings,
+						SmartByEntity:      subByEntity,
+						SubPayment:         ledger.SubscriptionPaymentForName(s.Name, allTxns),
+						OnViewPayments:     viewSubPayments,
 					})
 				},
 			)),
@@ -875,15 +928,17 @@ type subscriptionRowProps struct {
 	NeedsReview bool   // whether the subscription hasn't been charged in 2+ cadence intervals
 	// Conf is the detection's confidence assessment (#52): tier + the
 	// plain-English evidence rendered as a chip with the WHY in its tooltip.
-	Conf           subscriptions.Assessment
-	MonthlyTotal   int64 // sum of all active subscriptions' monthly amounts; drives the per-row share-bar
-	OnRemind       func(subscriptions.Subscription)
-	OnGuide        func(subscriptions.Subscription) // file the local how-to-cancel checklist (QA R3 CF-03)
-	OnDrill        func(payee string)               // open Transactions searched for this subscription's payee
-	OnCancel       func(name string)
-	OnUncancel     func(name string)
-	OnToggleSelect func(name string) // toggle cancel-candidate selection for this row
-	OnIgnore       func(name string) // mark as "not a subscription"; nil = action not available (ignored rows)
+	Conf               subscriptions.Assessment
+	MonthlyAmount      int64
+	SharePercent       int64
+	FinancialAvailable bool
+	OnRemind           func(subscriptions.Subscription)
+	OnGuide            func(subscriptions.Subscription) // file the local how-to-cancel checklist (QA R3 CF-03)
+	OnDrill            func(payee string)               // open Transactions searched for this subscription's payee
+	OnCancel           func(name string)
+	OnUncancel         func(name string)
+	OnToggleSelect     func(name string) // toggle cancel-candidate selection for this row
+	OnIgnore           func(name string) // mark as "not a subscription"; nil = action not available (ignored rows)
 	// SubPayment is this subscription's payment-check: the most recent transaction the
 	// user marked as a payment toward it (by name). OnViewPayments drills to those
 	// linked payments. HasAny false = no linked payment yet (the line is hidden).
@@ -1095,8 +1150,12 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			}),
 			uistate.T(cadenceKey),
 		)
-		perMonthNote = Span(css.Class("row-meta"),
-			uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))
+		if props.FinancialAvailable {
+			perMonthNote = Span(css.Class("row-meta"),
+				uistate.T("subs.perMonth", fmtMoney(money.New(props.MonthlyAmount, props.Base))))
+		} else {
+			perMonthNote = Span(css.Class("row-meta"), uistate.T("common.notReady"))
+		}
 	}
 
 	return Div(css.Class("row sub-row"),
@@ -1112,7 +1171,7 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			statusArea,
 			confChip,
 			reviewBadge,
-			subShareBar(s.MonthlyAmount(), props.MonthlyTotal),
+			subShareBar(props.SharePercent),
 			// SM-9: an expected charge that has not posted, stated on the row it is
 			// about rather than only as a dot beside the name.
 			smartRowInsightsFor(props.SmartSettings, props.SmartByEntity, s.Name, subRowSmartCodes),
@@ -1132,16 +1191,17 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 // MonthlyAmount / MonthlyTotal × 100%, capped at 100%. Returns an empty
 // fragment when the total is zero to avoid division-by-zero and visual noise
 // in edge cases (e.g. all subscriptions are free trials at $0).
-func subShareBar(monthly, total int64) ui.Node {
-	if total <= 0 || monthly <= 0 {
+func subShareBar(percent int64) ui.Node {
+	if percent <= 0 {
 		return Fragment()
 	}
-	pct := int(monthly * 100 / total)
+	pct := int(percent)
 	if pct > 100 {
 		pct = 100
 	}
 	return Div(
 		css.Class("share-bar"),
+		Title(fmt.Sprintf("%d%%", pct)),
 		Style(map[string]string{
 			"height":        "4px",
 			"max-width":     "180px",

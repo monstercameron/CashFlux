@@ -7,22 +7,22 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/goalview"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type goalSummaryProps struct{ App *appstate.App }
@@ -49,19 +49,9 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 	// "Funded so far" is the money working toward goals — saved contributions PLUS
 	// reserved set-asides — with the split shown below so it never contradicts the
 	// per-card saved/set-aside legend (#5).
-	funded := money.New(saved.Amount+setAside.Amount, v.Base)
+	funded := v.FundedTotal
 	target := v.TargetTotal
-	left := money.New(target.Amount-saved.Amount, v.Base)
-	if left.Amount < 0 {
-		left = money.New(0, v.Base)
-	}
 	fillW := v.OverallPct
-	if fillW > 100 {
-		fillW = 100
-	}
-	if fillW < 0 {
-		fillW = 0
-	}
 	// Progress semantics live on the childless FILL bar, not the wrapper — the
 	// wrapper contains focusable descendants (the smart tooltip), and a labeled
 	// role wrapping interactive children fails axe nested-interactive (#67).
@@ -95,7 +85,10 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 		// exist, say so — their card targets otherwise look like a $-mismatch
 		// against "Total target" (2026-07-18 assessment: users had to
 		// reverse-engineer which cards contribute).
-		fundScopeNote(app, v),
+		fundScopeNote(v),
+		If(len(v.ExcludedCurrencies) > 0,
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "goal-summary-excluded-currencies"),
+				uistate.T("goals.summaryExcludedCurrencies", strings.Join(v.ExcludedCurrencies, ", ")))),
 		// C400: the saved-vs-set-aside distinction, stated once at page level.
 		//
 		// Each card carries a legend, but a reader meeting the surface for the
@@ -124,26 +117,22 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
 	compareAtom := uistate.UseGoalCompareOpen()
 	openCompare := ui.UseEvent(Prevent(func() { compareAtom.Set(true) }))
-	showGoals := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewGoals) }))
-	showEarmarks := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewEarmarks) }))
 	sortVal := sortAtom.Get()
 	view := viewAtom.Get()
-	goalsActive, earmarksActive := "goals-tab", "goals-tab"
-	if view == uistate.GoalsViewGoals {
-		goalsActive += " is-active"
-	} else {
-		earmarksActive += " is-active"
-	}
 	// A tab strip (Goals · Earmarks) + a "Sort by" picker (goals view only) on the left, the
 	// primary "Add goal" pushed to the right.
-	toolbar := Div(css.Class("filter-strip"),
-		Div(css.Class("filter-strip-controls"),
-			Div(css.Class("goals-tabs"), Attr("role", "tablist"),
-				Button(ClassStr(goalsActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-goals"),
-					Attr("aria-selected", ariaBool(view == uistate.GoalsViewGoals)), OnClick(showGoals), uistate.T("goals.viewGoals")),
-				Button(ClassStr(earmarksActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-earmarks"),
-					Attr("aria-selected", ariaBool(view == uistate.GoalsViewEarmarks)), OnClick(showEarmarks), uistate.T("goals.viewEarmarks")),
-			),
+	toolbar := uiw.ControlStrip(uiw.ControlStripProps{
+		Label: uistate.T("goals.toolbarLabel"),
+		Controls: []ui.Node{
+			uiw.SegmentedControl(uiw.SegmentedControlProps{
+				Tabs: true, Label: uistate.T("goals.toolbarLabel"), Class: "goals-tabs",
+				ButtonClass: "goals-tab", ActiveClass: "is-active", Selected: view,
+				Options: []uiw.SegmentOption{
+					{Key: uistate.GoalsViewGoals, Label: uistate.T("goals.viewGoals"), TestID: "goals-tab-goals"},
+					{Key: uistate.GoalsViewEarmarks, Label: uistate.T("goals.viewEarmarks"), TestID: "goals-tab-earmarks"},
+				},
+				OnSelect: viewAtom.Set,
+			}),
 			If(view == uistate.GoalsViewGoals, Label(css.Class("fctrl"),
 				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(css.Class("fctrl-label"), uistate.T("goals.sortLabel")),
@@ -158,8 +147,9 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 					Option(Value(uistate.GoalSortPriority), SelectedIf(sortVal == uistate.GoalSortPriority), uistate.T("goals.sortPriority")),
 				),
 			)),
-		),
-		Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+		},
+		ActionsClass: tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+		Actions: []ui.Node{
 			// Goal-vs-goal comparison (flip modal): pick two goals, read the figures
 			// side by side.
 			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "goals-compare-btn"),
@@ -171,8 +161,8 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 				Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T("goals.addGoal"))),
-		),
-	)
+		},
+	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: toolbar,
@@ -196,11 +186,6 @@ func goalListWidget(props goalListProps) ui.Node {
 	goalSort := uistate.UseGoalSort().Get()
 
 	v := computeGoalView(app, activeMemberID)
-	// Apply the toolbar's Sort picker to the active list. Sort a copy — computeGoalView is
-	// memoized and its slices are shared with the summary tile, so we must not reorder the
-	// cached backing array in place.
-	activeSorted := append([]domain.Goal(nil), v.Active...)
-	sortGoals(activeSorted, goalSort, v.Tasks, time.Now())
 
 	viewAccountTxns := func(accountID string) {
 		f := uistate.TxFilter{Account: accountID}.Normalize()
@@ -307,10 +292,11 @@ func goalListWidget(props goalListProps) ui.Node {
 			}
 		})
 	}
-	overbooked := overbookedGoals(app)
+	overbooked := v.Overbooked
 	rowForU := func(g domain.Goal, fundSetAside int64, catName string, urgency goalsvc.PlanUrgency) ui.Node {
+		model := v.Rows[g.ID]
 		return ui.CreateElement(GoalRow, goalRowProps{
-			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
+			Goal: g, Accounts: v.Accounts, Members: v.Members, Model: &model,
 			OnDelete:       deleteGoal,
 			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRetarget: retargetGoal,
 			OnRedirect:         redirectToAllocate,
@@ -334,7 +320,7 @@ func goalListWidget(props goalListProps) ui.Node {
 	// pulled up out of the active and sinking-fund lists — lead the page so the
 	// actionable items are in the first viewport instead of sitting below healthy
 	// funds. This ONLY reorders: each card is the same GoalRow with the same pace
-	// badge and reason; the verdicts come straight from v.Health (computeGoalHealth),
+	// badge and reason; the verdicts come straight from v.Health (goalview.Health),
 	// never recomputed. Pulled goals are filtered OUT of the healthy sections below so
 	// nothing renders twice.
 	type planEntry struct {
@@ -342,7 +328,9 @@ func goalListWidget(props goalListProps) ui.Node {
 		missed bool
 	}
 	var planEntries []planEntry
+	missedByID := make(map[string]bool, len(v.Missed))
 	for _, g := range v.Missed {
+		missedByID[g.ID] = true
 		planEntries = append(planEntries, planEntry{g: g, missed: true})
 	}
 	for _, g := range v.Active {
@@ -355,25 +343,11 @@ func goalListWidget(props goalListProps) ui.Node {
 			planEntries = append(planEntries, planEntry{g: g})
 		}
 	}
-	// Ordering: severity (missed → at risk → watch) is the presentation of the
-	// DEFAULT "Most actionable" sort. When the user picks an explicit sort in
-	// the toolbar it applies here too — the Watch-first pass silently ignored
-	// e.g. "Sort by name" inside this section, which both broke the sort
-	// promise and goals.spec's A→Z regression check.
+	// Lifecycle sections belong to the default actionable view. An explicit
+	// sort spans every open goal, rather than pinning a differently named section
+	// ahead of the user's selected ordering.
 	if goalSort != uistate.GoalSortActionable {
-		planGoals := make([]domain.Goal, len(planEntries))
-		missedByID := make(map[string]bool, len(planEntries))
-		for i, e := range planEntries {
-			planGoals[i] = e.g
-			if e.missed {
-				missedByID[e.g.ID] = true
-			}
-		}
-		sortGoals(planGoals, goalSort, v.Tasks, now)
-		planEntries = planEntries[:0]
-		for _, g := range planGoals {
-			planEntries = append(planEntries, planEntry{g: g, missed: missedByID[g.ID]})
-		}
+		planEntries = nil
 	} else {
 		// Within the default "Most actionable" sort: missed → at risk → watch (the coarse
 		// verdict rank), then — crucially, since a whole cluster can share the Watch
@@ -400,11 +374,9 @@ func goalListWidget(props goalListProps) ui.Node {
 		})
 	}
 
-	// Healthy remainders for the sections below: the goals NOT pulled up (on-track /
-	// no-verdict). Missed goals were never in v.Active, so activeSorted only sheds its
-	// Watch / At-risk cards here.
+	// Healthy remainders for the default sections below.
 	var healthyActive []domain.Goal
-	for _, g := range activeSorted {
+	for _, g := range v.Active {
 		if !healthNeedsPlan(v.Health[g.ID].Health) {
 			healthyActive = append(healthyActive, g)
 		}
@@ -414,6 +386,10 @@ func goalListWidget(props goalListProps) ui.Node {
 		if !healthNeedsPlan(v.Health[g.ID].Health) {
 			healthyFund = append(healthyFund, g)
 		}
+	}
+	if goalSort != uistate.GoalSortActionable {
+		healthyActive = goalview.OrderedOpen(v, goalSort, now)
+		healthyFund = nil
 	}
 
 	rowForPlan := func(e planEntry) ui.Node {
@@ -488,6 +464,9 @@ func goalListWidget(props goalListProps) ui.Node {
 		// Each active goal card now renders its savings-pace rail INSIDE its own metadata
 		// block (see goals_row.go), so the list is just the cards — no trajectory wrapper.
 		rows := MapKeyed(healthyActive, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+			if goalSort != uistate.GoalSortActionable {
+				return rowForPlan(planEntry{g: g, missed: missedByID[g.ID]})
+			}
 			return rowFor(g, 0, "")
 		})
 		listSection = uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -544,13 +523,13 @@ func goalListWidget(props goalListProps) ui.Node {
 
 // fundScopeNote is the one-line scope statement under the goals headline: which
 // cards the totals count, and the sinking funds' own target when any exist.
-func fundScopeNote(app *appstate.App, v goalView) ui.Node {
+func fundScopeNote(v goalView) ui.Node {
 	if len(v.Fund) == 0 {
 		return Fragment()
 	}
-	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
-	_, fundTarget := goalsvc.Totals(v.Fund, rates, v.Base, false)
 	return P(css.Class("budget-sub"), Attr("data-testid", "goal-headline-scope"),
 		Style(map[string]string{"margin": "0.35rem 0 0"}),
-		uistate.T("goals.headlineScope", fmtMoney(fundTarget)))
+		uistate.T("goals.headlineScope", fmtMoney(v.FundTargetTotal)),
+		If(len(v.FundExcludedCurrencies) > 0, Span(Attr("data-testid", "goal-funds-excluded"),
+			uistate.T("goals.fundExcludedCurrencies", strings.Join(v.FundExcludedCurrencies, ", ")))))
 }

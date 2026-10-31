@@ -7,12 +7,18 @@ package app
 import (
 	"context"
 	"encoding/base64"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/applock"
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
@@ -20,46 +26,83 @@ import (
 
 func fixpullFixture(t *testing.T) {
 	t.Helper()
-	keys := []string{workspacesKey, syncUserIDKey, syncStatusKey, syncQueueKey, syncMetaPrefix + "fixpull-workspace"}
+	solp22Storage(t)
+	const workspaceID = "fixpull-workspace"
+	pr := prefs.Default()
+	pr.ServerURL, pr.ServerToken, pr.BackendDisabled = "https://fixpull.test", "fixpull-token", false
+	marker := encryptedWorkspaceKeyFor(datasetServerIDForURL(pr.ServerURL), "fixpull-account", workspaceID)
+	keys := []string{
+		datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey,
+		workspacesKey, syncUserIDKey, syncStatusKey, syncQueueKey,
+		syncMetaPrefix + workspaceID, marker, appLockKey, secureLockTransitionKey,
+	}
 	previous := make(map[string]string, len(keys))
 	for _, key := range keys {
-		previous[key] = lsGet(key)
+		previous[key] = browserstore.GetString(key)
+	}
+	initialJournal := make(map[string]bool)
+	for _, key := range browserstore.Keys() {
+		if strings.HasPrefix(key, recordWorkspacePrefix(workspaceID)) {
+			initialJournal[key] = true
+		}
 	}
 	oldPrefs, oldPasscode, oldSample := uistate.LoadPrefs(), activePasscode, uistate.SampleActive()
 	oldHosted := currentHostedHydration()
 	oldHadLocal, oldMerged := hadLocalDataset, mergedRemoteWorkspaces
+	oldDatasetMyGen := datasetMyGen
 	pageRefreshState.Lock()
 	oldScope, oldReady, oldBlocked := pageRefreshState.scope, pageRefreshState.ready, pageRefreshState.blocked
 	pageRefreshState.scope, pageRefreshState.ready, pageRefreshState.blocked = nil, true, false
 	pageRefreshState.Unlock()
-	pr := prefs.Default()
-	pr.ServerURL, pr.ServerToken, pr.BackendDisabled = "https://fixpull.test", "fixpull-token", false
+	blank := make(map[string]string, len(previous))
+	for key := range previous {
+		blank[key] = ""
+	}
+	solp22Batch(t, blank, nil)
+	datasetMyGen = ""
 	uistate.PersistPrefs(pr)
-	saveRegistry(workspace.Registry{}.Add("fixpull-workspace", "Household"))
+	saveRegistry(workspace.Registry{}.Add(workspaceID, "Household"))
 	lsSet(syncUserIDKey, "fixpull-account")
-	lsRemove(syncStatusKey)
-	lsRemove(syncQueueKey)
+	saveAppLock(applock.Config{})
 	activePasscode = ""
 	uistate.SetSampleActive(false)
 	hadLocalDataset, mergedRemoteWorkspaces = true, false
 	initializeHostedHydration(true)
 	t.Cleanup(func() {
-		for key, value := range previous {
-			if value == "" {
-				lsRemove(key)
-			} else {
-				lsSet(key, value)
+		browserstore.Barrier()
+		solp22Batch(t, previous, nil)
+		var detachedRecords []string
+		for _, key := range browserstore.Keys() {
+			if !initialJournal[key] && strings.HasPrefix(key, recordWorkspacePrefix(workspaceID)) {
+				detachedRecords = append(detachedRecords, key)
 			}
 		}
+		jrnlRemoveFixtureRecords(t, detachedRecords)
 		uistate.PersistPrefs(oldPrefs)
 		activePasscode = oldPasscode
 		uistate.SetSampleActive(oldSample)
 		hadLocalDataset, mergedRemoteWorkspaces = oldHadLocal, oldMerged
+		datasetMyGen = oldDatasetMyGen
 		setHostedHydration(oldHosted)
 		pageRefreshState.Lock()
 		pageRefreshState.scope, pageRefreshState.ready, pageRefreshState.blocked = oldScope, oldReady, oldBlocked
 		pageRefreshState.Unlock()
 	})
+}
+
+func fixpullImportApp(t *testing.T) *appstate.App {
+	t.Helper()
+	oldApp := appstate.Default
+	app, err := appstate.New(io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appstate.Default = app
+	t.Cleanup(func() {
+		appstate.Default = oldApp
+		app.Store().Close()
+	})
+	return app
 }
 
 func fixpullWait(t *testing.T, condition func() bool) {
@@ -111,11 +154,18 @@ func TestFIXPULLHostedDeviceWithoutAppLockPullsEncryptedSnapshot(t *testing.T) {
 // snapshot. A device without App Lock must be able to open it (refusing it locked
 // the owner out in 1.19.3); a device with App Lock still refuses any plaintext.
 func TestFIXPULLLegacyPlaintextLoadsWithoutAppLockOnly(t *testing.T) {
-	plaintext := []byte(`{"schemaVersion":2,"accounts":[]}`)
+	dataset := store.SampleDataset()
+	dataset.Transactions, dataset.Artifacts = nil, nil
+	plaintext, err := store.Export(dataset)
+	if err != nil {
+		t.Fatal(err)
+	}
 	serve := func() {
 		hostedPullWorkspaceRPC = func(_ context.Context, _ prefs.Prefs, req backendrpc.GetWorkspaceRequest, out *backendrpc.GetWorkspaceResponse) error {
 			out.Found = true
 			out.Workspace.ID = req.ID
+			out.Workspace.Version = 3
+			out.Workspace.UpdatedAt = "2026-10-20T12:00:00Z"
 			out.Dataset = plaintext
 			return nil
 		}
@@ -124,13 +174,42 @@ func TestFIXPULLLegacyPlaintextLoadsWithoutAppLockOnly(t *testing.T) {
 
 	t.Run("without App Lock the legacy copy is not refused", func(t *testing.T) {
 		fixpullFixture(t)
+		app := fixpullImportApp(t)
+		hadLocalDataset = false
+		if loadAppLock().Active() || serverWorkspaceWasEncrypted(activeWorkspaceID()) {
+			t.Fatal("legacy fixture retained App Lock or encrypted-server state")
+		}
 		oldRPC := hostedPullWorkspaceRPC
 		t.Cleanup(func() { hostedPullWorkspaceRPC = oldRPC })
 		serve()
 		pullActiveWorkspaceFromBackend(false)
-		fixpullWait(t, func() bool { return currentHostedHydration().Phase != hostedHydrationLoading })
-		if got := currentHostedHydration(); got.Message == refused {
-			t.Fatalf("legacy plaintext was refused without App Lock: %#v", got)
+		fixpullWait(t, func() bool { return currentHostedHydration().Phase == hostedHydrationProtect })
+		if got := currentHostedHydration(); got.Message == refused || !legacyWorkspaceNeedsProtection() {
+			t.Fatalf("legacy plaintext did not import and request protection: hydration=%#v legacy=%t", got, legacyWorkspaceNeedsProtection())
+		}
+		meta := loadSyncMeta(activeWorkspaceID())
+		if !meta.LegacyPlaintext || meta.Version != 3 || meta.Server != currentDatasetServerID() {
+			t.Fatalf("legacy sync metadata = %#v, want imported version 3 marked for protection", meta)
+		}
+		got, err := app.Store().Snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Accounts) != len(dataset.Accounts) {
+			t.Fatalf("imported accounts = %d, want %d", len(got.Accounts), len(dataset.Accounts))
+		}
+		wantIDs := make(map[string]bool, len(dataset.Accounts))
+		for _, account := range dataset.Accounts {
+			wantIDs[account.ID] = true
+		}
+		for _, account := range got.Accounts {
+			if !wantIDs[account.ID] {
+				t.Fatalf("imported unexpected account %q", account.ID)
+			}
+			delete(wantIDs, account.ID)
+		}
+		if len(wantIDs) != 0 {
+			t.Fatalf("import omitted account IDs: %v", wantIDs)
 		}
 	})
 	t.Run("with App Lock plaintext is refused", func(t *testing.T) {
@@ -138,9 +217,26 @@ func TestFIXPULLLegacyPlaintextLoadsWithoutAppLockOnly(t *testing.T) {
 		oldRPC, oldPass := hostedPullWorkspaceRPC, activePasscode
 		t.Cleanup(func() { hostedPullWorkspaceRPC, activePasscode = oldRPC, oldPass })
 		activePasscode = "known-app-lock"
+		saveAppLock(applock.Config{}.WithPasscode(activePasscode, "fixpull-test-salt", 0, ""))
 		if !datasetEncryptionActive() {
-			t.Skip("fixture cannot activate dataset encryption via activePasscode")
+			t.Fatal("fixture did not activate dataset encryption with persisted App Lock")
 		}
+		serve()
+		pullActiveWorkspaceFromBackend(false)
+		fixpullWait(t, func() bool { return currentHostedHydration().Phase == hostedHydrationError })
+		if got := currentHostedHydration(); got.Message != refused {
+			t.Fatalf("hosted hydration state = %#v, want the unprotected-copy refusal", got)
+		}
+	})
+	t.Run("without App Lock a previously encrypted scope rejects plaintext", func(t *testing.T) {
+		fixpullFixture(t)
+		marker := encryptedWorkspaceKey(activeWorkspaceID())
+		lsSet(marker, "true")
+		if loadAppLock().Active() {
+			t.Fatal("downgrade fixture unexpectedly has App Lock enabled")
+		}
+		oldRPC := hostedPullWorkspaceRPC
+		t.Cleanup(func() { hostedPullWorkspaceRPC = oldRPC })
 		serve()
 		pullActiveWorkspaceFromBackend(false)
 		fixpullWait(t, func() bool { return currentHostedHydration().Phase == hostedHydrationError })
@@ -153,6 +249,10 @@ func TestFIXPULLLegacyPlaintextLoadsWithoutAppLockOnly(t *testing.T) {
 func TestFIXPULLAppLockKeepsExistingEncryptedPullHandling(t *testing.T) {
 	fixpullFixture(t)
 	activePasscode = "known-app-lock"
+	saveAppLock(applock.Config{}.WithPasscode(activePasscode, "fixpull-test-salt", 0, ""))
+	if !datasetEncryptionActive() {
+		t.Fatal("fixture did not activate encrypted dataset handling with persisted App Lock")
+	}
 	oldRPC := hostedPullWorkspaceRPC
 	t.Cleanup(func() { hostedPullWorkspaceRPC = oldRPC })
 	envelope := cryptobox.Marshal(cryptobox.Envelope{

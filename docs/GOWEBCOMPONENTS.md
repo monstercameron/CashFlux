@@ -7,20 +7,24 @@ framework README, its `examples/`, and source. Keep this current as we learn mor
   fiber-based runtime, typed HTML builders, a shorthand authoring layer, client-side routing,
   shared state, fetch helpers, SSR/hydration, i18n, a11y, PWA, feature flags, and devtools — all
   in one Go module. The whole UI is Go compiled to wasm; no JS build/bundler.
-- **Module:** `github.com/monstercameron/GoWebComponents` (we pin a pseudo-version via `go get`).
-- **Requires:** Go 1.26+. Target `GOOS=js GOARCH=wasm`.
+- **Module:** `github.com/monstercameron/GoWebComponents/v7`, pinned to `v7.0.1`.
+- **Requires:** Go 1.27.0+, with the CashFlux toolchain pinned to Go 1.27.3. Target `GOOS=js GOARCH=wasm`.
 - **Trade-offs:** not faster than hand-tuned React; wasm bundle is large raw (~6 MB for a counter)
   but compresses ~5x under brotli. Value = whole UI in Go, shared types client/server.
 
 ## Dependency wiring (important)
 
-- Consume it as a **normal module** (`go get …@<commit>`); **do not** use a local `replace`.
-- The framework's *own* `go.mod` has `replace agenthub => ./tools/agenthub` and a GoGRPCBridge
-  replace. Replace directives are **ignored when the module is a dependency**, but the core public
-  packages (`ui`, `html`, `html/shorthand`, `state`, `router`, `utils`) **do not import** agenthub,
-  so Go's module-graph pruning drops it — `go mod tidy` resolves cleanly (only `cbor`, `float16`,
-  `goldmark` come along as indirect deps). The agenthub bits are only used by the `gwc` tool, which
-  we build from the checkout instead of `go install`.
+- Consume it as a **normal versioned module**; **do not** use a local `replace` in CashFlux.
+- In v7 the CLI is a separate nested module under the framework's `tools/` directory.
+  Build the local runner from that module without `-trimpath`; the runner locates its source
+  tree with `runtime.Caller`. Keep that source tree after building the runner.
+- The Windows v7 release runner has a trimmed source path and cannot locate its framework
+  root here. See [the upgrade record](DEPENDENCY_UPGRADE_2026-10-21.md) for the verified source setup.
+- The v7 `gwc build` command forces `GOEXPERIMENT=nojsonv2`, which conflicts with CashFlux's
+  SQLite dependency on Go 1.27. Use the existing direct Go build scripts for application builds.
+  `gwc dev` does not force this setting and remains the live development entry point.
+- Markdown is opt-in in v7. `internal/screens/custompage.go` imports `html/markdown` so custom
+  text widgets retain their headings, emphasis, lists, and links.
 
 ## Public packages we use
 
@@ -40,14 +44,15 @@ returns exactly what router handlers (`func(router.Attrs) *router.Element`) need
 
 ## Authoring with `html/shorthand` (our default)
 
-Dot-import it: `import . "github.com/monstercameron/GoWebComponents/html/shorthand"`.
+Dot-import it: `import . "github.com/monstercameron/GoWebComponents/v7/html/shorthand"`.
 
 - **Elements** are `func(...any) ui.Node`: `Div`, `Span`, `Button`, `Input`, `Select`, `Option`,
   `Form`, `Nav`, `Header`, `Main`, `Section`, `H1`–`H6`, `P`, `Ul`, `Li`, `Table`, … (full set in
   `html/html.go`). Mixed args: prop-options + children in any order.
 - **Prop options:** `Class`, `ID`, `Type`, `Name`, `Value`, `Placeholder`, `Min`/`Max`/`Step`,
   `Title`, `For`, `Href`, `Disabled(…bool)`, `Selected(…bool)`, `SelectedIf(bool)`, `Attr(k,v)`,
-  and events `OnClick`/`OnInput`/`OnChange`/`OnSubmit`/… (each takes `any`).
+  and events `OnClick`/`OnInput`/`OnChange`/`OnSubmit`/…. `OnInput` and `OnChange` accept typed
+  callbacks or `ui.Handler`; input-handler props must retain those types instead of `any`.
 - **Children** auto-normalize: a `string` becomes text; a `[]ui.Node` (e.g. from `Map`/`MapKeyed`)
   is **flattened** — so `Div(Class("rows"), MapKeyed(items, key, render))` just works.
 - **Control flow:** `If(cond, node)`, `IfElse(cond, a, b)`, `Unless`, `Show`, `Switch`/`Case`/
@@ -105,6 +110,47 @@ Use the `gwc` runner (we keep a built copy at `.tools/gwc.exe`; also wired as th
 .\.tools\gwc.exe wasm measure -package .             # raw + compressed size
 ```
 Direct build also works: `$env:GOOS="js"; $env:GOARCH="wasm"; go build -o static\bin\main.wasm .`
+
+### CashFlux live development on port 8080
+
+Use `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1` for
+CashFlux development. It builds both `main.wasm` and `services.wasm`, watches
+source changes, and serves the app at `http://127.0.0.1:8080`. CashFlux requires a
+full-page reload after rebuilding: swapping the running WASM runtime can leave
+multiple autosave loops writing the same workspace. The script requests
+`-hot=false` for this reason.
+
+The local runner repaired on 2026-10-20 was built from the ignored
+`.tools/gwc-framework-v5` worktree at framework tag `v5.0.1`, matching `go.mod`.
+The previous executable resolved its development sources from a separate checkout
+that had moved to an incompatible framework version. Keep the runner's source
+checkout available; rebuilding from an unrelated moving checkout can reintroduce
+that failure. These local tool repairs do not change the app's versioned module.
+
+That ignored tool installation also carries local compatibility fixes: it forwards
+the boolean flag as `-hot=false` rather than separate arguments, classifies that
+mode as a full reload for every rebuild, and serves the SPA entry for missing
+extensionless GET/HEAD routes such as `/transactions`. Missing asset paths still
+return 404. Replacing the ignored runner/source checkout requires preserving or
+upstreaming those fixes; they are not part of the downloaded framework module.
+
+The same local tool source serializes WebSocket data-frame writes across status
+delivery and reload broadcasts. Concurrent broadcasts previously terminated the
+server with `concurrent write to websocket connection`. A concurrent large-frame
+broadcast regression passed repeated native runs; the race detector was unavailable
+because this toolchain requires cgo for it. This repair is in the ignored source
+checkout, so replacing that checkout also requires preserving the write lock.
+
+The tracked `scripts/devwatch.ps1` helper prunes generated/tool directories before
+walking service sources, skips reparse-point directories and observes module-file
+timestamps. Run `scripts/devwatch.Tests.ps1` for the deterministic fixture;
+`-Probe` adds an optional local wall-time comparison with the previous scanner.
+
+Verify `/__gwc/status` reports `lastBuild.success: true` and
+`lastBuild.reloadType: "full"`, and verify `/transactions` returns 200. A source
+timestamp change should produce a new successful build with that file listed in
+`lastClassification.changedFiles`. This checks the watcher, not just a previously
+built artifact. Port 8142/8143 test servers are not required for this workflow.
 
 Host page needs `wasm_exec.js` (from `GOROOT/lib/wasm/wasm_exec.js`; gwc copies it) and a boot
 script that instantiates `./bin/main.wasm` into a `#app` div (see framework README "Host HTML").

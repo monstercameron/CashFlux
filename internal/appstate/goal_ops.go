@@ -11,22 +11,35 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/validate"
 )
 
 // ContributeResult carries the outcome of a ContributeToGoal call so callers
 // can surface appropriate toasts / prompts without re-reading state.
 type ContributeResult struct {
-	// BecameComplete is true when this contribution pushed the goal to 100%.
+	// SavedProgressKnown makes the before/after saved-only percentages usable.
+	// Milestone is the highest known saved-only threshold crossed, or zero. The
+	// completion-worded 100% celebration also requires known after-coverage.
+	SavedProgressKnown                    bool
+	BeforeSavedPercent, AfterSavedPercent int
+	Milestone                             int
+	// CompletionKnown makes the coverage-derived completion transition usable.
+	// Unknown FX or unsafe coverage arithmetic never produces a completion prompt.
+	CompletionKnown bool
+	// BecameComplete is true when known coverage crossed the goal's target.
 	BecameComplete bool
 	// TransactionID is non-empty when a ledger transaction was posted (the
 	// optional "also move money" path).  Empty when memo-only.
 	TransactionID string
 }
 
-// ContributeToGoal adds amt to g.CurrentAmount and persists the goal.
+// ContributeToGoal adds amt to the current stored goal identified by g.ID.
+// Captured metadata, saved progress and the primary account are re-read at submit.
 //
 // When postLedger is true AND the goal has a linked account (g.AccountID ≠ ""),
 // it also posts a debit transaction against that account so the contribution is
@@ -38,10 +51,15 @@ type ContributeResult struct {
 // When postLedger is false, or the goal has no linked account, the call is
 // memo-only: only CurrentAmount is bumped (the historical behaviour).
 //
-// amt must be positive and share the goal's currency; the caller should validate
-// before calling (the UI does this already).
+// amt must be positive and share the saved amount's currency. Arithmetic and the
+// intended goal write are checked before any mutation. A requested ledger debit
+// and the goal commit together; an error leaves both unchanged.
 func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) (ContributeResult, error) {
-	return a.ContributeToGoalFrom(g, amt, postLedger, g.AccountID)
+	latest, err := a.storedContributionGoal(g.ID)
+	if err != nil {
+		return ContributeResult{}, err
+	}
+	return a.ContributeToGoalFrom(latest, amt, postLedger, latest.AccountID)
 }
 
 // ContributeToGoalFrom is ContributeToGoal with an explicit ledger-post account:
@@ -49,23 +67,64 @@ func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) 
 // accounts lets the user pick), WITHOUT altering the goal's stored primary
 // AccountID. An empty fromAcctID (or postLedger=false) is memo-only.
 func (a *App) ContributeToGoalFrom(g domain.Goal, amt money.Money, postLedger bool, fromAcctID string) (ContributeResult, error) {
+	if err := a.roleGuard(); err != nil {
+		return ContributeResult{}, err
+	}
+	latest, err := a.storedContributionGoal(g.ID)
+	if err != nil {
+		return ContributeResult{}, err
+	}
+	g = latest
 	if amt.Amount <= 0 {
 		return ContributeResult{}, fmt.Errorf("appstate: contribute: amount must be positive")
+	}
+	if amt.Currency == "" {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: amount currency is required")
+	}
+	if g.CurrentAmount.Currency == "" && g.CurrentAmount.Amount != 0 {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: saved amount has no currency")
 	}
 	if amt.Currency != g.CurrentAmount.Currency && g.CurrentAmount.Currency != "" {
 		return ContributeResult{}, fmt.Errorf("appstate: contribute: currency mismatch: %q vs %q", amt.Currency, g.CurrentAmount.Currency)
 	}
 
-	wasComplete := g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
+	updatedAmount, err := money.Add(g.CurrentAmount.Amount, amt.Amount)
+	if err != nil {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: saved amount: %w", err)
+	}
+	before := g
+	g.CurrentAmount = money.New(updatedAmount, amt.Currency)
+	// Validate the intended goal write before optionally posting a debit. Invalid
+	// imported currencies/custom fields must not leave a stray ledger entry.
+	if issues := validate.ValidateGoal(g); !issues.OK() {
+		return ContributeResult{}, issues
+	}
+	if err := a.validateCustom("goal", g.Custom); err != nil {
+		return ContributeResult{}, err
+	}
+	contributedAt := time.Now()
+	g, err = g.RecordContributionChecked(domain.GoalContribution{Amount: amt, At: contributedAt})
+	if err != nil {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: record history: %w", err)
+	}
+	g.LastReviewedAt = contributedAt
+	rates := a.goalEvaluationRates()
+	beforeCoverage, beforeErr := goals.EvaluateCoverage(before, rates)
+	afterCoverage, afterErr := goals.EvaluateCoverage(g, rates)
+	result := ContributeResult{SavedProgressKnown: beforeCoverage.SavedKnown && afterCoverage.SavedKnown,
+		CompletionKnown: beforeErr == nil && afterErr == nil}
+	if result.SavedProgressKnown {
+		result.BeforeSavedPercent, result.AfterSavedPercent = beforeCoverage.SavedPercent, afterCoverage.SavedPercent
+		result.Milestone = goals.MilestoneCrossed(result.BeforeSavedPercent, result.AfterSavedPercent)
+		if result.Milestone == 100 && afterErr != nil {
+			result.Milestone = 0
+		}
+	}
+	result.BecameComplete = result.CompletionKnown && !beforeCoverage.Complete && afterCoverage.Complete
 
-	g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt.Amount, amt.Currency)
-	becameComplete := !wasComplete && g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
-
-	// Post the ledger entry (if requested) BEFORE saving the goal, so the
-	// contribution log can record the transaction id and "undo contribution" can
-	// later remove both the progress and the ledger entry in one action.
-	var txnID string
-	var postErr error
+	// Prepare the optional debit and attach its ID to the copy-owned, checked
+	// contribution log before committing either record.
+	var debit *domain.Transaction
 	if postLedger && fromAcctID != "" {
 		// A debit (expense-signed, negative amount) against the chosen account. No
 		// CategoryID so it doesn't distort budget rollups — the user can categorise
@@ -73,58 +132,106 @@ func (a *App) ContributeToGoalFrom(g domain.Goal, amt money.Money, postLedger bo
 		txn := domain.Transaction{
 			ID:        id.New(),
 			AccountID: fromAcctID,
-			Date:      time.Now(),
+			Date:      contributedAt,
 			Payee:     fmt.Sprintf("Goal contribution — %s", g.Name),
 			Desc:      fmt.Sprintf("Contribution to savings goal %q", g.Name),
 			Amount:    money.New(-amt.Amount, amt.Currency), // debit
 			Source:    domain.TxnSourceManual,               // a deliberate user contribution
 		}
-		if err := a.PutTransaction(txn); err != nil {
-			postErr = fmt.Errorf("appstate: contribute: post ledger: %w", err)
-		} else {
-			txnID = txn.ID
-			a.log.Info("goal contribution ledger entry posted", "goal", g.ID, "txn", txnID)
-		}
+		debit = &txn
+		g.Contributions[len(g.Contributions)-1].TxnID = txn.ID
 	}
 
-	g = g.RecordContribution(domain.GoalContribution{Amount: amt, TxnID: txnID, At: time.Now()})
-	g.LastReviewedAt = time.Now() // a contribution counts as touching the goal (review freshness)
-	if err := a.PutGoal(g); err != nil {
-		return ContributeResult{}, fmt.Errorf("appstate: contribute: save goal: %w", err)
+	if err := a.commitGoalContribution(before, g, debit); err != nil {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: %w", err)
 	}
-	if postErr != nil {
-		// The goal (with its bumped amount) is saved; surface the ledger error but
-		// don't roll back — the contribution still counts, just without a txn.
-		return ContributeResult{BecameComplete: becameComplete}, postErr
+	if debit != nil {
+		result.TransactionID = debit.ID
 	}
+	return result, nil
+}
 
-	return ContributeResult{BecameComplete: becameComplete, TransactionID: txnID}, nil
+func (a *App) goalEvaluationRates() currency.Rates {
+	settings := a.Settings()
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return currency.Rates{Base: base, Rates: settings.FXRates}
+}
+
+// goalCompletionForWrite keeps the existing nonfinancial write-trigger contract.
+// Financial completion requires known target-currency coverage on both sides.
+func goalCompletionForWrite(goal domain.Goal, rates currency.Rates) (complete, known bool) {
+	if !goal.IsFinancial() {
+		return goal.CurrentAmount.Amount >= goal.TargetAmount.Amount && goal.TargetAmount.Amount > 0, true
+	}
+	coverage, err := goals.EvaluateCoverage(goal, rates)
+	return err == nil && coverage.Complete, err == nil
+}
+
+// storedContributionGoal always reads the current store, rather than accepting a
+// form's captured goal as the new record. Missing IDs must never be resurrected.
+func (a *App) storedContributionGoal(goalID string) (domain.Goal, error) {
+	goal, found, err := a.store.GetGoal(goalID)
+	if err != nil {
+		return domain.Goal{}, fmt.Errorf("appstate: contribution: load goal: %w", err)
+	}
+	if found {
+		return goal, nil
+	}
+	return domain.Goal{}, fmt.Errorf("appstate: contribution: goal %q not found", goalID)
+}
+
+// GoalContributionRemaining returns the checked saved-only quick-fill amount for
+// the current goal. A legacy unspecified zero uses the target currency; nonzero
+// currencies are never relabeled to make an otherwise unsupported write possible.
+func (a *App) GoalContributionRemaining(goalID string) (money.Money, error) {
+	goal, err := a.storedContributionGoal(goalID)
+	if err != nil {
+		return money.Money{}, err
+	}
+	if goal.CurrentAmount.Currency == "" && goal.CurrentAmount.Amount == 0 {
+		goal.CurrentAmount = money.Zero(goal.TargetAmount.Currency)
+	}
+	remaining, err := goals.Remaining(goal)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("appstate: contribution remaining: %w", err)
+	}
+	return remaining, nil
 }
 
 // UndoLastContribution reverses the most recent contribution to a goal: it drops
 // the entry from the log, subtracts its amount from CurrentAmount (floored at
 // zero), and deletes the linked ledger transaction if one was posted. It returns
-// the undone amount and ok=false when there is nothing to undo.
+// the undone amount and ok=false when there is nothing to undo. The current stored
+// goal is re-read; invalid logged amounts fail before either record is changed.
 func (a *App) UndoLastContribution(g domain.Goal) (money.Money, bool, error) {
+	if err := a.roleGuard(); err != nil {
+		return money.Money{}, false, err
+	}
+	latest, err := a.storedContributionGoal(g.ID)
+	if err != nil {
+		return money.Money{}, false, err
+	}
+	g = latest
 	updated, last, ok := g.PopLastContribution()
 	if !ok {
 		return money.Money{}, false, nil
 	}
-	newAmt := updated.CurrentAmount.Amount - last.Amount.Amount
-	if newAmt < 0 {
-		newAmt = 0
+	if last.Amount.Amount <= 0 {
+		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: logged amount must be positive")
 	}
-	updated.CurrentAmount = money.New(newAmt, updated.CurrentAmount.Currency)
-	if err := a.PutGoal(updated); err != nil {
-		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: save goal: %w", err)
+	newAmount, err := updated.CurrentAmount.Sub(last.Amount)
+	if err != nil {
+		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: saved amount: %w", err)
 	}
-	// Remove the ledger entry this contribution posted, if it still exists. A
-	// failure here is non-fatal: the goal progress is already reversed, and the
-	// user can delete a stray transaction manually.
-	if last.TxnID != "" {
-		if err := a.DeleteTransaction(last.TxnID); err != nil {
-			a.log.Warn("undo contribution: delete ledger txn failed", "goal", g.ID, "txn", last.TxnID, "err", err)
-		}
+	if newAmount.Amount < 0 {
+		newAmount = money.Zero(newAmount.Currency)
+	}
+	updated.CurrentAmount = newAmount
+	if err := a.commitContributionUndo(g, updated, last.TxnID); err != nil {
+		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: %w", err)
 	}
 	return last.Amount, true, nil
 }

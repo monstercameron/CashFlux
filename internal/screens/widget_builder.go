@@ -6,11 +6,13 @@ package screens
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -20,15 +22,15 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/nwchange"
+	"github.com/monstercameron/CashFlux/internal/store"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/CashFlux/internal/widgetbuilderdata"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // This file owns the Widget Builder — a free-form node-graph editor (the visual
@@ -61,7 +63,7 @@ const vbDragShimJS = `
     if (!status) {
       status = document.createElement("div"); status.id = statusId; status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
-      status.style.cssText = "position:fixed;bottom:1rem;left:1rem;z-index:1000;padding:.55rem .8rem;border-radius:8px;background:var(--bg-elev,#1a1a1d);color:var(--text,#eee);border:1px solid var(--border,#555);font:13px sans-serif";
+      status.style.cssText = "position:fixed;bottom:1rem;left:1rem;z-index:var(--z-toast);padding:.55rem .8rem;border-radius:8px;background:var(--bg-elev,#1a1a1d);color:var(--text,#eee);border:1px solid var(--border,#555);font:13px sans-serif";
       status.textContent = "Canvas changes are waiting to save."; document.body.appendChild(status);
     }
   }
@@ -559,8 +561,9 @@ func VisualBuilder() ui.Node {
 		}
 	})
 
-	// Evaluate against live data.
-	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Strs: vbStringSurface(), Datasets: vbDatasets()})
+	// Evaluate against one prepared snapshot. Read failures remain visible in the
+	// preview rather than being interpreted as a genuinely empty dataset.
+	res, prepared, dataErr := vbEvalGraph(g, appstate.Default, time.Now())
 	issues := cardgraph.Validate(g)
 
 	// Animate the live-preview KPI figure exactly like the dashboard does: countup.js
@@ -637,11 +640,12 @@ func VisualBuilder() ui.Node {
 			vbPalette(addNode),
 			vbCanvas(g, selected.Get(), func(id cardgraph.NodeID) { selected.Set(id) }),
 			Div(css.Class("vb-dock"),
-				vbInspector(g, selected.Get(), issues, setProp, setVar, setRoot, deleteNode, wireInput),
+				vbInspector(g, selected.Get(), issues, prepared.Datasets, setProp, setVar, setRoot, deleteNode, wireInput),
 				Div(css.Class("vb-previewpane"),
 					Div(css.Class("vb-preview-head"),
 						Span(css.Class("vb-preview-title"), uistate.T("vbld.livePreview")),
-						Span(css.Class("vb-preview-hint"), uistate.T("vbld.previewHint")),
+						If(dataErr == nil, Span(css.Class("vb-preview-hint"), uistate.T("vbld.previewHint"))),
+						If(dataErr != nil, Span(css.Class("vb-preview-hint", tw.TextDim), Attr("role", "status"), uistate.T("vbld.dataUnavailable"))),
 					),
 					Div(css.Class("wb-stage"),
 						Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(col.Get()), "height": span(row.Get())}),
@@ -682,162 +686,130 @@ func vbVariableSurface() map[string]float64 {
 	return vbVarsMemo.vars
 }
 
-// vbStringSurface exposes named string values a source.scalar (text) node can bind —
-// currently the net-worth month-over-month subline, computed exactly the way the
-// dashboard's assets KPI does so a clone reads identically.
-func vbStringSurface() map[string]string {
-	out := map[string]string{}
-	app := appstate.Default
-	if app == nil {
-		return out
-	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	accounts, txns := app.Accounts(), app.Transactions()
-	// The hero widget's sub-line goes through the same seam and the same
-	// sentence as every other net-worth delta in the app (C341) — a widget the
-	// user drops on the dashboard must not disagree with the dashboard.
-	mtd, _ := nwchange.MonthToDateChange(accounts, txns, rates, time.Now())
-	sub, _ := nwChangeSub(mtd)
-	out["net_worth_sub"] = sub
-	return out
+// vbDataCache stores one immutable prepared snapshot for the currently active
+// app revision and non-store inputs. Failed reads/preparation are never cached.
+var vbDataCache struct {
+	sync.Mutex
+	key      vbDataCacheKey
+	prepared widgetbuilderdata.Prepared
+	valid    bool
 }
 
-// vbDatasets builds the app collections a source.dataset node can read.
-func vbDatasets() map[string]cardgraph.Collection {
-	out := map[string]cardgraph.Collection{}
-	app := appstate.Default
-	if app == nil {
-		return out
+type vbDataCacheKey struct {
+	app     *appstate.App
+	store   *store.SQLiteStore
+	rev     uint64
+	day     string
+	base    string
+	fxRates string
+}
+
+func vbPreparedData(app *appstate.App, now time.Time) (widgetbuilderdata.Prepared, error) {
+	if app == nil || app.Store() == nil {
+		return widgetbuilderdata.Prepared{}, errors.New("app data is unavailable")
 	}
-	catName := map[string]string{}
-	for _, c := range app.Categories() {
-		catName[c.ID] = c.Name
-	}
-	major := func(m money.Money) float64 {
-		div := 1.0
-		for i := 0; i < currency.Decimals(m.Currency); i++ {
-			div *= 10
+	st := app.Store()
+	day := dateutil.DayStart(now)
+	for attempt := 0; attempt < 2; attempt++ {
+		beforeRev := app.Rev()
+		settings, err := st.GetSettings()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder settings: %w", err)
 		}
-		return math.Abs(float64(m.Amount) / div)
-	}
-	txCols := []cardgraph.Column{
-		{Name: "category", Type: cardgraph.TypeText}, {Name: "payee", Type: cardgraph.TypeText},
-		{Name: "amount", Type: cardgraph.TypeNumber}, {Name: "type", Type: cardgraph.TypeText},
-		{Name: "month", Type: cardgraph.TypeText}, {Name: "date", Type: cardgraph.TypeText},
-		{Name: "desc", Type: cardgraph.TypeText}, {Name: "signed", Type: cardgraph.TypeNumber},
-	}
-	// signedMajor preserves the sign (negative for expenses) so a recent-transactions
-	// list can tone outflows red the way the dashboard ledger does.
-	signedMajor := func(m money.Money) float64 {
-		div := 1.0
-		for i := 0; i < currency.Decimals(m.Currency); i++ {
-			div *= 10
+		base := strings.TrimSpace(settings.BaseCurrency)
+		if base == "" {
+			base = "USD"
 		}
-		return float64(m.Amount) / div
-	}
-	var txRows []cardgraph.Row
-	for _, t := range app.Transactions() {
-		kind := "transfer"
-		signed := signedMajor(t.Amount)
-		switch {
-		case t.IsIncome():
-			kind = "income"
-		case t.IsExpense():
-			kind = "expense"
-			signed = -math.Abs(signed)
+		rateBytes, err := json.Marshal(settings.FXRates)
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("key builder FX rates: %w", err)
 		}
-		cat := catName[t.CategoryID]
-		if strings.TrimSpace(cat) == "" {
-			cat = "Uncategorized"
+		key := vbDataCacheKey{
+			app: app, store: st, rev: beforeRev,
+			day: day.Format("2006-01-02 MST -07:00"), base: base, fxRates: string(rateBytes),
 		}
-		desc := strings.TrimSpace(t.Payee)
-		if desc == "" {
-			desc = cat
+		vbDataCache.Lock()
+		if vbDataCache.valid && vbDataCache.key == key {
+			prepared := vbDataCache.prepared
+			vbDataCache.Unlock()
+			return prepared, nil
 		}
-		txRows = append(txRows, cardgraph.Row{
-			"category": cardgraph.Text(cat), "payee": cardgraph.Text(t.Payee),
-			"amount": cardgraph.Num(major(t.Amount)), "type": cardgraph.Text(kind),
-			"month": cardgraph.Text(t.Date.Format("2006-01")),
-			"date":  cardgraph.Text(t.Date.Format("Jan 2")), "desc": cardgraph.Text(desc),
-			"signed": cardgraph.Num(signed),
+		vbDataCache.Unlock()
+
+		categories, err := app.CategoriesChecked()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder categories: %w", err)
+		}
+		transactions, err := st.ListTransactions()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder transactions: %w", err)
+		}
+		accounts, err := st.ListAccounts()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder accounts: %w", err)
+		}
+		budgets, err := st.ListBudgets()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder budgets: %w", err)
+		}
+		goals, err := st.ListGoals()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder goals: %w", err)
+		}
+		tasks, err := st.ListTasks()
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, fmt.Errorf("read builder tasks: %w", err)
+		}
+		if afterRev := app.Rev(); afterRev != beforeRev {
+			if attempt == 0 {
+				continue
+			}
+			return widgetbuilderdata.Prepared{}, errors.New("builder data changed while it was being read")
+		}
+		prepared, err := widgetbuilderdata.Prepare(widgetbuilderdata.Snapshot{
+			At: day, BaseCurrency: base, FXRates: settings.FXRates,
+			Categories: categories, Transactions: transactions, Accounts: accounts,
+			Budgets: budgets, Goals: goals, Tasks: tasks,
 		})
-	}
-	out["transactions"] = cardgraph.Collection{Cols: txCols, Rows: txRows}
-
-	acctCols := []cardgraph.Column{{Name: "name", Type: cardgraph.TypeText}, {Name: "type", Type: cardgraph.TypeText}}
-	var acctRows []cardgraph.Row
-	for _, a := range app.Accounts() {
-		if a.Archived {
-			continue
+		if err != nil {
+			return widgetbuilderdata.Prepared{}, err
 		}
-		acctRows = append(acctRows, cardgraph.Row{"name": cardgraph.Text(a.Name), "type": cardgraph.Text(string(a.Type))})
+		vbDataCache.Lock()
+		vbDataCache.key, vbDataCache.prepared, vbDataCache.valid = key, prepared, true
+		vbDataCache.Unlock()
+		return prepared, nil
 	}
-	out["accounts"] = cardgraph.Collection{Cols: acctCols, Rows: acctRows}
+	return widgetbuilderdata.Prepared{}, errors.New("builder data changed while it was being read")
+}
 
-	// Budgets: name + limit (major units).
-	budCols := []cardgraph.Column{{Name: "name", Type: cardgraph.TypeText}, {Name: "limit", Type: cardgraph.TypeNumber}}
-	var budRows []cardgraph.Row
-	for _, b := range app.Budgets() {
-		budRows = append(budRows, cardgraph.Row{"name": cardgraph.Text(b.Name), "limit": cardgraph.Num(major(b.Limit))})
-	}
-	out["budgets"] = cardgraph.Collection{Cols: budCols, Rows: budRows}
+// vbStringSurface exposes the localized net-worth movement through the native
+// prepared change, so strings and datasets share the same point-in-time snapshot.
+func vbStringSurface(prepared widgetbuilderdata.Prepared) map[string]string {
+	sub, _ := nwChangeSub(prepared.NetWorthChange)
+	return map[string]string{"net_worth_sub": sub}
+}
 
-	// Goals: name, target, saved (major units).
-	goalCols := []cardgraph.Column{{Name: "name", Type: cardgraph.TypeText}, {Name: "target", Type: cardgraph.TypeNumber}, {Name: "saved", Type: cardgraph.TypeNumber}}
-	var goalRows []cardgraph.Row
-	for _, gl := range app.Goals() {
-		goalRows = append(goalRows, cardgraph.Row{"name": cardgraph.Text(gl.Name), "target": cardgraph.Num(major(gl.TargetAmount)), "saved": cardgraph.Num(major(gl.CurrentAmount))})
-	}
-	out["goals"] = cardgraph.Collection{Cols: goalCols, Rows: goalRows}
-
-	// Tasks: title + done flag (as text "done"/"open").
-	taskCols := []cardgraph.Column{{Name: "title", Type: cardgraph.TypeText}, {Name: "status", Type: cardgraph.TypeText}}
-	var taskRows []cardgraph.Row
-	for _, t := range app.Tasks() {
-		taskRows = append(taskRows, cardgraph.Row{"title": cardgraph.Text(t.Title), "status": cardgraph.Text(string(t.Status))})
-	}
-	out["tasks"] = cardgraph.Collection{Cols: taskCols, Rows: taskRows}
-
-	// Bills: upcoming recurring charges — reuse the transactions surface labeled as a
-	// separate dataset for discoverability (expenses only).
-	billCols := []cardgraph.Column{{Name: "payee", Type: cardgraph.TypeText}, {Name: "amount", Type: cardgraph.TypeNumber}}
-	var billRows []cardgraph.Row
-	for _, t := range app.Transactions() {
-		if t.IsExpense() {
-			billRows = append(billRows, cardgraph.Row{"payee": cardgraph.Text(t.Payee), "amount": cardgraph.Num(major(t.Amount))})
+func vbGraphUsesDataset(g cardgraph.Graph, dataset string) bool {
+	for _, node := range g.Nodes {
+		if node.Kind == cardgraph.KindSourceDataset && strings.TrimSpace(node.Props["which"]) == dataset {
+			return true
 		}
 	}
-	out["bills"] = cardgraph.Collection{Cols: billCols, Rows: billRows}
+	return false
+}
 
-	// net_worth_series: end-of-month net worth for the last six months — the time series
-	// behind the dashboard's net-worth trend tile, so an area/line chart clones it. Built
-	// from the exact ledger.NetWorthSeries the dashboard uses.
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+func vbEvalGraph(g cardgraph.Graph, app *appstate.App, now time.Time) (cardgraph.Result, widgetbuilderdata.Prepared, error) {
+	prepared, err := vbPreparedData(app, now)
+	if err != nil {
+		return cardgraph.Result{Issues: []cardgraph.Issue{{Message: uistate.T("vbld.dataUnavailable"), Fatal: true}}}, prepared, err
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	monthStart := dateutil.MonthStart(time.Now())
-	cutoffs := make([]time.Time, 0, 6)
-	labels := make([]string, 0, 6)
-	for i := 5; i >= 0; i-- {
-		end := monthStart.AddDate(0, -i, 0)
-		cutoffs = append(cutoffs, end)
-		labels = append(labels, end.AddDate(0, 0, -1).Format("Jan"))
+	if vbGraphUsesDataset(g, "net_worth_series") && prepared.NetWorthSeriesErr != nil {
+		return cardgraph.Result{Issues: []cardgraph.Issue{{Message: uistate.T("vbld.netWorthUnavailable"), Fatal: true}}}, prepared, nil
 	}
-	nwCols := []cardgraph.Column{{Name: "month", Type: cardgraph.TypeText}, {Name: "value", Type: cardgraph.TypeNumber}}
-	var nwRows []cardgraph.Row
-	if series, err := ledger.NetWorthSeries(app.Accounts(), app.Transactions(), cutoffs, rates); err == nil {
-		for i, m := range series {
-			nwRows = append(nwRows, cardgraph.Row{"month": cardgraph.Text(labels[i]), "value": cardgraph.Num(signedMajor(m))})
-		}
-	}
-	out["net_worth_series"] = cardgraph.Collection{Cols: nwCols, Rows: nwRows}
-	return out
+	res := cardgraph.Eval(g, cardgraph.Context{
+		Vars: vbVariableSurface(), Strs: vbStringSurface(prepared), Datasets: prepared.Datasets,
+	})
+	return res, prepared, nil
 }
 
 // ---- graph persistence + helpers ----------------------------------------------
@@ -893,7 +865,7 @@ func vbPublishedWidget(name string, colSpan, rowSpan int) ui.Node {
 	if rowSpan < 1 {
 		rowSpan = vbDim(g.Rows, 3)
 	}
-	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Strs: vbStringSurface(), Datasets: vbDatasets()})
+	res, _, _ := vbEvalGraph(g, appstate.Default, time.Now())
 	return uiw.Widget(uiw.WidgetProps{
 		ID: vbCardPrefix + name, Title: name, Draggable: true, Resizable: true,
 		GridColumn: "span " + strconv.Itoa(clampSpan(colSpan, 4)),
@@ -1719,7 +1691,7 @@ func vbColumnKeys(kind string) map[string]bool {
 // collection's columns. Unwired chains, unknown datasets, and reshaping steps
 // (group-by changes the columns) return nil; the caller falls back to a
 // free-text field.
-func vbUpstreamColumns(g cardgraph.Graph, id cardgraph.NodeID) []string {
+func vbUpstreamColumns(g cardgraph.Graph, id cardgraph.NodeID, datasets map[string]cardgraph.Collection) []string {
 	cur := id
 	for hops := 0; hops < 12; hops++ {
 		var from cardgraph.NodeID
@@ -1739,7 +1711,7 @@ func vbUpstreamColumns(g cardgraph.Graph, id cardgraph.NodeID) []string {
 			switch n.Kind {
 			case cardgraph.KindSourceDataset:
 				which := strings.TrimSpace(n.Props["which"])
-				c, ok := vbDatasets()[which]
+				c, ok := datasets[which]
 				if !ok {
 					return nil
 				}
@@ -1865,6 +1837,7 @@ func vbMetricField(p vbMetricFieldProps) ui.Node {
 }
 
 func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgraph.Issue,
+	datasets map[string]cardgraph.Collection,
 	setProp func(cardgraph.NodeID, string, string), setVar func(cardgraph.NodeID, string),
 	setRoot func(cardgraph.NodeID), deleteNode func(cardgraph.NodeID),
 	wireInput func(cardgraph.NodeID, string, string)) ui.Node {
@@ -1894,7 +1867,7 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 	// Params. Column-referencing props on data-shaping nodes become dropdowns
 	// of the wired dataset's real fields — nobody should have to KNOW that the
 	// transactions collection calls its category column "category".
-	upstreamCols := vbUpstreamColumns(g, node.ID)
+	upstreamCols := vbUpstreamColumns(g, node.ID, datasets)
 	colKeys := vbColumnKeys(node.Kind)
 	for _, pm := range vbParamSchema(node.Kind) {
 		pm := pm

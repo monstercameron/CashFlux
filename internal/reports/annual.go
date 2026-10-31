@@ -2,7 +2,12 @@
 
 package reports
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 // This file holds the pure computations behind the Annual Review report: the
 // year-level roll-ups (months in the red, seasonal extremes), the per-$100
@@ -81,42 +86,83 @@ type Per100Row struct {
 // regardless of size (callers label it "everything else"). Income ≤ 0 or no
 // spending yields nil.
 func Per100(rows []CategorySpend, incomeMinor int64, n int) []Per100Row {
-	if incomeMinor <= 0 || len(rows) == 0 || n <= 0 {
+	out, err := Per100Checked(rows, incomeMinor, n)
+	if err != nil {
 		return nil
 	}
-	abs := func(v int64) int64 {
-		if v < 0 {
-			return -v
-		}
-		return v
+	return out
+}
+
+// Per100Checked is Per100 with explicit overflow errors. It returns no partial
+// rows when a magnitude, folded remainder, or displayed share is unrepresentable.
+func Per100Checked(rows []CategorySpend, incomeMinor int64, n int) ([]Per100Row, error) {
+	if incomeMinor <= 0 || len(rows) == 0 || n <= 0 {
+		return nil, nil
 	}
-	share := func(amt int64) (int64, int64) {
+	share := func(amt int64) (int64, int64, error) {
 		// per-100 with one decimal: amt/income × 100 → ×10 for the tenths digit.
-		scaled := amt * 1000 / incomeMinor
-		return scaled / 10, scaled % 10
+		scaled, err := money.MulDiv(amt, 1000, incomeMinor, money.RoundTowardZero)
+		if err != nil {
+			return 0, 0, fmt.Errorf("reports: per-100 share: %w", err)
+		}
+		return scaled / 10, scaled % 10, nil
 	}
-	out := make([]Per100Row, 0, n+1)
+	capacity := min(n, len(rows)) + 1
+	out := make([]Per100Row, 0, capacity)
 	var restMinor int64
 	for i, r := range rows {
-		a := abs(r.Amount)
+		a, err := money.Abs(r.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("reports: per-100 category %q magnitude: %w", r.CategoryID, err)
+		}
 		if a == 0 {
 			continue
 		}
 		if i < n {
-			p, t := share(a)
+			p, t, err := share(a)
+			if err != nil {
+				return nil, fmt.Errorf("reports: per-100 category %q: %w", r.CategoryID, err)
+			}
 			out = append(out, Per100Row{CategoryID: r.CategoryID, AmountMinor: a, Per100: p, Tenths: t})
 		} else {
-			restMinor += a
+			restMinor, err = money.Add(restMinor, a)
+			if err != nil {
+				return nil, fmt.Errorf("reports: per-100 everything-else total: %w", err)
+			}
 		}
 	}
 	if restMinor > 0 {
-		p, t := share(restMinor)
+		p, t, err := share(restMinor)
+		if err != nil {
+			return nil, fmt.Errorf("reports: per-100 everything-else share: %w", err)
+		}
 		out = append(out, Per100Row{CategoryID: "", AmountMinor: restMinor, Per100: p, Tenths: t})
 	}
 	if len(out) == 0 {
-		return nil
+		return nil, nil
 	}
-	return out
+	return out, nil
+}
+
+// PositiveSavingsPer100 reports positive net savings as whole units and tenths
+// out of each 100 units of positive income. ok is false when there is no
+// positive income or savings. Arithmetic overflow is returned as an error.
+func PositiveSavingsPer100(incomeMinor, expenseMinor int64) (whole, tenths int64, ok bool, err error) {
+	if incomeMinor <= 0 {
+		return 0, 0, false, nil
+	}
+	saved, err := money.Sub(incomeMinor, expenseMinor)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("reports: positive savings: %w", err)
+	}
+	if saved <= 0 {
+		return 0, 0, false, nil
+	}
+	scaled, err := money.MulDiv(saved, 1000, incomeMinor, money.RoundTowardZero)
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("reports: positive savings share: %w", err)
+	}
+	return scaled / 10, scaled % 10, true, nil
 }
 
 // TrimTarget is one plan suggestion: a category whose recent spending runs above

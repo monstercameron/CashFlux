@@ -85,6 +85,18 @@ func TestSOLP2UnusualSlices3300(t *testing.T) {
 	}
 }
 
+func BenchmarkJob3300Step32(b *testing.B) {
+	in := jobFixture(3300)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		job := NewJob(in)
+		for !job.Step(32) {
+		}
+		_ = job.Findings()
+	}
+}
+
 func TestSOLP3UnusualSlices10k(t *testing.T) {
 	in := jobFixture(10000)
 	job := NewJob(in)

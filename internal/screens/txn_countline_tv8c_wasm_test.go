@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestTV8CCategoryPopoverKeepsEveryCategoryReadable(t *testing.T) {

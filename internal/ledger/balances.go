@@ -52,6 +52,9 @@ func bulkBalances(accounts []domain.Account, all []domain.Transaction, clearedOn
 		}
 		next, err := bal.Add(t.Amount)
 		if err != nil {
+			// Match Balance: once an account's sequence becomes invalid, no later
+			// transaction can make its final balance trustworthy again.
+			delete(out, t.AccountID)
 			if firstErr == nil {
 				firstErr = fmt.Errorf("ledger: account %s: %w", t.AccountID, err)
 			}

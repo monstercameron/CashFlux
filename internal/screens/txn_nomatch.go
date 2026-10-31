@@ -24,11 +24,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // txnNoMatchProps carries the query that found nothing. Empty means the view was
@@ -78,8 +79,8 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 		)
 	}
 	if props.Search == "" {
-		return P(css.Class("empty"), Attr("data-testid", "txn-nomatch"),
-			Attr("role", "status"), uistate.T("transactions.noMatch"))
+		return uiw.Callout(uiw.CalloutProps{Live: uiw.CalloutLiveStatus, TestID: "txn-nomatch",
+			Body: Span(uistate.T("transactions.noMatch"))})
 	}
 	return Div(css.Class("empty", tw.Flex, tw.FlexCol, tw.ItemsCenter, tw.Gap2),
 		Attr("data-testid", "txn-nomatch"), Attr("role", "status"),
@@ -138,7 +139,7 @@ func txnScheduledGhostRow(props txnScheduledGhostRowProps) ui.Node {
 		Div(css.Class("td-date"), props.Date),
 		Div(css.Class("td-desc"),
 			Span(css.Class("txn-scheduled-name"), props.Name),
-			Span(css.Class("txn-scheduled-pill"), Style(map[string]string{"fontSize": "12px", "textTransform": "none"}), uistate.T("transactions.scheduledStatus"))),
+			Span(css.Class("txn-scheduled-pill txn-scheduled-pill-plain"), uistate.T("transactions.scheduledStatus"))),
 		Div(css.Class("td-cat"), props.Category),
 		Div(css.Class("td-acct", "txn-scheduled-account"), Attr("title", props.Account), scheduledAccountLabel(props.Account)),
 		Div(css.Class("td-amount", tw.ColorClass(props.AmountTone)), props.Amount),
@@ -156,7 +157,7 @@ func txnScheduledTableRow(props txnScheduledTableRowProps) ui.Node {
 	return Tr(css.Class("txn-row", "txn-scheduled-ghost"), Attr("data-testid", "txn-scheduled-ghost"), Attr("aria-disabled", "true"),
 		Td(ClassStr("td-select")),
 		Td(ClassStr("td-date"), props.Date),
-		Td(ClassStr("td-desc"), Span(css.Class("txn-scheduled-name"), props.Name), Span(css.Class("txn-scheduled-pill"), Style(map[string]string{"fontSize": "12px", "textTransform": "none"}), uistate.T("transactions.scheduledStatus"))),
+		Td(ClassStr("td-desc"), Span(css.Class("txn-scheduled-name"), props.Name), Span(css.Class("txn-scheduled-pill txn-scheduled-pill-plain"), uistate.T("transactions.scheduledStatus"))),
 		If(props.Vis.Category, Td(ClassStr("td-cat"), props.Category)),
 		If(props.Vis.Account, Td(ClassStr("td-acct txn-scheduled-account"), Attr("title", props.Account), scheduledAccountLabel(props.Account))),
 		If(props.ShowUser, Td(ClassStr("td-user"))),
@@ -241,16 +242,17 @@ func scheduledAccountLabel(account string) string {
 }
 
 func txnScheduledGhostMenu(struct{}) ui.Node {
-	open := ui.UseState(false)
-	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	return Div(css.Class("txn-scheduled-menu"),
 		Button(css.Class("btn btn-icon txn-row-edit"), Type("button"), Attr("data-testid", "txn-scheduled-edit-disabled"), Attr("aria-label", uistate.T("transactions.rowEdit")), Attr("disabled", "disabled"), "✎"),
-		Button(css.Class("btn btn-icon"), Type("button"),
-			Attr("aria-label", uistate.T("fut2.scheduledMenuLabel")),
-			Attr("aria-expanded", ariaBool(open.Get())), Attr("data-testid", "txn-scheduled-menu-toggle"),
-			OnClick(toggle), "⋯"),
-		If(open.Get(), A(css.Class("txn-scheduled-menu-item"), Href(uistate.RoutePath("/recurring")),
-			Attr("data-testid", "txn-scheduled-open"), uistate.T("fut2.scheduledMenuOpen"))),
+		uiw.OverflowMenu(uiw.OverflowMenuProps{
+			TriggerLabel:  uistate.T("fut2.scheduledMenuLabel"),
+			TriggerTestID: "txn-scheduled-menu-toggle",
+			Items: []uiw.OverflowMenuItem{{
+				Label:  uistate.T("fut2.scheduledMenuOpen"),
+				Href:   uistate.RoutePath("/recurring"),
+				TestID: "txn-scheduled-open",
+			}},
+		}),
 	)
 }
 

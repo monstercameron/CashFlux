@@ -158,7 +158,7 @@ func TestTCS2ExpandPositiveOwedLegacyPayments(t *testing.T) {
 	account.Class = domain.ClassLiability
 	account.Type = domain.TypeCreditCard
 	account.LiabilitySign = domain.LiabilityPositiveOwed
-	if err := a.PutAccount(account); err != nil {
+	if err := a.Store().PutAccount(account); err != nil {
 		t.Fatal(err)
 	}
 	out.TransferGroupID = ""

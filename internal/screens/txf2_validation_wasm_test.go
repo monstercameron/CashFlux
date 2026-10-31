@@ -11,7 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestTxnFilterRangeValidation(t *testing.T) {
@@ -61,9 +61,7 @@ func TestTxnCountLineNamesExcludedRows(t *testing.T) {
 	if !strings.Contains(got, "3 transactions") {
 		t.Errorf("count line = %q, want transaction count", got)
 	}
-	if byTestID(f, "div", "txn-count-secondary") != nil {
-		t.Error("transaction facts should be rendered beside the table, not in the summary band")
-	}
+	requireBandWithoutSecondaryFacts(t, f)
 	if !strings.Contains(got, "left out of budgets") {
 		t.Errorf("accessible summary = %q, want excluded rows named", got)
 	}

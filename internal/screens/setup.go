@@ -5,8 +5,8 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,10 +20,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // setupKVCurrencyConfirmed is the SettingKV key that records whether the user
@@ -73,15 +73,10 @@ func SetupWizard() ui.Node {
 	// ── Step 2 — Income ─────────────────────────────────────────────────────
 	existingIncome := uistate.CurrentPrefs().MonthlyIncomeMinor
 	incomeStr := ui.UseState("")
+	incomeErrS := ui.UseState("")
 	if existingIncome > 0 && incomeStr.Get() == "" {
 		dec := currency.Decimals(curS.Get())
-		div := int64(1)
-		for i := 0; i < dec; i++ {
-			div *= 10
-		}
-		whole := existingIncome / div
-		frac := existingIncome % div
-		incomeStr.Set(fmt.Sprintf("%d.%0*d", whole, dec, frac))
+		incomeStr.Set(money.FormatMinor(existingIncome, dec))
 	}
 
 	// ── Step 3 — Account ────────────────────────────────────────────────────
@@ -97,7 +92,10 @@ func SetupWizard() ui.Node {
 	// ── Event handlers — stable, unconditional hook positions ────────────────
 	onCur := ui.UseEvent(func(e ui.Event) { curS.Set(e.GetValue()) })
 	onWeek := ui.UseEvent(func(e ui.Event) { weekS.Set(e.GetValue()) })
-	onIncomeStr := ui.UseEvent(func(e ui.Event) { incomeStr.Set(e.GetValue()) })
+	onIncomeStr := ui.UseEvent(func(e ui.Event) {
+		incomeStr.Set(e.GetValue())
+		incomeErrS.Set("")
+	})
 	onAcctName := ui.UseEvent(func(e ui.Event) { acctNameS.Set(e.GetValue()) })
 	onAcctType := ui.UseEvent(func(e ui.Event) { acctTypeS.Set(e.GetValue()) })
 	onAcctBal := ui.UseEvent(func(e ui.Event) { acctBalS.Set(e.GetValue()) })
@@ -132,59 +130,43 @@ func SetupWizard() ui.Node {
 
 	// confirmIncome saves monthly income and advances to step 2.
 	confirmIncome := ui.UseEvent(Prevent(func() {
-		raw := strings.TrimSpace(incomeStr.Get())
-		if raw != "" {
-			f, err := strconv.ParseFloat(raw, 64)
-			if err == nil && f >= 0 {
-				dec := currency.Decimals(curS.Get())
-				mult := int64(1)
-				for i := 0; i < dec; i++ {
-					mult *= 10
-				}
-				pr := uistate.CurrentPrefs()
-				pr.MonthlyIncomeMinor = int64(f * float64(mult))
-				uistate.SetPrefs(pr)
+		plan, err := setup.PrepareIncome(incomeStr.Get(), curS.Get())
+		if err != nil {
+			incomeErrS.Set(uistate.T("setup.amountInvalid"))
+			return
+		}
+		if plan.Set {
+			pr := uistate.CurrentPrefs()
+			pr.MonthlyIncomeMinor = plan.MonthlyIncomeMinor
+			if err := uistate.SetPrefs(pr); err != nil {
+				uistate.PostNotice(uistate.T("settings.budgetPeriodRekeyFailed"), true)
+				return
 			}
 		}
+		incomeErrS.Set("")
 		stepS.Set(2)
 	}))
 
 	// confirmAccount creates the first account and advances to step 3.
 	confirmAccount := ui.UseEvent(Prevent(func() {
-		name := strings.TrimSpace(acctNameS.Get())
-		if name == "" {
-			acctErrS.Set(uistate.T("setup.acctNameRequired"))
-			return
-		}
-		raw := strings.TrimSpace(acctBalS.Get())
-		var balMinor int64
-		if raw != "" {
-			f, err := strconv.ParseFloat(raw, 64)
-			if err == nil && f >= 0 {
-				dec := currency.Decimals(curS.Get())
-				mult := int64(1)
-				for i := 0; i < dec; i++ {
-					mult *= 10
-				}
-				balMinor = int64(f * float64(mult))
+		plan, err := setup.PrepareAccount(acctNameS.Get(), acctBalS.Get(), curS.Get(), domain.AccountType(acctTypeS.Get()))
+		if err != nil {
+			if errors.Is(err, setup.ErrNameRequired) {
+				acctErrS.Set(uistate.T("setup.acctNameRequired"))
+			} else {
+				acctErrS.Set(uistate.T("setup.amountInvalid"))
 			}
-		}
-		acctType := domain.AccountType(acctTypeS.Get())
-		acctClass := domain.ClassAsset
-		switch acctType {
-		case domain.TypeCreditCard, domain.TypeLineOfCredit,
-			domain.TypeLoan, domain.TypePersonalLoan, domain.TypeMortgage:
-			acctClass = domain.ClassLiability
+			return
 		}
 		a := domain.Account{
 			ID:             id.New(),
-			Name:           name,
+			Name:           plan.Name,
 			OwnerID:        domain.GroupOwnerID,
 			Scope:          domain.ScopeShared,
-			Class:          acctClass,
-			Type:           acctType,
-			Currency:       curS.Get(),
-			OpeningBalance: money.New(balMinor, curS.Get()),
+			Class:          plan.Class,
+			Type:           plan.Type,
+			Currency:       plan.Currency,
+			OpeningBalance: plan.OpeningBalance,
 			BalanceAsOf:    time.Now(),
 		}
 		if err := app.PutAccount(a); err != nil {
@@ -284,7 +266,7 @@ func SetupWizard() ui.Node {
 	incomeVal := incomeStr.Get()
 	step1 := uiw.Card(uiw.CardProps{
 		Title: uistate.T("setup.step2Title"),
-		Body: Form(css.Class("form-grid"), OnSubmit(confirmIncome),
+		Body: Form(css.Class("form-grid"), Attr("data-testid", "setup-income-form"), OnSubmit(confirmIncome),
 			P(css.Class("t-caption", tw.TextDim), uistate.T("setup.step2Hint")),
 			labeledField(fmt.Sprintf("%s (%s)", uistate.T("setup.incomeLabel"), curSym),
 				Input(css.Class("field"),
@@ -296,6 +278,7 @@ func SetupWizard() ui.Node {
 					Attr("data-testid", "setup-income"),
 					OnInput(onIncomeStr), uiw.FieldValue(incomeVal)),
 			),
+			If(incomeErrS.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), incomeErrS.Get())),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),
 				Button(css.Class("btn btn-primary"), Type("submit"),
 					uistate.T("setup.confirmIncome")),
@@ -318,7 +301,7 @@ func SetupWizard() ui.Node {
 	)
 	step2 := uiw.Card(uiw.CardProps{
 		Title: uistate.T("setup.step3Title"),
-		Body: Form(css.Class("form-grid"), OnSubmit(confirmAccount),
+		Body: Form(css.Class("form-grid"), Attr("data-testid", "setup-account-form"), OnSubmit(confirmAccount),
 			P(css.Class("t-caption", tw.TextDim), uistate.T("setup.step3Hint")),
 			acctDoneNote,
 			labeledField(uistate.T("setup.acctNameLabel"),

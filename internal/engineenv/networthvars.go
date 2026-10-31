@@ -46,44 +46,82 @@ func netWorthClassBucket(t domain.AccountType) string {
 
 // addNetWorthVars derives the networth_* variables: the month-to-date change
 // from a two-point NetWorthSeries, and the asset composition by summing FX-converted
-// per-account balances into type buckets (accounts with no exchange rate are
-// skipped, matching NetWorthExplained's exclusion semantics).
+// per-account balances into type buckets. A bucket is unavailable if one of its
+// included balances cannot be read or converted; independent buckets remain usable.
 func addNetWorthVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
-	for _, name := range NetWorthVarNames {
-		out[name] = 0
-	}
-
 	// Month-to-date change, read through the app's one net-worth-change seam
 	// (C341) so a formula or custom widget bound to networth_change cannot
 	// disagree with the dashboard hero that inspired it.
 	if c, err := nwchange.MonthToDateChange(d.Accounts, d.Transactions, d.Rates, d.Now); err == nil && c.Known {
-		out["networth_change"] = major(c.DeltaMinor())
-		if pct, ok := c.PercentChange(); ok {
+		if delta, err := c.DeltaMinorChecked(); err == nil {
+			out["networth_change"] = major(delta)
+		}
+		if pct, ok, err := c.PercentChangeChecked(); err == nil && ok {
 			out["networth_change_pct"] = float64(pct)
 		}
 	}
 
-	// Composition: per-account balances bucketed by type (assets only). toBase
-	// returns 0 for a currency with no rate, matching NetWorthExplained's
-	// exclusion semantics (a rate-less account never fakes a base-currency value).
+	// Composition: publish each bucket only if every included account in that
+	// bucket has a known balance and converts to base currency. A missing FX rate
+	// must not make the bucket look like a real zero or a partial total.
+	buckets := []string{"networth_cash", "networth_invested", "networth_property", "networth_other_assets"}
+	totals := make(map[string]int64, len(buckets))
+	known := make(map[string]bool, len(buckets))
+	for _, name := range buckets {
+		known[name] = true
+	}
 	var totalAssets, cashAssets int64
+	totalKnown, cashKnown := true, true
 	for _, a := range d.Accounts {
 		if a.Archived || a.Class == domain.ClassLiability || a.ExcludeFromNetWorth {
 			continue
 		}
+		bucket := netWorthClassBucket(a.Type)
 		bal, ok := bals[a.ID]
 		if !ok {
+			known[bucket] = false
+			totalKnown = false
+			if bucket == "networth_cash" {
+				cashKnown = false
+			}
 			continue
 		}
-		conv := toBase(bal.Amount, a.Currency)
-		bucket := netWorthClassBucket(a.Type)
-		out[bucket] += major(conv)
-		totalAssets += conv
+		conv, err := checkedToBase(bal.Amount, bal.Currency, d.Rates)
+		if err != nil {
+			known[bucket] = false
+			totalKnown = false
+			if bucket == "networth_cash" {
+				cashKnown = false
+			}
+			continue
+		}
+		if known[bucket] {
+			totals[bucket], err = money.Add(totals[bucket], conv)
+			if err != nil {
+				known[bucket] = false
+			}
+		}
+		if totalKnown {
+			totalAssets, err = money.Add(totalAssets, conv)
+			if err != nil {
+				totalKnown = false
+			}
+		}
 		if bucket == "networth_cash" {
-			cashAssets += conv
+			if cashKnown {
+				cashAssets, err = money.Add(cashAssets, conv)
+				if err != nil {
+					cashKnown = false
+				}
+			}
 		}
 	}
-	if totalAssets > 0 {
-		out["networth_liquid_pct"] = float64(cashAssets*100) / float64(totalAssets)
+	for _, name := range buckets {
+		if known[name] {
+			out[name] = major(totals[name])
+		}
+	}
+	if totalKnown && cashKnown && totalAssets > 0 {
+		out["networth_liquid_pct"] = float64(cashAssets) / float64(totalAssets) * 100
 	}
 }

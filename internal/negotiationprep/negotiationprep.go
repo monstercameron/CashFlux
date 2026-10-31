@@ -22,8 +22,11 @@ package negotiationprep
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Charge is one payment to this provider.
@@ -40,6 +43,14 @@ type Subscription struct {
 	Charges []Charge
 	// MonthlyMinor is the current cost per month.
 	MonthlyMinor int64
+	// AnnualKnown selects an exact annual amount supplied by the billing schedule.
+	AnnualKnown bool
+	AnnualMinor int64
+	// MonthlyIsEquivalent distinguishes normalization from monthly billing.
+	MonthlyIsEquivalent bool
+	// CostGap and ComparisonGap explain unavailable current cost or price evidence.
+	CostGap       string
+	ComparisonGap string
 	// CompetitorNote is an optional externally-sourced comparison ("similar plans
 	// run $8–12"). It is passed in rather than derived because the app has no way
 	// to know it, and inventing one would be the single most damaging thing this
@@ -76,6 +87,10 @@ type Prep struct {
 	// AnnualMinor is what this costs per year — the figure that makes a small
 	// monthly number worth ten minutes on the phone.
 	AnnualMinor int64
+	// AnnualKnown distinguishes an unavailable annual cost from zero.
+	AnnualKnown bool
+	// Err is populated by the compatibility Build wrapper on invalid arithmetic.
+	Err error
 }
 
 // Worthwhile reports whether the call is likely to be worth making at all. A
@@ -83,6 +98,9 @@ type Prep struct {
 // nothing to say, and sending somebody into that call is worse than not
 // suggesting it.
 func (p Prep) Worthwhile() bool {
+	if p.Err != nil {
+		return false
+	}
 	for _, l := range p.Leverage {
 		if l.Strong {
 			return true
@@ -99,7 +117,51 @@ const minTenureMonths = 6
 // Build assembles the prep sheet. fmtMoney formats a minor-unit figure; it comes
 // from the caller so this package stays free of currency handling.
 func Build(s Subscription, now time.Time, fmtMoney func(int64) string) Prep {
-	p := Prep{Name: strings.TrimSpace(s.Name), AnnualMinor: s.MonthlyMinor * 12}
+	p, err := BuildChecked(s, now, fmtMoney)
+	if err != nil {
+		return Prep{Name: strings.TrimSpace(s.Name), Err: err}
+	}
+	return p
+}
+
+// BuildChecked assembles a sheet with checked money arithmetic. Future charges
+// are excluded; a failure produces no partial financial claims.
+func BuildChecked(s Subscription, now time.Time, fmtMoney func(int64) string) (Prep, error) {
+	if now.IsZero() {
+		return Prep{}, fmt.Errorf("subscription review date is required")
+	}
+	if s.MonthlyMinor < 0 || s.AnnualMinor < 0 {
+		return Prep{}, fmt.Errorf("subscription costs must be nonnegative")
+	}
+	charges := make([]Charge, 0, len(s.Charges))
+	for _, c := range s.Charges {
+		if c.At.IsZero() {
+			return Prep{}, fmt.Errorf("subscription charge date is required")
+		}
+		if c.At.After(now) {
+			continue
+		}
+		amount, err := money.Abs(c.AmountMinor)
+		if err != nil {
+			return Prep{}, fmt.Errorf("subscription charge magnitude: %w", err)
+		}
+		charges = append(charges, Charge{At: c.At, AmountMinor: amount})
+	}
+	s.Charges = charges
+	p := Prep{Name: strings.TrimSpace(s.Name), AnnualMinor: s.AnnualMinor, AnnualKnown: s.AnnualKnown}
+	if !p.AnnualKnown && s.MonthlyMinor > 0 && s.CostGap == "" {
+		annual, err := money.MulDiv(s.MonthlyMinor, 12, 1, money.RoundTowardZero)
+		if err != nil {
+			return Prep{}, fmt.Errorf("subscription annual cost: %w", err)
+		}
+		p.AnnualMinor, p.AnnualKnown = annual, true
+	}
+	if s.CostGap != "" {
+		p.Gaps = append(p.Gaps, s.CostGap)
+	}
+	if s.ComparisonGap != "" {
+		p.Gaps = append(p.Gaps, s.ComparisonGap)
+	}
 	if p.Name == "" {
 		p.Name = "this subscription"
 	}
@@ -117,10 +179,17 @@ func Build(s Subscription, now time.Time, fmtMoney func(int64) string) Prep {
 	// rep, who corrects it, and the call is over. Given that this package's whole
 	// job is to stop exactly that, the bar is that the history has to look like a
 	// subscription before it is quoted as one.
-	if ok && looksRecurring(s.Charges) && s.MonthlyMinor > lowest {
+	if s.ComparisonGap == "" && ok && looksRecurring(s.Charges) && s.MonthlyMinor > lowest {
 		p.RiseMinor = s.MonthlyMinor - lowest
-		p.RisePercent = int(p.RiseMinor * 100 / lowest)
-	} else if ok && s.MonthlyMinor > lowest {
+		percent, err := money.MulDiv(p.RiseMinor, 100, lowest, money.RoundTowardZero)
+		if err != nil {
+			return Prep{}, fmt.Errorf("subscription price-rise percentage: %w", err)
+		}
+		if int64(int(percent)) != percent {
+			return Prep{}, fmt.Errorf("subscription price-rise percentage: %w", money.ErrOverflow)
+		}
+		p.RisePercent = int(percent)
+	} else if s.ComparisonGap == "" && ok && s.MonthlyMinor > lowest {
 		p.Gaps = append(p.Gaps, "The charges under this name vary too much to call it a price rise — "+
 			"some of them are probably other purchases. Don't quote an old price.")
 	}
@@ -144,7 +213,7 @@ func Build(s Subscription, now time.Time, fmtMoney func(int64) string) Prep {
 	} else {
 		p.Gaps = append(p.Gaps, "No competitor pricing was looked up, so don't claim one.")
 	}
-	if s.MonthlyMinor > 0 {
+	if p.AnnualKnown {
 		p.Leverage = append(p.Leverage, Leverage{Point: fmt.Sprintf(
 			"It costs you %s a year.", fmtMoney(p.AnnualMinor))})
 	}
@@ -153,7 +222,7 @@ func Build(s Subscription, now time.Time, fmtMoney func(int64) string) Prep {
 	}
 
 	p.Script = buildScript(p, s, fmtMoney)
-	return p
+	return p, nil
 }
 
 // recurringSpreadLimit is how far the smallest and largest charge may differ and
@@ -195,7 +264,7 @@ func looksRecurring(charges []Charge) bool {
 			high = a
 		}
 	}
-	return low > 0 && high <= low*recurringSpreadLimit
+	return low > 0 && (low > math.MaxInt64/recurringSpreadLimit || high <= low*recurringSpreadLimit)
 }
 
 // buildScript writes what to say. It is short on purpose: a script somebody has to
@@ -209,9 +278,13 @@ func buildScript(p Prep, s Subscription, fmtMoney func(int64) string) []string {
 		script = append(script, fmt.Sprintf(
 			"It's gone up to %s a month — I was paying %s. That's %s a year now.",
 			fmtMoney(s.MonthlyMinor), fmtMoney(s.MonthlyMinor-p.RiseMinor), fmtMoney(p.AnnualMinor)))
+	} else if s.MonthlyMinor > 0 && s.MonthlyIsEquivalent {
+		script = append(script, fmt.Sprintf("My current schedule has a monthly equivalent of %s (rounded toward zero), and costs %s a year.", fmtMoney(s.MonthlyMinor), fmtMoney(p.AnnualMinor)))
 	} else if s.MonthlyMinor > 0 {
 		script = append(script, fmt.Sprintf(
 			"I'm paying %s a month, which is %s a year.", fmtMoney(s.MonthlyMinor), fmtMoney(p.AnnualMinor)))
+	} else if p.AnnualKnown {
+		script = append(script, fmt.Sprintf("My current schedule costs %s a year; its monthly equivalent is below one minor unit.", fmtMoney(p.AnnualMinor)))
 	}
 	if p.TenureMonths >= minTenureMonths {
 		script = append(script, fmt.Sprintf("I've been with you %s.", humanMonths(p.TenureMonths)))
@@ -286,6 +359,9 @@ func humanMonths(months int) string {
 // "call the provider" gets postponed indefinitely; one that already contains the
 // script gets made.
 func (p Prep) TaskNotes() string {
+	if p.Err != nil {
+		return "Subscription preparation unavailable: " + p.Err.Error()
+	}
 	var b strings.Builder
 	if len(p.Leverage) > 0 {
 		b.WriteString("What you've got:\n")

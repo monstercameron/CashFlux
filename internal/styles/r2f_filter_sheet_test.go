@@ -12,14 +12,9 @@ func TestR2FFilterSheetKeepsPanelSingleColumnAndRangesReadable(t *testing.T) {
 	registerGenerated()
 	css := Build()
 	for _, want := range []string{
-		".filter-inline-panel.filter-sheet{position:fixed",
-		"top:3.5rem",
-		"right:0",
-		"bottom:0",
-		"height:calc(100dvh - 3.5rem)",
-		"width:min(380px, 100vw)",
-		".w:has(.filter-sheet){overflow:visible",
-		"will-change:auto",
+		".filter-inline-panel.filter-sheet{position:static",
+		"height:100%",
+		"width:100%",
 		".filter-inline-panel.filter-sheet .filter-inline-body{flex:1 1 0;min-height:0;overflow-y:auto",
 		".filter-sheet-footer{display:flex",
 		"border-top:1px solid var(--border)",

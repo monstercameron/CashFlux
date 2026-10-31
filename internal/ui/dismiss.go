@@ -5,123 +5,114 @@
 package ui
 
 import (
-	"syscall/js"
-
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/interop"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// DismissPopover wires WAI-ARIA menu-button dismissal for a popover (the
-// `.add-wrap` / `.add-menu` pattern) whose WRAPPER element carries `wrapID`:
+// DismissPopover closes a `.add-wrap` / `.add-menu` popover when the reader leaves it, and
+// handles its arrow-key navigation. wrapID is the id of the wrapper element that holds the
+// trigger and the menu. While isOpen is true:
 //
-//   - Escape closes the popover and returns focus to its trigger (the first
-//     <button> inside the wrapper);
-//   - a pointerdown outside the wrapper closes it;
-//   - ArrowDown/ArrowUp/Home/End rove focus among the wrapper's [role=menuitem]
-//     entries while focus is inside the popover (WAI-ARIA menu keyboard nav).
+//   - Escape calls onClose and moves focus back to the trigger (the first button in the wrapper);
+//   - a press outside the wrapper calls onClose;
+//   - ArrowDown, ArrowUp, Home and End move focus among the wrapper's [role=menuitem] entries.
+//     They do this only when focus is already inside the wrapper, so arrow keys are never
+//     taken from the page while the menu is merely open.
 //
-// The outside-click path is a document-level listener rather than relying on the
-// `.add-backdrop` element, because that backdrop is `position:fixed` inside the
-// topbar's sticky stacking context and so does not paint over page content —
-// clicks there fell through without dismissing. A document listener is immune to
-// stacking and catches outside presses anywhere.
+// The wrapper has its own pointerdown listener, attached only while the menu is open, which
+// records that the press began inside. The document's pointerdown listener runs after it, reads
+// that record and closes the menu only for a press that began outside. Targets are never
+// compared. The menu opens on the click that follows a press, so the opening press has already
+// happened when the wrapper listener attaches, and it cannot close the menu it opened.
 //
-// It is a custom hook: it calls UseEffect, so invoke it unconditionally at a
-// stable render position (like any hook). The listeners are registered only while
-// open and torn down on close/unmount. Self-close on open is avoided because the
-// effect registers AFTER the opening click's pointerdown has already fired.
+// The document listeners stay mounted for the life of the component and do nothing while the
+// menu is closed. They listen on the whole document, so a press anywhere on the page counts as
+// outside.
 //
-// `isOpen` is the popover's current open state; `wrapID` is the id set on the
-// wrapper element; `onClose` dismisses the popover (e.g. open.Set(false)).
+// DismissPopover is a custom hook: it calls UseLayoutEffect and UseDocumentEvent, so call it
+// unconditionally at a stable render position, like any hook.
 func DismissPopover(isOpen bool, wrapID string, onClose func()) {
-	openKey := "closed"
-	if isOpen {
-		openKey = "open"
+	// pressedInside is set by a press inside the wrapper. The document listener clears it on
+	// every press.
+	pressedInside := uic.UseRef(false)
+	uic.UseLayoutEffect(func() func() {
+		if !isOpen || wrapID == "" {
+			return nil
+		}
+		wrap, found := domElement(wrapID)
+		if !found {
+			return nil
+		}
+		subscription, err := wrap.Listen("pointerdown", func(interop.BrowserEvent) {
+			pressedInside.Set(true)
+		})
+		if err != nil {
+			return nil
+		}
+		return func() { subscription.Cancel() }
+	}, isOpen, wrapID)
+
+	uic.UseDocumentEvent("pointerdown", func(uic.Event) {
+		inside := pressedInside.Get()
+		pressedInside.Set(false)
+		if isOpen && wrapID != "" && onClose != nil && !inside {
+			onClose()
+		}
+	})
+
+	uic.UseDocumentEvent("keydown", func(e uic.Event) {
+		if !isOpen || wrapID == "" {
+			return
+		}
+		switch e.GetKey() {
+		case "Escape":
+			if onClose != nil {
+				onClose()
+			}
+			trigger := domValue(domNode(wrapID), "querySelector", "button")
+			domValue(trigger, "focus")
+		case "ArrowDown", "ArrowUp", "Home", "End":
+			rovePopoverFocus(e, wrapID)
+		}
+	})
+}
+
+// rovePopoverFocus moves focus among a popover's menu items for the arrow and Home/End keys.
+// It does nothing unless focus is already inside the popover.
+func rovePopoverFocus(e uic.Event, wrapID string) {
+	wrap := domNode(wrapID)
+	if !wrap.Truthy() {
+		return
 	}
-	uic.UseEffect(func() func() {
-		if !isOpen || wrapID == "" || onClose == nil {
-			return nil
+	active := domDocument().Get("activeElement")
+	if !active.Truthy() || !domValue(wrap, "contains", active).Bool() {
+		return
+	}
+	items := domValue(wrap, "querySelectorAll", `[role="menuitem"]`)
+	n := items.Get("length").Int()
+	if n == 0 {
+		return
+	}
+	e.PreventDefault()
+	cur := -1
+	for i := range n {
+		if domValue(domValue(items, "item", i), "isSameNode", active).Bool() {
+			cur = i
+			break
 		}
-		doc := js.Global().Get("document")
-		// getElementById (NOT querySelector("#"+id)): UseId() ids contain colons
-		// (e.g. "gwc:3:1"), which are invalid in a "#id" CSS selector — querySelector
-		// would throw a SyntaxError and panic the wasm callback. getElementById takes
-		// the raw id string and never throws.
-		keyCb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
-			}
-			e := args[0]
-			key := e.Get("key").String()
-			if key == "Escape" {
-				onClose()
-				if w := doc.Call("getElementById", wrapID); w.Truthy() {
-					if btn := w.Call("querySelector", "button"); btn.Truthy() {
-						btn.Call("focus")
-					}
-				}
-				return nil
-			}
-			// Arrow-key roving focus among [role=menuitem] entries (WAI-ARIA menu
-			// pattern): ArrowDown/Up cycle, Home/End jump to ends. Gated on focus
-			// already being inside THIS popover's wrapper, so arrow keys are never
-			// hijacked globally while the menu is merely open-but-unfocused.
-			if key == "ArrowDown" || key == "ArrowUp" || key == "Home" || key == "End" {
-				w := doc.Call("getElementById", wrapID)
-				if !w.Truthy() {
-					return nil
-				}
-				active := doc.Get("activeElement")
-				if !active.Truthy() || !w.Call("contains", active).Bool() {
-					return nil
-				}
-				items := w.Call("querySelectorAll", `[role="menuitem"]`)
-				n := items.Get("length").Int()
-				if n == 0 {
-					return nil
-				}
-				e.Call("preventDefault")
-				cur := -1
-				for i := range n {
-					if items.Index(i).Equal(active) {
-						cur = i
-						break
-					}
-				}
-				next := 0
-				switch key {
-				case "ArrowDown":
-					if next = cur + 1; next >= n {
-						next = 0
-					}
-				case "ArrowUp":
-					if next = cur - 1; next < 0 {
-						next = n - 1
-					}
-				case "End":
-					next = n - 1
-				}
-				items.Index(next).Call("focus")
-			}
-			return nil
-		})
-		downCb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
-			}
-			target := args[0].Get("target")
-			w := doc.Call("getElementById", wrapID)
-			if w.Truthy() && target.Truthy() && !w.Call("contains", target).Bool() {
-				onClose()
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", keyCb)
-		doc.Call("addEventListener", "pointerdown", downCb)
-		return func() {
-			doc.Call("removeEventListener", "keydown", keyCb)
-			doc.Call("removeEventListener", "pointerdown", downCb)
-			keyCb.Release()
-			downCb.Release()
+	}
+	next := 0
+	switch e.GetKey() {
+	case "ArrowDown":
+		if next = cur + 1; next >= n {
+			next = 0
 		}
-	}, openKey)
+	case "ArrowUp":
+		if next = cur - 1; next < 0 {
+			next = n - 1
+		}
+	case "End":
+		next = n - 1
+	}
+	domValue(domValue(items, "item", next), "focus")
 }

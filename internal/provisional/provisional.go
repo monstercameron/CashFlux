@@ -30,6 +30,8 @@
 package provisional
 
 import (
+	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -128,6 +130,18 @@ func New(id, accountID, desc string, currentMinor, targetMinor int64, currency s
 		Reviewed:           true,
 		Source:             domain.TxnSourceManual,
 	}, true
+}
+
+// NewChecked is New with checked subtraction. It returns an error when the
+// adjustment cannot be represented in minor units; callers handling financial
+// input should use this instead of silently wrapping the delta.
+func NewChecked(id, accountID, desc string, currentMinor, targetMinor int64, currency string, asOf, postedAt time.Time) (domain.Transaction, bool, error) {
+	if (currentMinor < 0 && targetMinor > math.MaxInt64+currentMinor) ||
+		(currentMinor > 0 && targetMinor < math.MinInt64+currentMinor) {
+		return domain.Transaction{}, false, fmt.Errorf("balance checkpoint adjustment overflows")
+	}
+	t, ok := New(id, accountID, desc, currentMinor, targetMinor, currency, asOf, postedAt)
+	return t, ok, nil
 }
 
 // SupersededBy returns the ids of checkpoints on an account that a

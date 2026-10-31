@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,9 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/goalfunded"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestBUDQ5InlineLimitWriteErrorKeepsDraftAndNotifies(t *testing.T) {
@@ -79,18 +80,35 @@ func TestBUDQ5GoalFundedMemoUsesRevisionAndViewedPeriod(t *testing.T) {
 	start := time.Date(2026, time.October, 3, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 0, 14)
 	calls := 0
-	calculate := func() goalfunded.Split {
+	calculate := func() (goalfunded.Split, error) {
 		calls++
-		return goalfunded.Split{FundedMinor: int64(calls)}
+		return goalfunded.Split{FundedMinor: int64(calls)}, nil
 	}
 	first := memoGoalFunded(app, 71, "budq5-goal", start, end, calculate)
 	second := memoGoalFunded(app, 71, "budq5-goal", start, end, calculate)
-	if calls != 1 || first.FundedMinor != second.FundedMinor {
+	if calls != 1 || first.split.FundedMinor != second.split.FundedMinor || first.err != nil || second.err != nil {
 		t.Fatalf("same revision/period was recomputed: calls=%d, values=%+v/%+v", calls, first, second)
 	}
 	_ = memoGoalFunded(app, 72, "budq5-goal", start, end, calculate)
 	if calls != 2 {
 		t.Fatalf("new data revision reused stale result: calls=%d", calls)
+	}
+}
+
+func TestBUDQ5GoalFundedMemoKeepsFailureAvailability(t *testing.T) {
+	app := guardTestApp(t)
+	start := time.Date(2026, time.October, 3, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 14)
+	wantErr := errors.New("missing FX rate")
+	calls := 0
+	calculate := func() (goalfunded.Split, error) {
+		calls++
+		return goalfunded.Split{}, wantErr
+	}
+	first := memoGoalFunded(app, 91, "budq5-goal-failure", start, end, calculate)
+	second := memoGoalFunded(app, 91, "budq5-goal-failure", start, end, calculate)
+	if calls != 1 || first.err != wantErr || second.err != wantErr {
+		t.Fatalf("failed result was lost or recalculated: calls=%d, values=%+v/%+v", calls, first, second)
 	}
 }
 

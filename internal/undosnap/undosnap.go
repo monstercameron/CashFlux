@@ -27,9 +27,10 @@ import (
 // ToSnapshot converts a raw ExportJSON payload into a history.Snapshot.
 //
 // For every top-level key whose value is a JSON array the array is expanded:
-// each element is parsed for its "id" field and stored as
-// snapshot[key][id] = elementJSON.  An element without an "id" field causes an
-// error so no data is silently dropped.
+// each element is indexed by its durable store key and stored as
+// snapshot[key][rowKey] = elementJSON. Most collections use their "id" field;
+// molecules use "name" and placements use "surface/id". Missing or duplicate
+// keys cause an error so no data is silently dropped or overwritten.
 //
 // For every top-level key whose value is NOT an array (object, string, number,
 // bool, null) the value is stored as snapshot["_meta:"+key][key] = valueJSON,
@@ -58,9 +59,12 @@ func ToSnapshot(exportJSON []byte) (history.Snapshot, error) {
 			}
 			coll := make(map[string]json.RawMessage, len(rows))
 			for i, elem := range rows {
-				id, err := extractID(elem)
+				id, err := extractCollectionKey(key, elem)
 				if err != nil {
 					return nil, fmt.Errorf("undosnap: element %d of %q: %w", i, key, err)
+				}
+				if _, exists := coll[id]; exists {
+					return nil, fmt.Errorf("undosnap: duplicate row key %q in %q", id, key)
 				}
 				coll[id] = elem
 			}
@@ -75,8 +79,41 @@ func ToSnapshot(exportJSON []byte) (history.Snapshot, error) {
 	return snap, nil
 }
 
+// extractCollectionKey mirrors the durable store key for collections whose
+// primary key is not the row's `id` field. All other collections retain the
+// strict non-empty ID contract.
+func extractCollectionKey(collection string, raw json.RawMessage) (string, error) {
+	switch collection {
+	case "molecules":
+		var row struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(raw, &row); err != nil {
+			return "", fmt.Errorf("unmarshal for name: %w", err)
+		}
+		if row.Name == "" {
+			return "", fmt.Errorf("element has no non-empty \"name\" field")
+		}
+		return row.Name, nil
+	case "placements":
+		var row struct {
+			ID      string `json:"id"`
+			Surface string `json:"surface"`
+		}
+		if err := json.Unmarshal(raw, &row); err != nil {
+			return "", fmt.Errorf("unmarshal for placement key: %w", err)
+		}
+		if row.Surface == "" || row.ID == "" {
+			return "", fmt.Errorf("placement has no non-empty \"surface\" or \"id\" field")
+		}
+		return row.Surface + "/" + row.ID, nil
+	default:
+		return extractID(raw)
+	}
+}
+
 // ToJSON reassembles a history.Snapshot produced by ToSnapshot back into a
-// CashFlux export-JSON payload.  Array collections are sorted by id for
+// CashFlux export-JSON payload. Array collections are sorted by snapshot key for
 // determinism; _meta:* scalars are lifted back to top-level fields.
 func ToJSON(s history.Snapshot) ([]byte, error) {
 	top := make(map[string]json.RawMessage, len(s))

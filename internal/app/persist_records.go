@@ -237,8 +237,8 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		app.Log().Error("load journal compaction state", "err", journalErr)
 		journalKeys = nil
 	}
-	baseline, baselineErr := localDatasetExport(app)
-	mirror, mirrorErr := undosnap.ToSnapshot(baseline)
+	mirror, snapshotErr := sharedDatasetSnapshot(app)
+	var mirrorErr error
 	baseHash := checkpointHash(checkpoint)
 	savedCursor, err := app.Store().ChangeCursor()
 	if err != nil {
@@ -322,7 +322,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			completeWaiters(app.Rev(), 0, appstate.ErrStaleDataset)
 			return
 		}
-		if baselineErr != nil || mirrorErr != nil {
+		if snapshotErr != nil || mirrorErr != nil {
 			completeWaiters(app.Rev(), 0, errors.New("the saved dataset could not be prepared"))
 			return
 		}

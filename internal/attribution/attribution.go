@@ -155,6 +155,21 @@ func Compute(in Input) (Report, error) {
 	// True net-worth delta: per-account balances strictly before each cutoff,
 	// mapped through the canonical liability-magnitude convention. Account
 	// contributions are collected on the way so KindAccount is exact.
+	// Index once in source order: the previous account loop rescanned the full
+	// ledger for every account (O(accounts × transactions)). Per-account order is
+	// retained, which keeps the existing summation and evidence behavior.
+	txnsByAccount := make(map[string][]int, len(in.Accounts))
+	accountTxnCounts := make(map[string]int, len(in.Accounts))
+	for i := range in.Txns {
+		accountTxnCounts[in.Txns[i].AccountID]++
+	}
+	for accountID, count := range accountTxnCounts {
+		txnsByAccount[accountID] = make([]int, 0, count)
+	}
+	for i := range in.Txns {
+		accountID := in.Txns[i].AccountID
+		txnsByAccount[accountID] = append(txnsByAccount[accountID], i)
+	}
 	type acctMove struct {
 		acct         domain.Account
 		contribMinor int64 // net-worth terms, base minor
@@ -166,31 +181,44 @@ func Compute(in Input) (Report, error) {
 	}
 	moves := make([]acctMove, 0, len(in.Accounts))
 	for _, a := range in.Accounts {
-		if a.Archived {
+		if !a.CountsInNetWorth() {
 			continue
 		}
 		balSince, balUntil := a.OpeningBalance.Amount, a.OpeningBalance.Amount
 		var flowAcct, adjAcct int64 // account-currency window sums
 		m := acctMove{acct: a}
-		for _, t := range in.Txns {
-			if t.AccountID != a.ID {
-				continue
-			}
+		for _, txnIndex := range txnsByAccount[a.ID] {
+			t := in.Txns[txnIndex]
 			if t.Date.Before(in.Since) {
-				balSince += t.Amount.Amount
+				var err error
+				balSince, err = addAccountAttribution(balSince, t.Amount.Amount, a.ID, "balance at since")
+				if err != nil {
+					return Report{}, err
+				}
 			}
 			if t.Date.Before(in.Until) {
-				balUntil += t.Amount.Amount
+				var err error
+				balUntil, err = addAccountAttribution(balUntil, t.Amount.Amount, a.ID, "balance at until")
+				if err != nil {
+					return Report{}, err
+				}
 			}
 			if dateutil.InRange(t.Date, in.Since, in.Until) {
+				magnitude, err := money.Abs(t.Amount.Amount)
+				if err != nil {
+					return Report{}, fmt.Errorf("attribution: account %s transaction %s magnitude: %w", a.ID, t.ID, err)
+				}
 				if isAdj(t) {
-					adjAcct += t.Amount.Amount
+					adjAcct, err = addAccountAttribution(adjAcct, t.Amount.Amount, a.ID, "adjustment flow")
 				} else {
-					flowAcct += t.Amount.Amount
+					flowAcct, err = addAccountAttribution(flowAcct, t.Amount.Amount, a.ID, "ordinary flow")
+				}
+				if err != nil {
+					return Report{}, err
 				}
 				m.count++
 				m.txnIDs = append(m.txnIDs, t.ID)
-				m.txnAbs = append(m.txnAbs, abs64(t.Amount.Amount))
+				m.txnAbs = append(m.txnAbs, magnitude)
 			}
 		}
 		// Net-worth contribution factor for this account over the window: assets
@@ -201,13 +229,34 @@ func Compute(in Input) (Report, error) {
 		// total (magnitudes at each cutoff) with the flow/adj split left linear —
 		// the headline residual (PartOther) absorbs any difference.
 		factor := int64(1)
-		contribAcct := balUntil - balSince
+		var contribAcct int64
+		var err error
 		if a.Class == domain.ClassLiability {
-			contribAcct = -(abs64(balUntil) - abs64(balSince))
+			startMagnitude, err := money.Abs(balSince)
+			if err != nil {
+				return Report{}, fmt.Errorf("attribution: account %s since liability magnitude: %w", a.ID, err)
+			}
+			endMagnitude, err := money.Abs(balUntil)
+			if err != nil {
+				return Report{}, fmt.Errorf("attribution: account %s until liability magnitude: %w", a.ID, err)
+			}
+			contribAcct, err = money.Sub(endMagnitude, startMagnitude)
+			if err != nil {
+				return Report{}, fmt.Errorf("attribution: account %s liability movement: %w", a.ID, err)
+			}
+			contribAcct, err = money.Neg(contribAcct)
+			if err != nil {
+				return Report{}, fmt.Errorf("attribution: account %s liability net-worth movement: %w", a.ID, err)
+			}
 			if balSince < 0 || (balSince == 0 && balUntil < 0) {
 				factor = 1 // negative-stored debt: |b| = -b, so -Δ|b| = Δb
 			} else {
 				factor = -1 // positive-stored "amount you owe"
+			}
+		} else {
+			contribAcct, err = money.Sub(balUntil, balSince)
+			if err != nil {
+				return Report{}, fmt.Errorf("attribution: account %s net-worth delta: %w", a.ID, err)
 			}
 		}
 		conv := func(minor int64) (int64, error) {
@@ -217,18 +266,34 @@ func Compute(in Input) (Report, error) {
 			}
 			return c.Amount, nil
 		}
-		var err error
 		if m.contribMinor, err = conv(contribAcct); err != nil {
 			return Report{}, err
 		}
-		if m.flowMinor, err = conv(factor * flowAcct); err != nil {
+		if _, err := money.Abs(m.contribMinor); err != nil {
+			return Report{}, fmt.Errorf("attribution: account %s converted movement magnitude: %w", a.ID, err)
+		}
+		factorFlow, err := signedFactor(flowAcct, factor, "account "+a.ID+" flow sign")
+		if err != nil {
 			return Report{}, err
 		}
-		if m.adjMinor, err = conv(factor * adjAcct); err != nil {
+		if m.flowMinor, err = conv(factorFlow); err != nil {
 			return Report{}, err
 		}
-		rep.NetDeltaMinor += m.contribMinor
-		rep.AdjustmentsMinor += m.adjMinor
+		factorAdj, err := signedFactor(adjAcct, factor, "account "+a.ID+" adjustment sign")
+		if err != nil {
+			return Report{}, err
+		}
+		if m.adjMinor, err = conv(factorAdj); err != nil {
+			return Report{}, err
+		}
+		rep.NetDeltaMinor, err = addAttribution(rep.NetDeltaMinor, m.contribMinor, "net-worth movement total")
+		if err != nil {
+			return Report{}, err
+		}
+		rep.AdjustmentsMinor, err = addAttribution(rep.AdjustmentsMinor, m.adjMinor, "balance adjustment total")
+		if err != nil {
+			return Report{}, err
+		}
 		if m.count > 0 || m.contribMinor != 0 {
 			moves = append(moves, m)
 		}
@@ -263,6 +328,10 @@ func Compute(in Input) (Report, error) {
 		if err != nil {
 			return Report{}, fmt.Errorf("attribution: txn %s: %w", t.ID, err)
 		}
+		magnitude, err := money.Abs(conv.Amount)
+		if err != nil {
+			return Report{}, fmt.Errorf("attribution: txn %s converted magnitude: %w", t.ID, err)
+		}
 		// Display label: payee when present, else the description — manual
 		// entries often carry only Desc ("Car payment"), and a large-expense
 		// finding with a blank subject reads broken.
@@ -273,15 +342,23 @@ func Compute(in Input) (Report, error) {
 		ev := evTxn{id: t.ID, amountMinor: conv.Amount, payee: label, accountID: t.AccountID}
 		switch {
 		case t.IsIncome():
-			rep.IncomeMinor += conv.Amount
+			rep.IncomeMinor, err = addAttribution(rep.IncomeMinor, conv.Amount, "income total")
+			if err != nil {
+				return Report{}, err
+			}
 			incomeTxns = append(incomeTxns, ev)
 		case t.IsExpense():
-			mag := abs64(conv.Amount)
-			rep.SpendingMinor += mag
+			rep.SpendingMinor, err = addAttribution(rep.SpendingMinor, magnitude, "spending total")
+			if err != nil {
+				return Report{}, err
+			}
 			spendTxns = append(spendTxns, ev)
-			catSpend[t.CategoryID] += mag
+			catSpend[t.CategoryID], err = addCategoryAttribution(catSpend[t.CategoryID], magnitude, t.CategoryID)
+			if err != nil {
+				return Report{}, err
+			}
 			catTxns[t.CategoryID] = append(catTxns[t.CategoryID], ev)
-			if mag > abs64(largest.amountMinor) {
+			if magnitude > abs64(largest.amountMinor) {
 				largest = ev
 			}
 		}
@@ -301,11 +378,24 @@ func Compute(in Input) (Report, error) {
 		if err != nil {
 			return Report{}, fmt.Errorf("attribution: txn %s: %w", t.ID, err)
 		}
+		if _, err := money.Abs(conv.Amount); err != nil {
+			return Report{}, fmt.Errorf("attribution: new-payee txn %s magnitude: %w", t.ID, err)
+		}
 		newPayees = append(newPayees, newPayee{payee: t.Payee, ev: evTxn{id: t.ID, amountMinor: conv.Amount}})
 	}
 
-	flow := rep.IncomeMinor - rep.SpendingMinor
-	rep.OtherMinor = rep.NetDeltaMinor - flow - rep.AdjustmentsMinor
+	flow, err := money.Sub(rep.IncomeMinor, rep.SpendingMinor)
+	if err != nil {
+		return Report{}, fmt.Errorf("attribution: net cash flow: %w", err)
+	}
+	rep.OtherMinor, err = money.Sub(rep.NetDeltaMinor, flow)
+	if err != nil {
+		return Report{}, fmt.Errorf("attribution: residual after cash flow: %w", err)
+	}
+	rep.OtherMinor, err = money.Sub(rep.OtherMinor, rep.AdjustmentsMinor)
+	if err != nil {
+		return Report{}, fmt.Errorf("attribution: residual after balance adjustments: %w", err)
+	}
 
 	// ── Findings ──────────────────────────────────────────────────────────────
 	var items []Item
@@ -325,8 +415,9 @@ func Compute(in Input) (Report, error) {
 
 	if len(moves) > 0 {
 		sort.SliceStable(moves, func(i, j int) bool {
-			if d := abs64(moves[i].contribMinor) - abs64(moves[j].contribMinor); d != 0 {
-				return d > 0
+			left, right := abs64(moves[i].contribMinor), abs64(moves[j].contribMinor)
+			if left != right {
+				return left > right
 			}
 			return moves[i].acct.ID < moves[j].acct.ID
 		})
@@ -371,8 +462,9 @@ func Compute(in Input) (Report, error) {
 
 	if len(newPayees) > 0 {
 		sort.SliceStable(newPayees, func(i, j int) bool {
-			if d := abs64(newPayees[i].ev.amountMinor) - abs64(newPayees[j].ev.amountMinor); d != 0 {
-				return d > 0
+			left, right := abs64(newPayees[i].ev.amountMinor), abs64(newPayees[j].ev.amountMinor)
+			if left != right {
+				return left > right
 			}
 			return newPayees[i].ev.id < newPayees[j].ev.id
 		})
@@ -392,8 +484,9 @@ func Compute(in Input) (Report, error) {
 			rest = items
 		}
 		sort.SliceStable(rest, func(i, j int) bool {
-			if d := abs64(rest[i].AmountMinor) - abs64(rest[j].AmountMinor); d != 0 {
-				return d > 0
+			left, right := abs64(rest[i].AmountMinor), abs64(rest[j].AmountMinor)
+			if left != right {
+				return left > right
 			}
 			if rest[i].Kind != rest[j].Kind {
 				return rest[i].Kind < rest[j].Kind
@@ -445,6 +538,45 @@ func abs64(v int64) int64 {
 	return v
 }
 
+func addAttribution(current, amount int64, context string) (int64, error) {
+	total, err := money.Add(current, amount)
+	if err != nil {
+		return 0, fmt.Errorf("attribution: %s: %w", context, err)
+	}
+	return total, nil
+}
+
+func addAccountAttribution(current, amount int64, accountID, context string) (int64, error) {
+	total, err := money.Add(current, amount)
+	if err != nil {
+		return 0, fmt.Errorf("attribution: account %s %s: %w", accountID, context, err)
+	}
+	return total, nil
+}
+
+func addCategoryAttribution(current, amount int64, categoryID string) (int64, error) {
+	total, err := money.Add(current, amount)
+	if err != nil {
+		return 0, fmt.Errorf("attribution: category %s spending total: %w", categoryID, err)
+	}
+	return total, nil
+}
+
+func signedFactor(amount, factor int64, context string) (int64, error) {
+	switch factor {
+	case 1:
+		return amount, nil
+	case -1:
+		value, err := money.Neg(amount)
+		if err != nil {
+			return 0, fmt.Errorf("attribution: %s: %w", context, err)
+		}
+		return value, nil
+	default:
+		return 0, fmt.Errorf("attribution: invalid sign factor %d", factor)
+	}
+}
+
 func firstID(it Item) string {
 	if len(it.TxnIDs) > 0 {
 		return it.TxnIDs[0]
@@ -456,8 +588,9 @@ func firstID(it Item) string {
 func topEvidence(evs []evTxn) []string {
 	sorted := append([]evTxn(nil), evs...)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		if d := abs64(sorted[i].amountMinor) - abs64(sorted[j].amountMinor); d != 0 {
-			return d > 0
+		left, right := abs64(sorted[i].amountMinor), abs64(sorted[j].amountMinor)
+		if left != right {
+			return left > right
 		}
 		return sorted[i].id < sorted[j].id
 	})

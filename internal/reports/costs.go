@@ -6,11 +6,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"unicode"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // This file finds the year's "money that bought nothing": bank/card fees and
@@ -65,12 +68,22 @@ func hasToken(s string, words map[string]struct{}) bool {
 // excluded-from-reports charges, and income are skipped; amounts convert to
 // the base currency; refund-pair netting applies. Items sort largest first.
 func CostOfMoney(txns []domain.Transaction, cats []domain.Category, start, end time.Time, rates currency.Rates) (MoneyCosts, error) {
+	return costOfMoney(netted(txns), cats, start, end, rates)
+}
+
+// CostOfMoneyFromLedger reads prepared activity without applying legacy refund
+// links a second time. Classification is shared with CostOfMoney.
+func CostOfMoneyFromLedger(txns budgeting.NettedLedger, cats []domain.Category, start, end time.Time, rates currency.Rates) (MoneyCosts, error) {
+	return costOfMoney(txns, cats, start, end, rates)
+}
+
+func costOfMoney(txns []domain.Transaction, cats []domain.Category, start, end time.Time, rates currency.Rates) (MoneyCosts, error) {
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name
 	}
 	var out MoneyCosts
-	for _, t := range netted(txns) {
+	for _, t := range txns {
 		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
@@ -84,17 +97,27 @@ func CostOfMoney(txns []domain.Transaction, cats []domain.Category, start, end t
 		if err != nil {
 			return MoneyCosts{}, err
 		}
-		amt := conv.Abs().Amount
+		magnitude, err := conv.AbsChecked()
+		if err != nil {
+			return MoneyCosts{}, err
+		}
+		amt := magnitude.Amount
 		desc := t.Desc
 		if desc == "" {
 			desc = t.Payee
 		}
 		out.Items = append(out.Items, CostCharge{Desc: desc, Date: t.Date, Amount: amt, Interest: interest})
 		if interest {
-			out.InterestTotal += amt
+			out.InterestTotal, err = money.Add(out.InterestTotal, amt)
+			if err != nil {
+				return MoneyCosts{}, err
+			}
 			out.InterestCount++
 		} else {
-			out.FeeTotal += amt
+			out.FeeTotal, err = money.Add(out.FeeTotal, amt)
+			if err != nil {
+				return MoneyCosts{}, err
+			}
 			out.FeeCount++
 		}
 	}

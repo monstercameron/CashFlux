@@ -10,15 +10,21 @@ package i18n
 // not touch en.go.
 var qpassBKeys = Catalog{
 	// --- reconciliation: tracked securities vs the account balances net worth uses ---
-	"investments.reconcileLine":         "%s securities + %s cash & untracked = %s across investment accounts",
-	"investments.reconcileBehindLine":   "%s in securities is ahead of %s in recorded balances by %s — update your account balances",
-	"investments.reconcileNetWorthNote": "Net worth counts the investment-account balances, not the tracked-securities value.",
-	"investments.reconcileTitle":        "Reconciliation by account",
-	"investments.reconcileAcctLine":     "%s: %s securities + %s cash & untracked = %s",
-	"investments.reconcileAcctBehind":   "%s: %s securities, balance behind by %s — update account balance",
-	"investments.reconcileUnnamed":      "Account",
+	"investments.reconcileLine":          "%s securities + %s cash & untracked = %s across investment accounts",
+	"investments.reconcileBehindLine":    "%s in securities is ahead of %s in recorded balances by %s — update your account balances",
+	"investments.reconcileNetWorthNote":  "Net worth counts the investment-account balances, not the tracked-securities value.",
+	"investments.reconcileTitle":         "Reconciliation by account",
+	"investments.reconcileAcctLine":      "%s: %s securities + %s cash & untracked = %s",
+	"investments.reconcileAcctBehind":    "%s: %s securities, balance behind by %s — update account balance",
+	"investments.reconcileUnnamed":       "Account",
+	"investments.totalUnavailable":       "Unavailable",
+	"investments.totalUnavailableDetail": "One or more investment account balances could not be converted or added.",
+	"investments.reconcileUnavailable":   "Account balance reconciliation is unavailable.",
 	// --- growth card: clarify it charts account balances, not securities value ---
-	"investments.growthCaption": "Charts your investment-account balances over time — the figure net worth uses, not the tracked-securities market value.",
+	"investments.growthCaption":            "Charts your investment-account balances over time — the figure net worth uses, not the tracked-securities market value.",
+	"investments.growthUnavailable":        "Growth history unavailable",
+	"investments.growthChangeUnavailable":  "Change unavailable",
+	"investments.growthPercentUnavailable": "percent unavailable from a zero starting value",
 	// --- honest rename of the "Portfolio metrics" toolbar control (it opens the
 	//     household-wide formula builder, not a portfolio-scoped tool) ---
 	"investments.formulaBuilderShow":  "Formula builder",

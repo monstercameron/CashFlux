@@ -22,10 +22,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Rules manages auto-categorization rules: a match phrase assigns a category
@@ -311,9 +311,10 @@ func Rules() ui.Node {
 	}))
 
 	rs := app.Rules()
+	coverage := rules.SummarizeCoverage(rs, ctxs)
 	// Flag rules that never fire because an earlier rule already matches them.
 	warnByID := map[string]string{}
-	for _, c := range rules.Conflicts(rs) {
+	for _, c := range coverage.Conflicts {
 		if c.ShadowedBy >= 0 {
 			warnByID[rs[c.Index].ID] = uistate.T("rules.shadowed", rs[c.ShadowedBy].Match)
 		} else {
@@ -324,17 +325,9 @@ func Rules() ui.Node {
 	// signal (L15), evaluated with FULL transaction context so condition-bearing
 	// rules count honestly (a plain-text count read "0 caught" for a rule that
 	// catches hundreds). maxMatch anchors the per-rule weight bars.
-	covered := rules.CoveredFull(rs, ctxs)
+	covered := coverage.Covered
 	hasTxns := len(ctxs) > 0
-	matchCounts := make(map[string]int, len(rs))
-	maxMatch := 0
-	for _, r := range rs {
-		n := r.MatchCountFull(ctxs)
-		matchCounts[r.ID] = n
-		if n > maxMatch {
-			maxMatch = n
-		}
-	}
+	maxMatch := coverage.MaxMatchCount
 
 	// Drag-to-reorder precedence (C64): drop the dragged rule in front of the target,
 	// renumber Order via appstate, and refresh. First matching rule wins, so order =
@@ -422,7 +415,7 @@ func Rules() ui.Node {
 					Rule: r, CategoryName: catName[r.SetCategoryID], CondLine: condLine(r),
 					MemberName: memberName[r.SetMemberID],
 					Precedence: i + 1,
-					Warning:    warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
+					Warning:    warnByID[r.ID], MatchCount: coverage.Counts[i], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
 					OnApplyScoped: applyScoped, OnUndoApply: undoApply,
 					UndoableCount:  undoableFor(r.ID, lastApplyRule.Get(), lastApply.Get()),
 					OnDelete:       deleteRule,

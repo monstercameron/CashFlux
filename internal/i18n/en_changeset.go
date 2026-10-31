@@ -6,6 +6,7 @@ package i18n
 // AG20 session receipt. Kept in its own file (not en.go) so it doesn't touch the
 // concurrent-WIP catalog.
 var changesetKeys = Catalog{
+	"assistant.writeBaselineUnavailable": "The approved change could not start because its undo history was unavailable: %s",
 	// --- AG1 review card ---
 	"changeset.title":       "Proposed changes",
 	"changeset.subtitle":    "Review each step, then apply the ones you want.",
@@ -18,11 +19,17 @@ var changesetKeys = Catalog{
 	"changeset.receiptTitle": "Applied %d of %d",
 	"changeset.receiptOne":   "Applied 1 change",
 	// %s = the failing step, %s = the error.
-	"changeset.failed":      "Stopped at “%s”: %s. Earlier steps were applied.",
-	"changeset.undoAll":     "Undo all",
-	"changeset.undoAllAria": "Undo every change the assistant just applied",
-	"changeset.undone":      "Undid the assistant's changes.",
-	"changeset.applied":     "Applied %d change(s).",
+	"changeset.failed":                 "Stopped at “%s”: %s. Earlier steps were applied.",
+	"changeset.failedPartial":          "Stopped at “%s”: %s. This step changed some data before failing.",
+	"changeset.captureFailed":          "The change may have been saved, but its undo record could not be verified. Check Activity before retrying.",
+	"changeset.noChanges":              "No changes were needed.",
+	"changeset.undoProgress":           "Reversed %d of %d captured changes; %d remain.",
+	"changeset.undoVerificationFailed": "Undo verification failed: %s",
+	"changeset.undoStopped":            "Undo stopped: %s",
+	"changeset.undoAll":                "Undo all",
+	"changeset.undoAllAria":            "Undo every change the assistant just applied",
+	"changeset.undone":                 "Undid the assistant's changes.",
+	"changeset.applied":                "Applied %d change(s).",
 	// --- AG20 cumulative session receipt ---
 	"changeset.sessionAria": "What the assistant did in this chat",
 	// --- C389 per-action history ---

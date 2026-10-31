@@ -3,10 +3,13 @@
 package appstate
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 // ErrReadOnly is returned by entity-mutating methods (PutX / DeleteX for
@@ -64,10 +67,22 @@ func (a *App) CanManageMembers() bool {
 	return memberrole.CanManageMembers(a.ActiveRole())
 }
 
+// ready returns ErrDurabilityUnavailable when the App has no local dataset behind it, so public
+// methods return an error instead of dereferencing a missing App or store.
+func (a *App) ready() error {
+	if a == nil || a.store == nil {
+		return ErrDurabilityUnavailable
+	}
+	return nil
+}
+
 // roleGuard returns ErrReadOnly when the active identity is not permitted to
 // edit financial entities. It is called at the top of every PutX / DeleteX
 // that should respect the role guardrail.
 func (a *App) roleGuard() error {
+	if err := a.ready(); err != nil {
+		return err
+	}
 	if !a.CanEdit() {
 		a.log.Warn("mutation blocked: active identity is read-only",
 			"role", a.ActiveRole())
@@ -78,12 +93,37 @@ func (a *App) roleGuard() error {
 
 // memberRoleGuard returns ErrReadOnly when the active identity may not manage
 // members (only RoleOwner is permitted). Used in PutMember / DeleteMember /
-// DeleteMemberAfterReassign.
+// DeleteMemberAfterReassign. SetDefaultMember deliberately uses roleGuard instead: picking which
+// existing member new forms default to is an editing action open to Editors, while adding,
+// changing and removing members stays with Owners.
 func (a *App) memberRoleGuard() error {
+	if err := a.ready(); err != nil {
+		return err
+	}
 	if !a.CanManageMembers() {
 		a.log.Warn("member mutation blocked: active identity cannot manage members",
 			"role", a.ActiveRole())
 		return ErrReadOnly
 	}
 	return nil
+}
+
+// householdSettingsChanged reports whether next differs from current in any household-wide
+// setting: the default account, base currency, exchange rates and their timestamps, freshness
+// overrides, budgeting method, flex budget, payoff baseline and the household AI spend cap and
+// spend record. The per-person fields (music resume point, AI key, model, base URL and reasoning
+// effort) are blanked before the comparison, so they never count. A value that cannot be encoded counts as
+// a change, which keeps the role check on the safe side.
+func householdSettingsChanged(current, next store.Settings) bool {
+	a, errA := json.Marshal(householdSettings(current))
+	b, errB := json.Marshal(householdSettings(next))
+	return errA != nil || errB != nil || !bytes.Equal(a, b)
+}
+
+// householdSettings returns s with every per-person field cleared, leaving the household-wide
+// fields (including the AI spend cap and record) in place.
+func householdSettings(s store.Settings) store.Settings {
+	s.OpenAIKey, s.OpenAIModel, s.OpenAIReasoningEffort, s.OpenAIBaseURL = "", "", "", ""
+	s.Music = nil
+	return s
 }

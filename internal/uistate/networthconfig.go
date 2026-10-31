@@ -8,41 +8,15 @@ import "encoding/json"
 
 const netWorthConfigKey = "cashflux:networth:config"
 
-// netWorthWindows are the valid analysis windows (months), used to sanitize a
-// persisted value. One month is "this month so far"; the rest are trailing
-// calendar-month windows.
-var netWorthWindows = map[int]bool{0: true, 1: true, 6: true, 12: true, 24: true}
-
-// NetWorthConfig is the persisted net-worth-page reading posture: how many
-// calendar months the bridge decomposes and the mirrored chart spans.
-// Persisting it means /networth reopens on the window the user was studying.
-type NetWorthConfig struct {
-	// TrendMonths is the analysis window: 0 (all time), 1, 6, 12 or 24 months.
-	// The name is
-	// kept from the trend-only era so an already-persisted value still loads.
-	TrendMonths int `json:"trendMonths"`
-}
-
-func defaultNetWorthConfig() NetWorthConfig {
-	return NetWorthConfig{TrendMonths: 6}
-}
-
 // NetWorthConfigGet returns the effective net-worth config: the persisted
 // override layered over the defaults, or the plain defaults when nothing is
 // stored.
 func NetWorthConfigGet() NetWorthConfig {
-	cfg := defaultNetWorthConfig()
-	raw := kvGet(netWorthConfigKey)
-	if raw == "" {
-		return cfg
-	}
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+	c, err := ParseNetWorthConfig(kvGet(netWorthConfigKey))
+	if err != nil {
 		return defaultNetWorthConfig()
 	}
-	if !netWorthWindows[cfg.TrendMonths] {
-		cfg.TrendMonths = 6
-	}
-	return cfg
+	return c
 }
 
 // SetNetWorthConfig persists a net-worth config override.

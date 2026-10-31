@@ -43,15 +43,25 @@ func registerGenerated() {
 		// should follow the user's theme use var(--radius), everything else uses
 		// the fixed --radius-xs…xl scale below.
 		customProp("--radius", "0px"),
-		// Z-index scale — one place to reason about stacking order. Higher layer wins.
+		// Z-index scale — one place to reason about stacking order. Higher layer wins. Use these
+		// tokens for any layer that sits above the page content, so the order is the same across
+		// the app. A value local to one component (a fill behind its figures, a tick inside a bar)
+		// may stay a literal, since it only orders siblings inside that component.
+		customProp("--z-base", "0"),       // in-flow content
 		customProp("--z-raised", "5"),     // lifted-in-card fills / figs
 		customProp("--z-sticky", "20"),    // sticky headers / action bars
+		customProp("--z-lift", "30"),      // a card, filter panel or toolbar lifted above its siblings
+		customProp("--z-cell", "40"),      // a table row or cell lifted above its neighbours
+		customProp("--z-row-menu", "51"),  // a row or cell whose menu or editor is open
 		customProp("--z-dropdown", "50"),  // row ⋯ menus, selects
 		customProp("--z-overlay", "60"),   // in-page overlays
+		customProp("--z-row-active", "61"), // the active action row, above an open overlay in the same table
 		customProp("--z-popover", "2000"), // floating explainers / tooltips (over content)
 		customProp("--z-modal", "3000"),   // flip-panel modals + their backdrop
 		customProp("--z-dialog", "3500"),  // confirm/prompt dialogs — above modals so they're answerable from within one
 		customProp("--z-toast", "4000"),   // toasts / notices (above everything)
+		customProp("--z-banner", "9000"),  // full-width app banners: save failure, update available
+		customProp("--z-lock", "9500"),    // app lock gate (above banners and everything)
 		colorScheme("dark"),
 		customProp("--font-ui", "Inter"),
 		customProp("--font-display", "'Fraunces'"),
@@ -507,9 +517,12 @@ func registerGenerated() {
 			transform("none"),
 		),
 	)
-	// Page-content transitions run at the Layout token (spec §2: 240ms).
+	// Page-content transitions run at the Layout token (spec §2: 240ms). The fill is
+	// backwards, not both: a forwards fill keeps the page's identity transform after the
+	// entrance, and a transform makes the page the containing block for fixed overlays
+	// such as the bulk bar. The end state matches the page's base style.
 	rule("#cf-page-view.page-enter",
-		animation("wonder-page-enter var(--motion-layout) var(--ease-enter) both"),
+		animation("wonder-page-enter var(--motion-layout) var(--ease-enter) backwards"),
 	)
 	rule("[data-wonder=\"off\"] #cf-page-view.page-enter",
 		animation("none"),
@@ -623,13 +636,6 @@ func registerGenerated() {
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".bento .w",
 		animation("none"),
-	)
-	rule(".flip-backdrop",
-		transition("opacity .28s var(--wonder-ease),\n                    backdrop-filter var(--wonder-dur-slow) var(--wonder-ease-out)"),
-		backdropFilter("blur(0px)"),
-	)
-	rule(".flip-backdrop.show",
-		backdropFilter("blur(calc(3px * var(--wonder-on)))"),
 	)
 	// Toasts rise and settle exactly once (spec §2: no overshoot) — the old
 	// bounce midpoint + elastic bezier are gone; enter curve at the overlay token.
@@ -756,7 +762,7 @@ func registerGenerated() {
 		display("none"),
 		position("fixed"),
 		inset("auto 1rem 1rem 1rem"),
-		zIndex("20"),
+		zIndex("var(--z-sticky)"),
 		background("#3b0d0d"),
 		color("#fecaca"),
 		border("1px solid #7f1d1d"),
@@ -978,7 +984,7 @@ func registerGenerated() {
 	// Standalone action buttons (bell, ⋯ More) wear the standard .btn/.btn-tool
 	// chrome — bordered bg-elev squares at the shared control height — so the
 	// header uses the same control language as every page toolbar.
-	rule(".topbar .tb-actions .icon-btn,\n      .topbar .tb-actions .more-btn,\n      .topbar .tb-actions .notify-btn,\n      .topbar .tb-actions .muzak-btn",
+	rule(".topbar .tb-actions .notify-btn",
 		width("var(--tb-h)"),
 		height("var(--tb-h)"),
 		borderRadius("var(--radius-lg)"),
@@ -990,7 +996,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
 	)
-	rule(".topbar .tb-actions .icon-btn:hover,\n      .topbar .tb-actions .more-btn:hover,\n      .topbar .tb-actions .notify-btn:hover,\n      .topbar .tb-actions .muzak-btn:hover",
+	rule(".topbar .tb-actions .notify-btn:hover",
 		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
 		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
 		color("var(--text)"),
@@ -1358,7 +1364,7 @@ func registerGenerated() {
 		borderColor("#e4e2dd !important"),
 		color("#1c1c1e"),
 	)
-	rule("[data-theme=\"light\"] .add-item:hover, [data-theme=\"light\"] .notify-item:hover",
+	rule("[data-theme=\"light\"] .notify-item:hover",
 		background("#efede8 !important"),
 		color("#1c1c1e"),
 	)
@@ -1472,10 +1478,6 @@ func registerGenerated() {
 	rule("[data-theme=\"light\"] #cf-cmd-palette",
 		background("rgba(239,237,232,0.72) !important"),
 	)
-	rule(".cf-dialog-scrim",
-		backdropFilter("blur(4px)"),
-		webkitBackdropFilter("blur(4px)"),
-	)
 	rule(".cf-dialog",
 		boxShadow("0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--border,#2a2a2c)"),
 		padding("1.5rem 1.5rem 1.25rem"),
@@ -1488,12 +1490,15 @@ func registerGenerated() {
 		background("#cfcdc7"),
 		borderColor("#f7f6f3"),
 	)
+	// .card-title is the one card heading. Its size, weight, leading, tracking and colour come
+	// from the heading tokens, so a page only overrides the tokens, never the heading itself.
 	rule(".card-title",
-		margin("0 0 0.75rem"),
-		fontSize("1.05rem"),
-		color("var(--text)"),
-		fontWeight("600"),
-		letterSpacing("-0.01em"),
+		margin("0"),
+		fontSize("var(--heading-size)"),
+		fontWeight("var(--heading-weight)"),
+		lineHeight("var(--heading-line)"),
+		letterSpacing("var(--heading-tracking)"),
+		color("var(--heading-color)"),
 	)
 	rule(".hero-main",
 		display("flex"),
@@ -2473,15 +2478,22 @@ func registerGenerated() {
 	)
 	// Two-row standard toolbar: primary row (search fills + Filters trigger), then an
 	// actions row beneath. A column so the two rows stack; each row is its own flex line.
+	// The toolbar keeps a gap under itself only when a chips row or the open panel follows, so
+	// an empty row never leaves dead space under the search.
 	rule(".filter-toolbar",
 		display("flex"),
 		flexDirection("column"),
 		gap("0.5rem"),
+	)
+	rule(".filter-toolbar:has(~ .filter-chips:not(:empty)), .filter-toolbar:has(~ .filter-inline-panel:not(:empty))",
 		marginBottom("0.6rem"),
+	)
+	rule(".filter-chips:empty, .filter-inline-panel:empty",
+		display("none"),
 	)
 	rule(".filter-toolbar-primary",
 		display("flex"),
-		alignItems("center"),
+		alignItems("stretch"),
 		gap("0.5rem"),
 	)
 	// The search pill grows to fill the WHOLE line; the Filters trigger holds its natural
@@ -2640,33 +2652,40 @@ func registerGenerated() {
 		marginBottom("0.8rem"),
 		overflow("hidden"),
 	)
-	// Transactions can opt into a right-side sheet without changing the shared
-	// toolbar's default inline disclosure on other pages.
+	// Fading panels (the Filters panel and the More menu) fade in while they grow and fade out
+	// while they collapse, over 250ms to match panelFadeMs. Content is clipped while they move
+	// so nothing spills out; the open animation fills only forwards, so each panel returns to
+	// its own overflow rule (the More menu's submenus stay unclipped). Reduced motion turns
+	// all of this off.
+	keyframes("panel-fade-in",
+		at("0%", prop("opacity", "0"), prop("height", "0px"), prop("overflow", "hidden")),
+		at("99%", prop("overflow", "hidden")),
+		at("100%", prop("opacity", "1"), prop("height", "auto")),
+	)
+	keyframes("panel-fade-out",
+		at("0%", prop("opacity", "1"), prop("height", "auto"), prop("overflow", "hidden")),
+		at("100%", prop("opacity", "0"), prop("height", "0px"), prop("overflow", "hidden")),
+	)
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".fade-panel",
+		prop("interpolate-size", "allow-keywords"),
+		prop("animation", "panel-fade-in 250ms ease-out backwards"),
+	)
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".fade-panel.is-leaving",
+		prop("animation", "panel-fade-out 250ms ease-in both"),
+		prop("pointer-events", "none"),
+	)
+	// The shared Overlay portals the sheet to the page body and gives it the viewport, so the
+	// panel fills that surface rather than fixing itself to the window.
 	rule(".filter-inline-panel.filter-sheet",
-		position("fixed"),
-		top("3.5rem"),
-		right("0"),
-		bottom("0"),
-		zIndex("var(--z-modal)"),
-		width("min(380px, 100vw)"),
-		height("calc(100dvh - 3.5rem)"),
+		position("static"),
+		width("100%"),
+		height("100%"),
 		minHeight("0"),
 		margin("0"),
 		borderRadius("0"),
-		boxShadow("-12px 0 36px rgba(0,0,0,.22)"),
+		boxShadow("none"),
 		display("flex"),
 		flexDirection("column"),
-	)
-	// Bento tiles normally clip their contents and use will-change: transform.
-	// Both properties make a fixed descendant behave like it is fixed to that
-	// short tile, which clipped the sheet to roughly the toolbar height. Release
-	// the owning tile while its sheet is mounted so the panel uses the viewport.
-	rule(".w:has(.filter-sheet)",
-		overflow("visible"),
-		willChange("auto"),
-	)
-	rule(".w:not(.drag):has(.filter-sheet):hover",
-		transform("none"),
 	)
 	rule(".filter-inline-panel.filter-sheet .filter-inline-body",
 		flex("1 1 0"),
@@ -2762,19 +2781,6 @@ func registerGenerated() {
 	rule(".filter-inline-panel.filter-sheet .filter-amount-control .field",
 		paddingLeft("1.6rem"),
 	)
-	rule(".txn-period-control",
-		width("12rem"),
-		minWidth("12rem"),
-		position("relative"),
-		display("flex"),
-		flexDirection("column"),
-		alignItems("stretch"),
-	)
-	rule(".txn-period-select",
-		width("100%"),
-		minWidth("0"),
-		fontWeight("600"),
-	)
 	rule(".txn-period-custom",
 		position("absolute"),
 		top("calc(100% + .35rem)"),
@@ -2830,6 +2836,40 @@ func registerGenerated() {
 	)
 	rule(".filter-inline-body .filter-fields .field-label .field",
 		color("var(--text)"),
+	)
+	// The filter fields are standard labelled fields: a sentence-case label above a control
+	// with the shared field height, border and radius, so values never clip to the pill.
+	rule(".filter-inline-body .filter-fields .field-label",
+		flexDirection("column"),
+		alignItems("stretch"),
+		gap("0.35rem"),
+		minHeight("0"),
+		padding("0"),
+		background("transparent"),
+		border("0"),
+		borderRadius("0"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("500"),
+		letterSpacing("normal"),
+		prop("text-transform", "none"),
+		color("var(--text-dim)"),
+		whiteSpace("normal"),
+	)
+	// The panel's select is the standard field: the same padding, height, border, background
+	// and radius as every other field, with the native select's own chevron.
+	rule(".filter-inline-body .filter-fields .field-label .field, .filter-inline-body .filter-fields .field-label select",
+		width("100%"),
+		minWidth("0"),
+		boxSizing("border-box"),
+		minHeight("44px"),
+		padding(".5rem .6rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--control-border)"),
+		borderRadius("var(--radius-lg)"),
+		color("var(--text)"),
+		font("inherit"),
+		prop("text-transform", "none"),
+		letterSpacing("normal"),
 	)
 	rule(".form-grid",
 		display("grid"),
@@ -3149,9 +3189,17 @@ func registerGenerated() {
 	// 38px height as the pill controls next to it, a tidy gap, and a SINGLE leading glyph
 	// rendered slightly grayed (like the select-tag icons) so the label leads. Applied to
 	// every page's toolbar action buttons for one consistent control language.
+	// An icon-only tool button is a square the height of the tool row, so the header's ⋯,
+	// theme, music and profile buttons sit at the same size as the Filters button.
+	rule(".btn-tool.is-icon-only",
+		width("var(--tool-h)"),
+		padding("0"),
+		justifyContent("center"),
+	)
 	rule(".btn-tool",
-		minHeight("38px"),
-		padding("0.35rem 0.75rem"),
+		minHeight("var(--tool-h)"),
+		padding("var(--btn-py) var(--btn-px)"),
+		fontSize("var(--fs-body)"),
 		gap("0.4rem"),
 		borderRadius("var(--radius-lg)"),
 	)
@@ -4643,6 +4691,9 @@ func registerGenerated() {
 		customProp("--shadow-1", "0 1px 2px rgba(0,0,0,0.22)"),
 		customProp("--shadow-2", "0 8px 24px rgba(0,0,0,0.28)"),
 		customProp("--shadow-3", "0 20px 60px rgba(0,0,0,0.38)"),
+		// Menus lift off the card with a tight contact edge and a soft fall beneath it, so the
+		// options read as a layer above the content they open over.
+		customProp("--shadow-menu", "0 1px 2px rgba(0,0,0,0.3), 0 12px 28px rgba(0,0,0,0.45)"),
 		customProp("--type-11", "calc(11px * var(--ui-scale, 1))"),
 		customProp("--type-12", "calc(12px * var(--ui-scale, 1))"),
 		customProp("--type-13", "calc(13px * var(--ui-scale, 1))"),
@@ -4653,6 +4704,16 @@ func registerGenerated() {
 		customProp("--type-24", "calc(24px * var(--ui-scale, 1))"),
 		customProp("--type-32", "calc(32px * var(--ui-scale, 1))"),
 		customProp("--control-h", "36px"),
+		// The tool button is one height whether it carries a label or only a glyph, so every page
+		// action lines up with the Filters button.
+		customProp("--tool-h", "38px"),
+		// Section headings: one set of tokens, read by .card-title and every page that shows a
+		// card heading, so the same heading looks the same wherever it appears.
+		customProp("--heading-size", "1rem"),
+		customProp("--heading-weight", "600"),
+		customProp("--heading-line", "1.35"),
+		customProp("--heading-tracking", "-0.01em"),
+		customProp("--heading-color", "var(--text)"),
 		customProp("--control-h-compact", "32px"),
 		customProp("--field-h", "36px"),
 		customProp("--icon-button-size", "32px"),
@@ -7961,9 +8022,24 @@ func registerGenerated() {
 		flex("1 1 10rem"),
 		maxWidth("22rem"),
 		minWidth("9rem"),
+		minHeight("var(--field-h)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		background("var(--bg-elev)"),
+		transition("border-color .12s ease, box-shadow .12s ease"),
 	)
 	rule(".todo-ctrl-search.is-active, .fctrl-search.is-active",
 		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+	)
+	// Focus shows on the search box, not on the borderless input inside it, so the
+	// field reads as one edge with the accent ring the other inputs use.
+	rule(".fctrl-search:focus-within",
+		// The same border the Filters button takes when it is open, so focus reads as one state.
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
+	)
+	rule(".fctrl-input:focus, .fctrl-input:focus-visible",
+		outline("0"),
+		borderRadius("0"),
 	)
 	rule(".todo-search-input, .fctrl-input",
 		flex("1 1 auto"),
@@ -7973,11 +8049,6 @@ func registerGenerated() {
 		background("transparent"),
 		color("var(--text)"),
 		fontSize("0.9rem"),
-	)
-	rule(".fctrl-input:focus-visible",
-		outline("2px solid var(--accent)"),
-		outlineOffset("2px"),
-		borderRadius("var(--radius-xs)"),
 	)
 	rule(".todo-search-input::placeholder, .fctrl-input::placeholder",
 		color("var(--text-faint)"),
@@ -8312,8 +8383,8 @@ func registerGenerated() {
 	// popover paints over sibling cards instead of being covered by a later card in the
 	// grid (the hover transform makes each card its own stacking context). The card is
 	// position:relative, so z-index applies.
-	rule(".bento-goals .goal-card:has(.add-wrap [aria-expanded=\"true\"])",
-		zIndex("30"),
+	rule(".bento-goals .goal-card:has(.add-wrap > .add-menu:not(.hidden-menu))",
+		zIndex("var(--z-lift)"),
 	)
 	rule(".bento-goals .goal-card.is-soon",
 		boxShadow("inset 5px 0 0 #f59e0b"),
@@ -9755,17 +9826,17 @@ func registerGenerated() {
 		position("fixed"),
 		inset("0"),
 		background("rgba(4,4,6,.6)"),
-		backdropFilter("blur(3px)"),
+		backdropFilter("blur(0px)"),
 		display("grid"),
 		placeItems("center"),
 		opacity("0"),
 		pointerEvents("none"),
-		transition("opacity .28s"),
-		zIndex("var(--z-modal)"),
+		transition("opacity .28s var(--wonder-ease), backdrop-filter var(--wonder-dur-slow) var(--wonder-ease-out)"),
 	)
 	rule(".flip-backdrop.show",
 		opacity("1"),
 		pointerEvents("auto"),
+		backdropFilter("blur(calc(3px * var(--wonder-on)))"),
 	)
 	rule(".flip-wrap",
 		width("384px"),
@@ -9773,6 +9844,10 @@ func registerGenerated() {
 		height("470px"),
 		maxHeight("86vh"),
 		perspective("1500px"),
+		// The shadow belongs to the wrap, not the flipping face. The face sits in a preserve-3d
+		// layer, which clips its box-shadow to a hard-edged rectangle just outside the card.
+		borderRadius("var(--radius-sm)"),
+		boxShadow("0 30px 70px -20px rgba(0,0,0,.75)"),
 	)
 	rule(".flip-inner",
 		position("relative"),
@@ -9795,7 +9870,6 @@ func registerGenerated() {
 		overflow("hidden"),
 		display("flex"),
 		flexDirection("column"),
-		boxShadow("0 30px 70px -20px rgba(0,0,0,.75)"),
 	)
 	rule(".flip-back",
 		transform("rotateY(180deg)"),
@@ -10704,7 +10778,7 @@ func registerGenerated() {
 		fontSize("13px"),
 		lineHeight("1"),
 		boxShadow("0 6px 18px rgba(0,0,0,.28)"),
-		zIndex("60"),
+		zIndex("var(--z-overlay)"),
 		pointerEvents("auto"),
 	)
 	ruleMedia("(prefers-reduced-motion: no-preference)", "aside.rail.collapsed .nv:hover > span,\n        aside.rail.collapsed .nv:focus-visible > span,\n        aside.rail.collapsed .nv:focus-within > span",
@@ -10867,7 +10941,7 @@ func registerGenerated() {
 		border("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"),
 		padding("4px"),
-		boxShadow("0 8px 24px rgba(0,0,0,.3)"),
+		boxShadow("var(--shadow-menu)"),
 		display("flex"),
 		flexDirection("column"),
 		gap("2px"),
@@ -10919,27 +10993,33 @@ func registerGenerated() {
 		textAlign("left"),
 		padding(".5rem .7rem"),
 		borderRadius("5px"),
+		width("100%"),
+		boxSizing("border-box"),
 		background("transparent"),
-		border("0"),
+		border("1px solid transparent"),
 		color("var(--text)"),
 		cursor("pointer"),
 		font("inherit"),
 		fontSize("13px"),
 	)
+	// Hover and keyboard focus take the Filters button's active tints, so the menu highlights in
+	// the same colour as the control that opened it.
 	rule(".add-item:hover, .add-item:focus-visible",
-		background("var(--hover)"),
+		background("color-mix(in srgb, var(--accent) 12%, var(--bg-elev))"),
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
 	)
-	// A bento tile whose overflow ("⋯ More") menu is open must rise above its neighbours,
-	// or the dropdown is painted UNDER the next tile and its items can't be clicked (each
-	// tile is its own stacking context). Scope to the open state via the trigger's
-	// aria-expanded so closed tiles keep their normal stacking.
-	rule(".w:has(.add-wrap button[aria-expanded=\"true\"])",
+	// A bento tile whose overflow ("⋯ More") menu is showing must rise above its neighbours,
+	// or the dropdown is painted UNDER the next tile and its items cannot be clicked (each
+	// tile is its own stacking context). Key on the menu being present, not on aria-expanded:
+	// the menu fades out after aria-expanded has turned false, and it keeps its stacking until
+	// it is gone. Closed tiles keep their normal stacking.
+	rule(".w:has(.add-wrap > .add-menu:not(.hidden-menu))",
 		position("relative"),
-		zIndex("40"),
+		zIndex("var(--z-cell)"),
 	)
 	// The open menu itself sits above sibling content within the raised tile.
-	rule(".add-wrap button[aria-expanded=\"true\"] + .add-menu",
-		zIndex("41"),
+	rule(".add-wrap > .add-menu:not(.hidden-menu)",
+		zIndex("calc(var(--z-cell) + 1)"),
 	)
 	// Destructive overflow-menu item (e.g. Delete account): red text, red hover.
 	rule(".add-item.danger",
@@ -10952,17 +11032,17 @@ func registerGenerated() {
 	rule(".add-backdrop",
 		position("fixed"),
 		inset("0"),
-		zIndex("40"),
+		zIndex("var(--z-cell)"),
 	)
 	rule(".hidden-menu",
 		display("none"),
 	)
 	rule(".add-wrap:has(> .add-menu:not(.hidden-menu):not(.hidden))",
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 	)
 	rule(".row:has(.add-menu:not(.hidden-menu):not(.hidden)),\n      .budget:has(.add-menu:not(.hidden-menu):not(.hidden)),\n      li:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
 		position("relative"),
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 	)
 	// Table rows (e.g. the transactions DataTable) render as <tr>/<td>, which the
 	// selectors above don't match. When a row ⋯ menu is open the cell holding it must
@@ -10972,7 +11052,7 @@ func registerGenerated() {
 	// underneath (e.g. td-user) swallows the click. Lift + un-clip the open cell.
 	rule("td:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
 		position("relative"),
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 		overflow("visible"),
 	)
 	rule(".menu-btn:hover",
@@ -11883,23 +11963,6 @@ func registerGenerated() {
 	rule(".dash-check:hover",
 		color("var(--accent,#3b82f6)"),
 	)
-	rule(".cf-dialog-backdrop",
-		position("fixed"),
-		inset("0"),
-		// Above flip-panel modals (--z-modal) so a confirm/prompt triggered from inside a
-		// modal — e.g. Merge/Delete in the Review-duplicates modal — is reachable, not
-		// trapped behind the modal's backdrop.
-		zIndex("var(--z-dialog)"),
-		display("flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		padding("1rem"),
-	)
-	rule(".cf-dialog-scrim",
-		position("absolute"),
-		inset("0"),
-		background("rgba(0,0,0,.45)"),
-	)
 	rule(".cf-dialog",
 		position("relative"),
 		zIndex("1"),
@@ -12096,7 +12159,7 @@ func registerGenerated() {
 		bottom("0"),
 		left("0"),
 		right("0"),
-		zIndex("20"),
+		zIndex("var(--z-sticky)"),
 		background("var(--bg-elev, #1a1a1d)"),
 		borderTop("1px solid var(--border, #2a2a2c)"),
 		paddingBottom("env(safe-area-inset-bottom, 0px)"),
@@ -12213,9 +12276,6 @@ func registerGenerated() {
 	)
 	rule("[data-density=\"compact\"] .card",
 		borderRadius("var(--radius-lg)"),
-	)
-	rule(".card-title",
-		fontWeight("600"),
 	)
 	rule(".stat-value.neg",
 		color("var(--money-negative) !important"),
@@ -12504,7 +12564,7 @@ func registerGenerated() {
 	rule(".upsheet-backdrop",
 		position("fixed"),
 		inset("0"),
-		zIndex("60"),
+		zIndex("var(--z-overlay)"),
 		display("flex"),
 		alignItems("flex-end"),
 		justifyContent("center"),

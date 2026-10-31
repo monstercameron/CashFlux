@@ -8,8 +8,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // AddHost is mounted at the shell root (beside QuickAddHost). It reads the
@@ -65,6 +65,16 @@ func AddHost() uic.Node {
 			SaveLabel: uistate.T("accounts.addTitle"),
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),
+		})
+	case "service":
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("services.add"),
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			FormID:    "service-add-form",
+			SaveLabel: uistate.T("services.add"),
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.ServiceAddForm, screens.ServiceAddFormProps{OnDone: close}),
 		})
 	case "debt":
 		// Add debt: the same account form, pre-set to a liability (credit card) so the

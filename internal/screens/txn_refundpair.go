@@ -11,9 +11,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // RefundPairBody is the body of the refund-pairing flip modal (mounted at the
@@ -119,7 +119,7 @@ func RefundPairBody(_ struct{}) ui.Node {
 	}
 
 	return Div(css.Class(tw.FlexCol, tw.Gap3),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlinks.pairIntro")),
+		P(css.Class("muted", tw.Text13, "txn-hint-flush"), uistate.T("txnlinks.pairIntro")),
 		summary,
 		body,
 		Div(css.Class("modal-sticky-foot"),

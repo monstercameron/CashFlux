@@ -5,10 +5,14 @@
 package screens
 
 import (
-	"strconv"
+	"errors"
+	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountedit"
+	"github.com/monstercameron/CashFlux/internal/accountselect"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -17,16 +21,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
-	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // AccountEditFormProps drives the account editor form rendered inside the shell-root
@@ -50,6 +52,80 @@ func AccountUpdateActionLabel(accountID string) string {
 		}
 	}
 	return uistate.T("accounts.updateBalance")
+}
+
+// reconSeed is the reconcile form's starting statement balance and date. It is read once, when the
+// modal mounts.
+type reconSeed struct {
+	balance  string
+	dateISO  string
+	hasDraft bool
+}
+
+// loadReconSeed reads the saved reconcile draft for the account. Without a draft the statement date
+// starts at today.
+func loadReconSeed(accountID, todayISO string) *reconSeed {
+	bal, date, has := uistate.LoadReconcileDraft(accountID)
+	if !has || date == "" {
+		date = todayISO
+	}
+	return &reconSeed{balance: bal, dateISO: date, hasDraft: has}
+}
+
+// reconciliationEvent builds the history event for a statement balance. A forced event records the
+// difference that was left standing.
+func reconciliationEvent(stmtMinor int64, cur, statementDate string, diffMinor int64, forced bool) domain.Reconciliation {
+	ev := domain.Reconciliation{
+		At: time.Now(), StatementBalance: money.New(stmtMinor, cur), DifferenceMinor: diffMinor, Forced: forced,
+	}
+	if d, err := dateutil.ParseDate(strings.TrimSpace(statementDate)); err == nil {
+		ev.StatementDate = d
+	}
+	return ev
+}
+
+// editBalances is what the editor shows of the account's balances: the current and cleared figures,
+// the sign convention reconciliation runs in, and the balance strip. They cost a pass over every
+// transaction, so the editor computes them once per data revision, not on every keystroke.
+type editBalances struct {
+	Current, Cleared money.Money
+	// OK is false when the balances could not be calculated.
+	OK bool
+	// Conv is the sign convention of the account's stored balance, and ClearedStated the cleared
+	// balance in the stated convention (positive is money you have).
+	Conv          reconcile.Convention
+	ClearedStated money.Money
+	// Strip is the balance strip, built only for the modes that show it.
+	Strip ui.Node
+}
+
+// computeEditBalances calculates the editor's balances for the account. A failure is logged and
+// leaves OK false, so the editors say the figures are unavailable instead of showing a guess.
+func computeEditBalances(app *appstate.App, a domain.Account, found bool, mode string) editBalances {
+	var b editBalances
+	if !found {
+		return b
+	}
+	txns := app.Transactions()
+	var bErr, cErr error
+	b.Current, bErr = ledger.Balance(a, txns)
+	b.Cleared, cErr = ledger.ClearedBalance(a, txns)
+	balErr := errors.Join(bErr, cErr)
+	if balErr != nil {
+		slog.Error("account editor: calculate balances", "account_id", a.ID, "error", balErr)
+	}
+	b.OK = balErr == nil
+	// Reconciliation runs entirely in the stated convention, where positive is money you have and
+	// negative is money you owe. That is what the account card shows and what a statement prints. The
+	// stored figure cannot be used directly: a debt is stored positive by the "amount you owe" form
+	// and negative by sample data and some importers, so the same debt would reconcile against
+	// opposite statement figures depending on how it happens to be stored.
+	b.Conv, _ = reconcile.ConventionOf(a, b.Current.Amount)
+	b.ClearedStated = money.New(reconcile.Stated(b.Cleared.Amount, b.Conv), a.Currency)
+	if mode != uistate.AcctEditModeReconcile && mode != uistate.AcctEditModeTransfer {
+		b.Strip = accountBalancesStrip(app, a, b.Current, b.ClearedStated, b.OK)
+	}
+	return b
 }
 
 // AccountEditForm renders one of the account editors (edit / update-balance /
@@ -83,31 +159,24 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	}
 	dec := currency.Decimals(a.Currency)
 	cbs := buildAcctRowCallbacks(app)
+	todayISO := dateutil.FormatDate(time.Now())
 
-	// Current balances for the setbal delta preview + adjustment.
-	var curBal, curCleared money.Money
-	if app != nil {
-		curBal, _ = ledger.Balance(a, app.Transactions())
-		curCleared, _ = ledger.ClearedBalance(a, app.Transactions())
-	}
-	// C683: reconciliation runs entirely in the STATED convention — positive is
-	// money you have, negative is money you owe — because that is what the account
-	// card shows and what a statement prints. The raw stored figure cannot be used
-	// here: a debt is stored positive by the "amount you owe" add form and negative
-	// by the sample data and several importers, so diffing the stored number
-	// against a typed statement balance gave opposite answers for the same debt,
-	// and disagreed with the card about the same account.
-	reconConv, _ := reconcile.ConventionOf(a, curBal.Amount)
-	curClearedStated := money.New(reconcile.Stated(curCleared.Amount, reconConv), a.Currency)
+	// Current balances for the setbal delta preview, the balance strip and the reconcile
+	// difference. When either cannot be calculated the editors say so and the reconcile
+	// form stays closed, because a difference built on a guess is worse than none.
+	balances := ui.UseMemo(func() editBalances { return computeEditBalances(app, a, found, props.Mode) },
+		props.AccountID, props.Mode, revKey(app))
+	curBal, balancesOK := balances.Current, balances.OK
+	reconConv, curClearedStated := balances.Conv, balances.ClearedStated
 
 	// ---- setbal state ----
 	setBalAmtS := ui.UseState("")
 	setBalCatS := ui.UseState("")
-	// C684: the date the balance was TRUE as of, which is not always today — a
+	// The date the balance was true as of, which is not always today: a
 	// figure read on Friday and entered on Monday belongs to Friday, or every
-	// period total files it in the wrong month. Defaults to today, because that is
-	// the common case and nobody should have to fill in a date to update a balance.
-	setBalAsOfS := ui.UseState(time.Now().Format("2006-01-02"))
+	// period total files it in the wrong month. It defaults to today, the common case.
+	// Nobody should have to fill in a date just to update a balance.
+	setBalAsOfS := ui.UseState(todayISO)
 	onSetBalAmt := ui.UseEvent(func(v string) { setBalAmtS.Set(v) })
 	onSetBalAsOf := ui.UseEvent(func(v string) { setBalAsOfS.Set(v) })
 
@@ -115,31 +184,57 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	xferFromS := ui.UseState(a.ID)
 	xferToS := ui.UseState("")
 	xferAmtS := ui.UseState("")
-	xferDateS := ui.UseState(time.Now().Format("2006-01-02"))
+	xferDateS := ui.UseState(todayISO)
 	xferDescS := ui.UseState("")
 	onXferAmt := ui.UseEvent(func(v string) { xferAmtS.Set(v) })
 	onXferDate := ui.UseEvent(func(v string) { xferDateS.Set(v) })
 	onXferDesc := ui.UseEvent(func(v string) { xferDescS.Set(v) })
 
 	// ---- reconcile state ----
-	// QA R3 CF-02: an interrupted reconciliation resumes — the form seeds from a
-	// saved per-account draft ("Save & finish later") when one exists.
-	// C683: the journal of everything this modal writes, so Cancel can put it back.
-	// A ref, not state: it is recorded during handlers and read only when the modal
-	// closes, so mutating it must never trigger a re-render mid-write.
-	reconUndo := ui.UseRef(reconcile.NewSession())
-	draftBal, draftDate, hasReconDraft := uistate.LoadReconcileDraft(props.AccountID)
-	stmtDateInit := time.Now().Format("2006-01-02")
-	if hasReconDraft && draftDate != "" {
-		stmtDateInit = draftDate
+	// reconUndo journals everything this modal writes, so Cancel can put it back. It is
+	// a ref, not state: it is recorded during handlers and read only when the modal
+	// closes, so mutating it must never trigger a re-render mid-write. It is created on
+	// the first render only.
+	reconUndoRef := ui.UseRef[*reconcile.Session](nil)
+	if reconUndoRef.Get() == nil {
+		reconUndoRef.Set(reconcile.NewSession())
 	}
-	stmtBalS := ui.UseState(draftBal)
+	reconUndo := reconUndoRef.Get()
+	// reconAdjustKey identifies one adjustment action. It is created when the dialog opens and kept
+	// across failed attempts, so a retry returns the row the first attempt posted instead of posting
+	// a second one. A posted adjustment ends the action, and the next adjustment gets a new key.
+	reconAdjustKey := ui.UseRef("")
+	if reconAdjustKey.Get() == "" {
+		reconAdjustKey.Set(id.New())
+	}
+	// An interrupted reconciliation resumes: the form seeds from the saved per-account
+	// draft ("Save & finish later") when one exists. The draft is read on the first
+	// render only.
+	reconSeedRef := ui.UseRef[*reconSeed](nil)
+	if reconSeedRef.Get() == nil {
+		reconSeedRef.Set(loadReconSeed(props.AccountID, todayISO))
+	}
+	seed := reconSeedRef.Get()
+	stmtBalS := ui.UseState(seed.balance)
 	onStmtBal := ui.UseEvent(func(v string) { stmtBalS.Set(v) })
 	// Statement closing date — the "reconciled through" point recorded with the event.
-	stmtDateS := ui.UseState(stmtDateInit)
+	stmtDateS := ui.UseState(seed.dateISO)
 	onStmtDate := ui.UseEvent(func(v string) { stmtDateS.Set(v) })
-	// Recording a reconciliation appends to the account's capped history, confirms
-	// the balance (BalanceAsOf), and closes the modal. Only offered once the
+	// recordReconciliation saves a completed reconciliation to the account's capped
+	// history and confirms the balance (BalanceAsOf). Both the normal and the forced
+	// finish go through it; it reports whether the event was saved.
+	recordReconciliation := func(ev domain.Reconciliation) (appstate.RecordOutcome, bool) {
+		outcome, err := app.RecordReconciliation(a.ID, ev)
+		if err != nil {
+			postAcctWriteError("record reconciliation", err)
+			return outcome, false
+		}
+		uistate.ClearReconcileDraft(a.ID)
+		reconUndo.Forget() // a recorded reconciliation keeps what it wrote
+		uistate.BumpDataRevision()
+		return outcome, true
+	}
+	// Recording a reconciliation closes the modal. It is only offered once the
 	// difference is zero, so the recorded event is always a true match.
 	doRecordRecon := ui.UseEvent(Prevent(func() {
 		if app == nil {
@@ -148,74 +243,40 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		}
 		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
 		if perr != nil {
-			done()
+			uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
 			return
 		}
-		ev := domain.Reconciliation{At: time.Now(), StatementBalance: money.New(stmtMinor, a.Currency)}
-		if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
-			ev.StatementDate = d
-		}
-		cp := a
-		cp.Reconciliations = reconcile.Record(cp.Reconciliations, ev)
-		cp.BalanceAsOf = time.Now()
-		if err := app.PutAccount(cp); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		ev := reconciliationEvent(stmtMinor, a.Currency, stmtDateS.Get(), 0, false)
+		outcome, ok := recordReconciliation(ev)
+		if !ok {
 			return
 		}
-		// C684: reconciling says what the balance actually WAS, so any provisional
-		// checkpoint standing in for it up to this date has done its job and is now
-		// double-counting against the statement's own rows. A stand-in nothing ever
-		// removes is worse than no stand-in: the error compounds every time somebody
-		// checks their balance between statements.
-		retired := 0
-		app.BulkMutate(func() {
-			for _, cid := range provisional.SupersededBy(a.ID, app.Transactions(), ev.Through()) {
-				if err := app.DeleteTransaction(cid); err == nil {
-					retired++
-				}
-			}
-		})
-		uistate.ClearReconcileDraft(a.ID)
-		reconUndo.Get().Forget() // a completed reconciliation keeps what it wrote
-		uistate.BumpDataRevision()
-		msg := uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006"))
-		if retired > 0 {
-			msg += " " + uistate.T("accounts.reconCheckpointsRetired", retired)
+		msg := uistate.T("accounts.reconRecorded", uistate.CurrentPrefs().FormatDate(ev.Through()))
+		if outcome.Retired > 0 {
+			msg += " " + uistate.T("accounts.reconCheckpointsRetired", outcome.Retired)
 		}
 		uistate.PostNotice(msg, false)
 		done()
 	}))
-	// --- QA R3 CF-02: legitimate discrepancy-resolution paths -----------------
+	// Discrepancy-resolution paths.
 	// Post an adjustment transaction for the exact difference so the cleared
 	// balance meets the statement; cleared+reviewed, clearly labeled, undoable.
 	doReconAdjust := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			return
 		}
-		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
-		if perr != nil {
+		_, diff, ok := unresolvedDifference(app, a, reconConv, stmtBalS.Get(), dec)
+		if !ok {
 			return
 		}
-		cleared, _ := ledger.ClearedBalance(a, app.Transactions())
-		diff := reconcile.Diff(reconcile.Stated(cleared.Amount, reconConv), stmtMinor)
-		if diff.Reconciled {
+		desc := uistate.T("accounts.reconAdjustDesc", strings.TrimSpace(stmtDateS.Get()))
+		posted, err := app.PostReconcileAdjustmentOnce(a.ID, reconAdjustKey.Get(), diff.DifferenceMinor, reconConv, desc)
+		if err != nil {
+			postAcctWriteError("post reconcile adjustment", err)
 			return
 		}
-		// The difference is a STATED figure; the row posts into the account's own
-		// convention, or an adjustment on a positive-owed card would move the debt
-		// the wrong way by exactly twice itself.
-		t := domain.Transaction{
-			ID: id.New(), AccountID: a.ID, Date: time.Now(),
-			Desc:    uistate.T("accounts.reconAdjustDesc", strings.TrimSpace(stmtDateS.Get())),
-			Amount:  money.New(reconcile.Stored(diff.DifferenceMinor, reconConv), a.Currency),
-			Cleared: true, Reviewed: true,
-			Source: domain.TxnSourceManual,
-		}
-		if err := app.PutTransaction(t); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		reconUndo.Get().NoteCreated(t.ID)
+		reconAdjustKey.Set(id.New())
+		reconUndo.NoteCreated(posted.ID)
 		uistate.BumpDataRevision()
 		uistate.PostUndoable(uistate.T("accounts.reconAdjustPosted", fmtMoney(money.New(diff.DifferenceMinor, a.Currency))))
 	}))
@@ -225,13 +286,8 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		if app == nil {
 			return
 		}
-		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
-		if perr != nil {
-			return
-		}
-		cleared, _ := ledger.ClearedBalance(a, app.Transactions())
-		diff := reconcile.Diff(reconcile.Stated(cleared.Amount, reconConv), stmtMinor)
-		if diff.Reconciled {
+		stmtMinor, diff, ok := unresolvedDifference(app, a, reconConv, stmtBalS.Get(), dec)
+		if !ok {
 			return
 		}
 		diffStr := fmtMoney(money.New(diff.DifferenceMinor, a.Currency))
@@ -239,30 +295,17 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			if !ok {
 				return
 			}
-			ev := domain.Reconciliation{
-				At: time.Now(), StatementBalance: money.New(stmtMinor, a.Currency),
-				DifferenceMinor: diff.DifferenceMinor, Forced: true,
-			}
-			if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
-				ev.StatementDate = d
-			}
-			cp := a
-			cp.Reconciliations = reconcile.Record(cp.Reconciliations, ev)
-			cp.BalanceAsOf = time.Now()
-			if err := app.PutAccount(cp); err != nil {
-				uistate.PostNotice(err.Error(), true)
+			ev := reconciliationEvent(stmtMinor, a.Currency, stmtDateS.Get(), diff.DifferenceMinor, true)
+			if _, saved := recordReconciliation(ev); !saved {
 				return
 			}
-			uistate.ClearReconcileDraft(a.ID)
-			reconUndo.Get().Forget() // a recorded reconciliation keeps what it wrote
-			uistate.BumpDataRevision()
 			uistate.PostNotice(uistate.T("accounts.reconForceRecorded", diffStr), false)
 			done()
 		})
 	}))
 	// Save the half-done reconciliation and close; the draft re-seeds next open.
 	doReconSaveDraft := ui.UseEvent(Prevent(func() {
-		reconUndo.Get().Forget() // finishing later KEEPS the rows already ticked
+		reconUndo.Forget() // finishing later KEEPS the rows already ticked
 		uistate.SaveReconcileDraft(a.ID, strings.TrimSpace(stmtBalS.Get()), strings.TrimSpace(stmtDateS.Get()))
 		uistate.PostNotice(uistate.T("accounts.reconDraftSaved"), false)
 		done()
@@ -280,7 +323,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		cp := a
 		cp.Reconciliations = hist
 		if err := app.PutAccount(cp); err != nil {
-			uistate.PostNotice(err.Error(), true)
+			postAcctWriteError("reopen reconciliation", err)
 			return
 		}
 		stmtBalS.Set(money.FormatMinor(removed.StatementBalance.Amount, dec))
@@ -288,14 +331,14 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			stmtDateS.Set(dateutil.FormatDate(removed.StatementDate))
 		}
 		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("accounts.reconReopened", removed.Through().Format("Jan 2, 2006")), false)
+		uistate.PostNotice(uistate.T("accounts.reconReopened", uistate.CurrentPrefs().FormatDate(removed.Through())), false)
 	}))
 	// Investigate: jump to this account's cleared transactions in the ledger so a
 	// stubborn discrepancy can be hunted where the rows live.
 	reconNav := router.UseNavigate()
 	reconTxFilter := uistate.UseTxFilter()
 	doReconInvestigate := ui.UseEvent(Prevent(func() {
-		reconUndo.Get().Forget() // leaving to investigate KEEPS the rows already ticked
+		reconUndo.Forget() // leaving to investigate KEEPS the rows already ticked
 		f := uistate.TxFilter{Account: a.ID, Cleared: "yes"}.Normalize()
 		reconTxFilter.Set(f)
 		uistate.PersistTxFilter(f)
@@ -307,44 +350,41 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// to cleared in one action, so a statement whose lines are all present is
 	// reconciled without clicking each row. Undoable via the shared undo story
 	// (Ctrl+Z restores the pre-batch snapshot). The uncleared set is collected
-	// first, then mutated, so PutTransaction never reshapes the slice mid-loop.
+	// first, then mutated, so PutTransaction never reshapes the slice mid-loop. A row that
+	// cannot be saved is counted and reported; the other rows still clear.
 	doReconMarkAll := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			return
 		}
-		var pending []domain.Transaction
-		for _, t := range app.Transactions() {
-			if t.AccountID == a.ID && !t.Cleared {
-				pending = append(pending, t)
-			}
-		}
+		pending := reconcile.Uncleared(a.ID, app.Transactions())
 		if len(pending) == 0 {
 			return
 		}
+		now := time.Now()
+		failed := 0
 		for _, t := range pending {
-			reconUndo.Get().NoteBefore(t)
-			t = t.MarkCleared(true, time.Now())
-			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				return
+			reconUndo.NoteBefore(t)
+			if err := app.PutTransaction(t.MarkCleared(true, now)); err != nil {
+				slog.Error("reconcile: mark transaction cleared", "transaction_id", t.ID, "error", err)
+				failed++
 			}
 		}
 		uistate.BumpDataRevision()
+		if failed > 0 {
+			uistate.PostNotice(uistate.T("accounts.reconMarkAllPartial", failed), true)
+			return
+		}
 		postUndoStory(uistate.T("accounts.reconMarkAllDone", len(pending)))
 	}))
 
 	// ---- edit state ----
-	instInit := a.Institution
-	if instInit == "" {
-		instInit = a.Lender
-	}
 	lockISO := ""
 	if !a.LockUntil.IsZero() {
 		lockISO = dateutil.FormatDate(a.LockUntil)
 	}
 	nameS := ui.UseState(a.Name)
 	typeS := ui.UseState(string(a.Type))
-	ev := useEntityVarField(accountVarKind, nameS, a.VarName)
+	varField := useEntityVarField(accountVarKind, nameS, a.VarName)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
 	climS := ui.UseState(moneyMajorOrEmpty(a.CreditLimit, dec))
 	aprS := ui.UseState(rateFieldValue(a))
@@ -353,14 +393,14 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	stmtDayS := ui.UseState(intOrEmpty(a.StatementDay))
 	exclNWS := ui.UseState(a.ExcludeFromNetWorth)
 	lenderS := ui.UseState(a.Lender)
-	institutionS := ui.UseState(instInit)
-	// AC10: the structured institution-directory picker, separate from the legacy
-	// free-text Institution/Lender field above (which stays as a fallback label).
+	institutionS := ui.UseState(a.Institution)
+	// The structured institution-directory picker, separate from the free-text
+	// Institution/Lender field above (which stays as a fallback label).
 	instIDS := ui.UseState(a.InstitutionID)
-	// AC16: a beneficiary / transfer-on-death note, surfaced (never a password) in
+	// A beneficiary / transfer-on-death note, shown (never a password) in
 	// the estate emergency pack.
 	beneficiaryNoteS := ui.UseState(a.BeneficiaryNote)
-	// AC5: the per-account revaluation-cadence override (0 = the type default).
+	// The per-account revaluation-cadence override, in days (0 = the type default).
 	revalueDaysS := ui.UseState(intOrEmpty(a.RevalueDays))
 	// Stale-balance controls: persistent exemption + "ignore until" snooze date.
 	freshSnoozeISO := ""
@@ -380,10 +420,18 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// count it as a liability (debt) in the formulas — e.g. an HOA obligation. Seeded
 	// from the account's stored class. Ignored for typed accounts (their class follows
 	// the type).
-	asLiabS := ui.UseState(a.Type == domain.TypeOther && a.Class == domain.ClassLiability)
+	asLiabS := ui.UseState(accountedit.CountsAsDebt(a.Type, a.Class))
 	splitOwnS := ui.UseState(len(a.OwnershipShares) > 0)
 	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
 	customEditVals := ui.UseState(customMapToStrings(a.Custom))
+	// attemptedS is set by the first refused save. From then on the editor shows what is wrong with
+	// the fields as they stand, so a message goes away as soon as its field is fixed.
+	attemptedS := ui.UseState(false)
+	// foldForcedS keeps the details open after a refused save whose problem sits in them, when the
+	// editor opened with them folded away.
+	foldForcedS := ui.UseState(false)
+	errID := "acct-edit-save-err-" + a.ID
+	moveToProblem := useProblemFocus(errID)
 	notesS := ui.UseState(a.Notes)
 	onNotes := func(v string) { notesS.Set(v) }
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
@@ -397,7 +445,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onFreshSnooze := ui.UseEvent(func(v string) { freshSnoozeS.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
 	onInstitution := func(v string) { institutionS.Set(v) }
-	// C6: ONE institution concept. Picking a directory entry also fills the free-text
+	// One institution concept. Picking a directory entry also fills the free-text
 	// label from it (so the two storage fields agree and only one control shows);
 	// clearing the pick re-reveals the free-text fallback.
 	onInstID := func(v string) {
@@ -405,7 +453,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		if v != "" && app != nil {
 			for _, in := range sortedInstitutions(app) {
 				if in.ID == v {
-					institutionS.Set(in.TrimmedName())
+					institutionS.Set(in.CleanName())
 					break
 				}
 			}
@@ -433,28 +481,27 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 	// ---- save / cancel handlers (own the modal's commit actions) ----
 	cancel := ui.UseEvent(Prevent(func() { done() }))
-	// C683: Cancel in the reconcile modal means what the word says — the ledger
+	// In the reconcile modal, Cancel means what it says: the ledger
 	// goes back to how it was found. Ticking rows writes them immediately (every
-	// figure in the dialog recomputes from live data), so without this a person who
-	// opened the wrong statement, ticked twenty rows and pressed Cancel kept all
-	// twenty, with no record of which they were.
+	// figure in the dialog recomputes from live data), so Cancel rolls back what the
+	// modal wrote; otherwise a person who opened the wrong statement and ticked twenty
+	// rows would keep all twenty, with no record of which they were.
 	//
 	// It asks first, because the rows ticked so far are real work and Cancel is
 	// adjacent to the action that keeps them. Nothing to take back closes at once
 	// rather than asking a pointless question.
 	reconCancel := ui.UseEvent(Prevent(func() {
-		sess := reconUndo.Get()
-		if !sess.Touched() {
+		if !reconUndo.Touched() {
 			done()
 			return
 		}
-		n := sess.Count()
+		n := reconUndo.Count()
 		uistate.ConfirmModal(uistate.T("accounts.reconCancelConfirm", n), true, func(ok bool) {
 			if !ok {
 				return
 			}
 			var failed int
-			app.BulkMutate(func() { failed = sess.Rollback(app) })
+			app.BulkMutate(func() { failed = reconUndo.Rollback(app) })
 			if failed > 0 {
 				uistate.PostNotice(uistate.T("accounts.reconCancelPartial", failed), true)
 			} else {
@@ -464,248 +511,374 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			done()
 		})
 	}))
-	// AC10: "Manage institutions" jumps from the edit form straight to the
+	// "Manage institutions" jumps from the edit form straight to the
 	// institution-directory modal. Declared unconditionally here (not inside
 	// editForm) so the hook count stays stable across every switch branch below.
 	institutionsMgrAtom := uistate.UseInstitutionsManager()
 	openInstitutionsFromEditor := ui.UseEvent(Prevent(func() { institutionsMgrAtom.Set(true) }))
+	// A transfer is checked here, before it is posted, so a figure or date that cannot be read
+	// leaves the form open with its message instead of closing on a transfer that never happened.
 	doTransfer := ui.UseEvent(Prevent(func() {
-		if xferFromS.Get() == xferToS.Get() || xferToS.Get() == "" {
+		if app == nil || xferFromS.Get() == xferToS.Get() || xferToS.Get() == "" {
 			return
 		}
-		cbs.OnTransfer(xferFromS.Get(), xferToS.Get(), xferAmtS.Get(), xferDateS.Get(), xferDescS.Get())
-		done()
+		if _, err := accountselect.ParseTransfer(app.Accounts(), accountselect.TransferInput{
+			FromID: xferFromS.Get(), ToID: xferToS.Get(), Amount: xferAmtS.Get(), Date: xferDateS.Get(),
+			Desc: xferDescS.Get(), DefaultDesc: uistate.T("accounts.transferDefaultDesc"),
+		}); err != nil {
+			uistate.PostNotice(transferFormError(err), true)
+			return
+		}
+		if cbs.OnTransfer(xferFromS.Get(), xferToS.Get(), xferAmtS.Get(), xferDateS.Get(), xferDescS.Get()) {
+			done()
+		}
 	}))
+	// checkEdit checks the editor's fields the way a save does: what the account builder refuses, a
+	// variable name another account uses, a custom value that does not validate, and a new value or
+	// as-of date that cannot be read. It reads the live lists, so it is right inside a handler as well
+	// as in the render. The account it returns is only fit to save when the problem is empty.
+	checkEdit := func() (domain.Account, formProblem) {
+		members := app.Members()
+		// Split ownership needs two members to split between; with fewer the editor hides it, so the
+		// save does not hold the account to a total the person cannot fix, and the shares the account
+		// already has are kept as they are.
+		splitAvailable := accountedit.SplitAvailable(len(members))
+		split := splitOwnS.Get() && splitAvailable
+		// An account stored without a currency is saved in the household's base currency.
+		cur := a.Currency
+		if strings.TrimSpace(cur) == "" {
+			cur = accountedit.BaseCurrencyOrDefault(app.Settings().BaseCurrency)
+		}
+		cp, problem := checkAccountForm(a, accountedit.Fields{
+			Name: nameS.Get(), Type: typeS.Get(), Owner: ownerS.Get(), Currency: cur,
+			Opening: balS.Get(), AsLiability: asLiabS.Get(), CreditLimit: climS.Get(), APR: aprS.Get(), APY: apyS.Get(),
+			MinPayment: minpS.Get(), DueDay: dueS.Get(), StatementDay: stmtDayS.Get(), Lender: lenderS.Get(),
+			ExpectedReturn: retS.Get(), Liquidity: liqS.Get(), Stability: stabS.Get(), LockUntil: lockS.Get(),
+			Institution: institutionS.Get(), InstitutionID: instIDS.Get(), Notes: notesS.Get(),
+			BeneficiaryNote: beneficiaryNoteS.Get(), RevalueDays: revalueDaysS.Get(), FreshnessExempt: freshExemptS.Get(),
+			SnoozeUntil: freshSnoozeS.Get(), ExcludeNetWorth: exclNWS.Get(), VarName: varField.VarName.Get(),
+			Shares: sharesOrNil(sharesMapS.Get(), split), MemberIDs: memberIDsOf(members),
+		}, accountCheck{
+			SelfID: a.ID, Accounts: app.Accounts(), Defs: app.CustomFieldDefsFor("account"), Custom: customEditVals.Get(),
+			IDs: accountInputIDs("acct-edit-"+a.ID, "acct-edit-"+a.ID), VarInputID: "acct-edit-varname-" + a.ID,
+		})
+		if !splitAvailable {
+			cp.OwnershipShares = cloneSharesMap(a.OwnershipShares)
+		}
+		return cp, valueUpdateProblem(problem, setBalAmtS.Get(), setBalAsOfS.Get(), dec, a.ID)
+	}
+	// saveEdit applies the form through the shared account builder. A field the builder
+	// rejects (an unreadable opening balance, lock-until or snooze date, a share total that
+	// is not 100), a new value or date that cannot be read, or a variable name that is taken
+	// shows its message under the form, moves focus to the input, and nothing is saved.
 	saveEdit := ui.UseEvent(Prevent(func() {
-		// Block the save on a variable-name collision; the field already shows the warning
-		// inline (there's no separate error line in this editor).
-		if entityVarCollision(accountVarKind, accountVarEntities(app.Accounts()), a.ID, ev.VarName.Get(), nameS.Get()) != "" {
+		if app == nil {
 			return
 		}
-		cp := a
-		cp.Name = strings.TrimSpace(nameS.Get())
-		cp.VarName = strings.TrimSpace(ev.VarName.Get())
-		cp.OwnerID = ownerS.Get()
-		if splitOwnS.Get() {
-			cp.OwnershipShares = cloneSharesMap(sharesMapS.Get())
-		} else {
-			cp.OwnershipShares = nil
-		}
-		if ownerS.Get() == domain.GroupOwnerID {
-			cp.Scope = domain.ScopeShared
-		} else {
-			cp.Scope = domain.ScopeIndividual
-		}
-		if amt, err := money.ParseMinor(strings.TrimSpace(balS.Get()), dec); err == nil {
-			cp.OpeningBalance = money.New(amt, a.Currency)
-		}
-		// Account type is editable (e.g. a line of credit → credit card, or an asset
-		// reclassified as a liability). The class follows the type, and the fields
-		// that don't belong to the new class are cleared so a reclassified account
-		// doesn't carry stale credit-limit/lock-until data.
-		selType := domain.AccountType(typeS.Get())
-		cp.Type = selType
-		cp.Class = selType.Class()
-		// "Other" accounts can be explicitly counted as a liability (debt) via the toggle,
-		// overriding the type's natural class so the liability formulas include them.
-		if selType == domain.TypeOther && asLiabS.Get() {
-			cp.Class = domain.ClassLiability
-		}
-		if cp.Class == domain.ClassLiability {
-			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
-			cp = applyRateAPR(cp, aprS.Get())
-			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
-			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
-			cp.StatementDay = textutil.ParseInt(stmtDayS.Get())
-			cp.Lender = strings.TrimSpace(lenderS.Get())
-			cp.ExpectedReturnAPR = 0
-			cp.APY = 0
-			cp.LiquidityScore = 0
-			cp.StabilityScore = 0
-			cp.LockUntil = time.Time{}
-		} else {
-			cp.ExpectedReturnAPR = textutil.ParseFloat(retS.Get())
-			cp.APY = textutil.ParseFloat(apyS.Get())
-			cp.LiquidityScore = textutil.ParseInt(liqS.Get())
-			cp.StabilityScore = textutil.ParseInt(stabS.Get())
-			if lu := strings.TrimSpace(lockS.Get()); lu != "" {
-				if d, err := dateutil.ParseDate(lu); err == nil {
-					cp.LockUntil = d
-				}
-			} else {
-				cp.LockUntil = time.Time{}
+		attemptedS.Set(true)
+		cp, problem := checkEdit()
+		if problem.Any() {
+			if problem.NeedsAdvanced {
+				editAdvOpen.Set(true)
 			}
-			cp.CreditLimit = money.Money{}
-			cp = cp.WithoutRateAPR()
-			cp.MinPayment = money.Money{}
-			cp.DueDayOfMonth = 0
-			cp.StatementDay = 0
-			cp.Lender = ""
-		}
-		// AC11: exclude-from-net-worth applies to any account class.
-		cp.ExcludeFromNetWorth = exclNWS.Get()
-		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
-		cp.InstitutionID = instIDS.Get()
-		cp.Notes = strings.TrimSpace(notesS.Get())
-		// AC16: beneficiary / transfer-on-death note — plain text, never a password.
-		cp.BeneficiaryNote = strings.TrimSpace(beneficiaryNoteS.Get())
-		// AC5: revaluation-cadence override (0 = the account type's default cadence).
-		cp.RevalueDays = textutil.ParseInt(revalueDaysS.Get())
-		// Stale-balance controls: exemption + snooze-until (blank = no snooze).
-		cp.FreshnessExempt = freshExemptS.Get()
-		cp.FreshnessSnoozeUntil = time.Time{}
-		if s := strings.TrimSpace(freshSnoozeS.Get()); s != "" {
-			if d, derr := dateutil.ParseDate(s); derr == nil {
-				cp.FreshnessSnoozeUntil = d
+			if problem.inDetails(a.ID) {
+				foldForcedS.Set(true)
 			}
-		}
-		if defs := app.CustomFieldDefsFor("account"); len(defs) > 0 {
-			cp.Custom = customValuesToMap(defs, customEditVals.Get())
+			moveToProblem(problem.First())
+			return
 		}
 		// Merged update-value + edit: when the user typed a new current value, OnSetBalance
 		// persists cp (all edits) AND posts the balance adjustment + freshens BalanceAsOf in
 		// one write — so we must NOT also call OnSave (that would double-write the account and
 		// clobber the adjustment's freshness). When the value field is blank, it's a plain edit.
+		var saved bool
 		if strings.TrimSpace(setBalAmtS.Get()) != "" {
-			cbs.OnSetBalance(cp, curBal, setBalAmtS.Get(), setBalCatS.Get(), strings.TrimSpace(setBalAsOfS.Get()))
+			// The value and the date were checked above, so a refusal here comes after the account
+			// edits were stored (the balance step reads the stored account). When that happened the
+			// person is told which part was saved, and the form stays open to try the balance again.
+			before, hadBefore := storedAccount(app, a.ID)
+			saved = cbs.OnSetBalance(cp, setBalAmtS.Get(), setBalCatS.Get(), strings.TrimSpace(setBalAsOfS.Get()))
+			if !saved {
+				if after, ok := storedAccount(app, a.ID); ok && hadBefore && !reflect.DeepEqual(before, after) {
+					uistate.PostNotice(uistate.T("accounts.editSavedBalanceNot", after.Name), true)
+				}
+			}
 		} else {
-			cbs.OnSave(cp)
+			saved = cbs.OnSave(cp)
 		}
-		done()
+		if saved {
+			done()
+		}
 	}))
 
 	if !found {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
-
-	// The 4-way balance strip + provenance chip shown above the value-update
-	// section: current / cleared / statement (last reconciliation) / 30-day
-	// projected, and how the balance most recently moved. Adjustments are
-	// identified by the update-balance description (they're marked at the UI
-	// layer, not structurally).
-	var balancesNode ui.Node = Fragment()
-	if app != nil {
-		provKind, provAt := ledger.BalanceProvenance(a.ID, app.Transactions(), isBalanceAdjustment)
-		provKey := map[ledger.ProvenanceKind]string{
-			ledger.ProvenanceOpening:  "accounts.provOpening",
-			ledger.ProvenanceAdjusted: "accounts.provAdjusted",
-			ledger.ProvenanceImported: "accounts.provImported",
-			ledger.ProvenanceDerived:  "accounts.provDerived",
-		}[provKind]
-		provText := uistate.T(provKey)
-		if !provAt.IsZero() {
-			provText += uistate.T("accounts.provAsOf", provAt.Format("Jan 2, 2006"))
-		}
-		stmtStr := uistate.T("accounts.balNone")
-		if n := len(a.Reconciliations); n > 0 {
-			stmtStr = fmtMoney(a.Reconciliations[n-1].StatementBalance)
-		}
-		projStr := uistate.T("accounts.balNone")
-		if a.Class != domain.ClassLiability && !isValuationType(a.Type) {
-			proj := app.ProjectAccount(a.ID, time.Now(), 30)
-			projStr = fmtMoney(money.New(proj.End, a.Currency))
-		}
-		stat := func(key, val, testid string) ui.Node {
-			return Div(Style(map[string]string{"display": "grid", "gap": "0.1rem"}),
-				Span(css.Class("t-caption", tw.TextDim), uistate.T(key)),
-				Span(Attr("data-testid", testid), val))
-		}
-		balancesNode = Div(css.Class("acct-bal-strip"), Attr("data-testid", "acct-bal-4way"),
-			Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.4rem 1.25rem",
-				"padding": "0.5rem 0.65rem", "border": "1px solid var(--border)", "border-radius": "8px",
-				"margin-bottom": "0.6rem"}),
-			stat("accounts.balCurrent", fmtMoney(curBal), "acct-bal-current"),
-			stat("accounts.balCleared", fmtMoney(curCleared), "acct-bal-cleared"),
-			stat("accounts.balStatement", stmtStr, "acct-bal-statement"),
-			stat("accounts.balProjected", projStr, "acct-bal-projected"),
-			Div(Style(map[string]string{"flex": "1 1 100%"}),
-				Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-bal-provenance"), provText)),
-		)
+	var problem formProblem
+	if attemptedS.Get() {
+		_, problem = checkEdit()
 	}
 
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
-		return reconcileForm(a, curClearedStated, reconConv, reconUndo.Get(), dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, reconCancel, doRecordRecon, cbs.OnRefresh, app,
-			reconcileActions{Adjust: doReconAdjust, Force: doReconForce, Investigate: doReconInvestigate,
-				SaveDraft: doReconSaveDraft, Reopen: doReconReopen, MarkAll: doReconMarkAll, HasDraft: hasReconDraft})
+		return reconcileForm(reconcileProps{
+			Account: a, Cleared: curClearedStated, Conv: reconConv, Session: reconUndo, Decimals: dec, App: app,
+			Unavailable: !balancesOK,
+			StmtBal:     stmtBalS, StmtDate: stmtDateS, OnStmtBal: onStmtBal, OnStmtDate: onStmtDate,
+			Cancel: reconCancel, OnRecord: doRecordRecon, OnRefresh: cbs.OnRerender,
+			Actions: reconcileActions{Adjust: doReconAdjust, Force: doReconForce, Investigate: doReconInvestigate,
+				SaveDraft: doReconSaveDraft, Reopen: doReconReopen, MarkAll: doReconMarkAll, HasDraft: seed.hasDraft},
+		})
 	case uistate.AcctEditModeTransfer:
-		return transferForm(a, app, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
+		return transferForm(transferProps{
+			Account: a, App: app, Accounts: app.Accounts(),
+			From: xferFromS, To: xferToS, Amount: xferAmtS, Date: xferDateS, Desc: xferDescS,
+			OnAmount: onXferAmt, OnDate: onXferDate, OnDesc: onXferDesc, OnSubmit: doTransfer, Cancel: cancel,
+		})
 	default:
 		// The edit and "update value / balance" actions share one merged editor: it can
 		// update the current value AND edit the account's details in a single save. When
-		// opened from "Update value" (setbal mode) the value field is auto-focused; from
-		// "Edit" the name field is. Both persist through the same saveEdit handler.
-		focusValue := props.Mode == uistate.AcctEditModeSetBal
-		return editForm(a, dec, curBal, app.Members(), app.Accounts(), app.Categories(), app.CustomFieldDefsFor("account"),
-			nameS, typeS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS,
-			setBalAmtS, setBalCatS,
-			editAdvOpen, asLiabS, splitOwnS, sharesMapS, customEditVals,
-			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock,
-			onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt, onCustomEdit, saveEdit, cancel, focusValue,
-			acctEditExtra{
-				stmtDayS: stmtDayS, exclNWS: exclNWS, onStmtDay: onStmtDay, onToggleExclNW: onToggleExclNW,
-				instIDS: instIDS, onInstID: onInstID, openInstitutions: openInstitutionsFromEditor,
-				beneficiaryNoteS: beneficiaryNoteS, onBeneficiaryNote: onBeneficiaryNote,
-				revalueDaysS: revalueDaysS, onRevalueDays: onRevalueDays,
-				freshExemptS: freshExemptS, freshSnoozeS: freshSnoozeS,
-				onToggleFreshExempt: onToggleFreshExempt, onFreshSnooze: onFreshSnooze,
-				balancesNode: balancesNode,
-				setBalAsOfS:  setBalAsOfS, onSetBalAsOf: onSetBalAsOf,
-			})
+		// opened from "Update value" (setbal mode) the value field is auto-focused and the
+		// details fold; from "Edit" the name field is focused and the details are open. Both
+		// persist through the same saveEdit handler.
+		return editForm(editFormState{
+			Account: a, Decimals: dec, CurBal: curBal, BalancesOK: balancesOK,
+			Balances:   balances.Strip,
+			Members:    app.Members(),
+			Accounts:   app.Accounts(),
+			Categories: app.Categories(), CustomDefs: app.CustomFieldDefsFor("account"),
+			ValueFirst: props.Mode == uistate.AcctEditModeSetBal,
+
+			Name: nameS, Type: typeS, VarName: varField.VarName, Owner: ownerS, Balance: balS, CreditLimit: climS, APR: aprS,
+			MinPayment: minpS, DueDay: dueS, Lender: lenderS, Institution: institutionS, ExpectedReturn: retS, APY: apyS,
+			Liquidity: liqS, Stability: stabS, LockUntil: lockS, Notes: notesS, SetBalAmt: setBalAmtS, SetBalCat: setBalCatS,
+			SetBalAsOf: setBalAsOfS, StatementDay: stmtDayS, InstitutionID: instIDS, BeneficiaryNote: beneficiaryNoteS,
+			RevalueDays: revalueDaysS, FreshSnooze: freshSnoozeS, Problem: problem, ErrID: errID, FoldForced: foldForcedS.Get(),
+			AdvOpen: editAdvOpen, AsLiability: asLiabS, SplitOwn: splitOwnS, ExcludeNetWorth: exclNWS, FreshExempt: freshExemptS,
+			Shares: sharesMapS, CustomVals: customEditVals,
+
+			OnName: varField.OnName, OnVarName: varField.OnVarName, OnBalance: onBal, OnCreditLimit: onClim, OnAPR: onApr,
+			OnMinPayment: onMinp, OnDueDay: onDue, OnLender: onLender, OnExpectedReturn: onRet, OnAPY: onApy,
+			OnLiquidity: onLiq, OnStability: onStab, OnLockUntil: onLock, OnSetBalAmt: onSetBalAmt, OnSetBalAsOf: onSetBalAsOf,
+			OnStatementDay: onStmtDay, OnRevalueDays: onRevalueDays, OnFreshSnooze: onFreshSnooze,
+			OnToggleAdv: onToggleEditAdv, OnToggleAsLiability: onToggleAsLiab, OnToggleSplit: onToggleSplitOwn,
+			OnToggleExcludeNW: onToggleExclNW, OnToggleFreshExempt: onToggleFreshExempt, OpenInstitutions: openInstitutionsFromEditor,
+			OnSave: saveEdit, OnCancel: cancel,
+			OnInstitution: onInstitution, OnInstitutionID: onInstID, OnNotes: onNotes, OnBeneficiaryNote: onBeneficiaryNote,
+			OnCustomEdit: onCustomEdit,
+		})
 	}
 }
 
-// acctValueUpdateSection is the "update value / balance" block folded into the top of
-// the merged editor (it replaced the standalone update-balance modal). Typing a new
-// value records an adjustment so the computed balance matches; leaving it blank keeps
-// the balance as-is (a plain edit). It shows the current balance for context, a live
-// delta preview, and — once a value is entered — the category for the adjustment.
-func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBalAmtS, setBalCatS, setBalAsOfS ui.State[string], onSetBalAmt, onSetBalAsOf ui.Handler, categories []domain.Category, focusValue bool) ui.Node {
-	rawAmt := strings.TrimSpace(setBalAmtS.Get())
-	var deltaNode ui.Node = Fragment()
-	if rawAmt != "" {
-		if targetMinor, parseErr := money.ParseMinor(rawAmt, dec); parseErr == nil {
-			dp := reconcile.PreviewDelta(curBal.Amount, targetMinor)
-			sign := ""
-			if dp.AdjustmentMinor > 0 {
-				sign = "+"
-			}
-			adjLabel := sign + money.FormatMinor(dp.AdjustmentMinor, dec)
-			if dp.NeedsAdjustment {
-				deltaNode = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-					uistate.T("accounts.setBalanceDeltaPreview",
-						fmtMoney(money.New(curBal.Amount, a.Currency)),
-						fmtMoney(money.New(targetMinor, a.Currency)), adjLabel))
-			} else {
-				deltaNode = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-					uistate.T("accounts.setBalanceNoAdjNeeded"))
-			}
+// accountBalancesStrip is the 4-way balance strip and provenance chip shown above the
+// value-update section: current / cleared / statement (last reconciliation) / 30-day
+// projected, and how the balance most recently moved. Adjustments are identified by the
+// update-balance description (they're marked at the UI layer, not structurally). The current and
+// cleared figures arrive in the stated convention. When the balances could not be calculated
+// those two show as unavailable. The editor builds it only in its edit and update-value modes.
+func accountBalancesStrip(app *appstate.App, a domain.Account, curBal, curClearedStated money.Money, balancesOK bool) ui.Node {
+	provKind, provAt := ledger.BalanceProvenance(a.ID, app.Transactions(), isBalanceAdjustment)
+	provKey := map[ledger.ProvenanceKind]string{
+		ledger.ProvenanceOpening:  "accounts.provOpening",
+		ledger.ProvenanceAdjusted: "accounts.provAdjusted",
+		ledger.ProvenanceImported: "accounts.provImported",
+		ledger.ProvenanceDerived:  "accounts.provDerived",
+	}[provKind]
+	provText := uistate.T(provKey)
+	if !provAt.IsZero() {
+		provText += uistate.T("accounts.provAsOf", uistate.CurrentPrefs().FormatDate(provAt))
+	}
+	stmtStr := uistate.T("accounts.balNone")
+	if n := len(a.Reconciliations); n > 0 {
+		stmtStr = fmtMoney(a.Reconciliations[n-1].StatementBalance)
+	}
+	projStr := uistate.T("accounts.balNone")
+	if a.ShowsCashCurve() {
+		proj, err := app.ProjectAccount(a.ID, time.Now(), 30)
+		if err != nil {
+			projStr = uistate.T("calculation.unavailable")
+		} else if proj.Known() {
+			projStr = fmtMoney(money.New(proj.End, a.Currency))
 		}
 	}
+	currentStr, clearedStr := uistate.T("calculation.unavailable"), uistate.T("calculation.unavailable")
+	if balancesOK {
+		currentStr, clearedStr = fmtMoney(statedBalance(a, curBal)), fmtMoney(curClearedStated)
+	}
+	stat := func(key, val, testid string) ui.Node {
+		return Div(css.Class("acct-bal-stat"),
+			Span(css.Class("t-caption", tw.TextDim), uistate.T(key)),
+			Span(Attr("data-testid", testid), val))
+	}
+	return Div(css.Class("acct-bal-strip"), Attr("data-testid", "acct-bal-4way"),
+		stat("accounts.balCurrent", currentStr, "acct-bal-current"),
+		stat("accounts.balCleared", clearedStr, "acct-bal-cleared"),
+		stat("accounts.balStatement", stmtStr, "acct-bal-statement"),
+		stat("accounts.balProjected", projStr, "acct-bal-projected"),
+		Div(css.Class("acct-bal-prov"),
+			Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-bal-provenance"), provText)),
+	)
+}
+
+// statedBalance converts a stored balance into the stated convention the app shows and
+// the user types: positive is money you have, negative is money you owe. The update-value
+// section and the balance strip both display through it.
+func statedBalance(a domain.Account, stored money.Money) money.Money {
+	conv, _ := reconcile.ConventionOf(a, stored.Amount)
+	return money.New(reconcile.Stated(stored.Amount, conv), a.Currency)
+}
+
+// unresolvedDifference reads the typed statement balance and compares it with the cleared
+// balance, which is stated in the account's convention. ok is false when no valid balance
+// has been typed, the cleared balance cannot be calculated, or the account already
+// reconciles, so there is nothing to resolve.
+func unresolvedDifference(app *appstate.App, a domain.Account, conv reconcile.Convention, stmtText string, dec int) (int64, reconcile.Result, bool) {
+	stmtMinor, err := money.ParseMinor(strings.TrimSpace(stmtText), dec)
+	if err != nil {
+		return 0, reconcile.Result{}, false
+	}
+	cleared, err := ledger.ClearedBalance(a, app.Transactions())
+	if err != nil {
+		slog.Error("reconcile: calculate cleared balance", "account_id", a.ID, "error", err)
+		return 0, reconcile.Result{}, false
+	}
+	diff, err := reconcile.DiffChecked(reconcile.Stated(cleared.Amount, conv), stmtMinor)
+	if err != nil {
+		slog.Error("reconcile: calculate difference", "account_id", a.ID, "error", err)
+		return 0, reconcile.Result{}, false
+	}
+	return stmtMinor, diff, !diff.Reconciled
+}
+
+// signedDiffLabel formats a difference with an explicit plus sign when it is positive,
+// for example "+$40.50" or "−$26,711.50".
+func signedDiffLabel(minor int64, sym string, dec int) string {
+	label := fmtSignedMoney(minor, sym, dec)
+	if minor > 0 {
+		label = "+" + label
+	}
+	return label
+}
+
+// setBalanceNote says, in one line, what a typed figure does. For a debt it says whether
+// the debt goes down or up; anything else shows the signed change. A debt typed without
+// its minus sign also gets a short warning under the line. Both figures are in the
+// stated convention.
+func setBalanceNote(a domain.Account, curStated, targetStated int64) ui.Node {
+	preview := reconcile.PreviewDelta(curStated, targetStated)
+	delta := preview.AdjustmentMinor
+	isDebt := accountedit.ClassOf(a.Type, accountedit.CountsAsDebt(a.Type, a.Class)) == domain.ClassLiability
+	var text string
+	switch shape := reconcile.ClassifyChange(curStated, targetStated); {
+	case !preview.NeedsAdjustment:
+		text = uistate.T("accounts.setBalanceNoAdjNeeded")
+	case isDebt && shape == reconcile.ShapeDebtFalls:
+		text = uistate.T("accounts.setBalanceDebtFalls", fmtMoney(money.New(delta, a.Currency)))
+	case isDebt && shape == reconcile.ShapeDebtRises:
+		text = uistate.T("accounts.setBalanceDebtRises", fmtMoney(money.New(-delta, a.Currency)))
+	default:
+		text = uistate.T("accounts.setBalanceDeltaPreview", signedDiffLabel(delta, currency.Symbol(a.Currency), currency.Decimals(a.Currency)))
+	}
+	line := P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"), text)
+	warning := If(isDebt && reconcile.LooksLikeUnsignedDebt(curStated, targetStated), P(css.Class("t-caption"), Attr("data-testid", "setbal-unsigned-warning"),
+		uistate.T("accounts.setBalanceUnsignedDebt", fmtMoney(money.New(-targetStated, a.Currency)))))
+	return Div(line, warning)
+}
+
+// setBalanceInputID is the id of the new-value input of the account's editor.
+func setBalanceInputID(accountID string) string { return "acct-setbal-" + accountID }
+
+// setBalanceAsOfInputID is the id of the as-of date input that appears beside the new value.
+func setBalanceAsOfInputID(accountID string) string { return "acct-setbal-asof-" + accountID }
+
+// valueUpdateProblem adds to the problem anything wrong with a new value and the date it was true
+// as of. A blank value leaves the balance as it is, so nothing is checked then, and a blank date
+// means today.
+func valueUpdateProblem(p formProblem, amount, asOf string, decimals int, accountID string) formProblem {
+	amount = strings.TrimSpace(amount)
+	if amount == "" {
+		return p
+	}
+	if _, err := money.ParseMinor(amount, decimals); err != nil {
+		p = p.And(uistate.T("accounts.invalidBalance"), setBalanceInputID(accountID), false)
+	}
+	if date := strings.TrimSpace(asOf); date != "" {
+		if _, err := dateutil.ParseDate(date); err != nil {
+			p = p.And(uistate.T("accounts.setBalanceAsOfInvalid"), setBalanceAsOfInputID(accountID), false)
+		}
+	}
+	return p
+}
+
+// storedAccount is the account with the id as the household has it stored right now.
+func storedAccount(app *appstate.App, accountID string) (domain.Account, bool) {
+	for _, ac := range app.Accounts() {
+		if ac.ID == accountID {
+			return ac, true
+		}
+	}
+	return domain.Account{}, false
+}
+
+// inDetails reports whether the problem concerns the account's details, which an editor opened on
+// "Update balance" folds away, and not only the new value at the top. A problem that names no input
+// (a share total, a custom value) is about the details too.
+func (p formProblem) inDetails(accountID string) bool {
+	if len(p.Inputs) == 0 || p.Unplaced {
+		return true
+	}
+	for _, id := range p.Inputs {
+		if id != setBalanceInputID(accountID) && id != setBalanceAsOfInputID(accountID) {
+			return true
+		}
+	}
+	return false
+}
+
+// acctValueUpdateSection is the "update value / balance" block at the top of the merged
+// editor. Entering a value records an adjustment so the balance matches it; leaving it
+// blank keeps the balance as-is. The block shows the current balance, a live delta
+// preview, and, once a value is entered, the adjustment's category and date. curStated
+// is the current balance in the stated convention; balanceKnown is false when it could not be
+// calculated, and the block then shows no current figure and no preview.
+func acctValueUpdateSection(a domain.Account, curStated money.Money, balanceKnown bool, dec int, setBalAmtS, setBalCatS, setBalAsOfS ui.State[string], onSetBalAmt, onSetBalAsOf ui.Handler, categories []domain.Category, valueFirst bool, problem formProblem, errID string) ui.Node {
+	rawAmt := strings.TrimSpace(setBalAmtS.Get())
+	deltaNode := ui.If(rawAmt != "" && balanceKnown, func() ui.Node {
+		targetMinor, parseErr := money.ParseMinor(rawAmt, dec)
+		if parseErr != nil {
+			return Fragment()
+		}
+		return setBalanceNote(a, curStated.Amount, targetMinor)
+	})
 	catOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.setBalanceNoCategory")}}
 	for _, c := range categories {
 		catOpts = append(catOpts, uiw.SelectOption{Value: c.ID, Label: c.Name})
 	}
-	valInput := []any{css.Class("field"), Attr("id", "acct-setbal-"+a.ID), Attr("data-testid", "acct-setbal-input"),
+	nowText := uistate.T("accounts.currentValueNow", fmtMoney(curStated))
+	if !balanceKnown {
+		nowText = uistate.T("calculation.unavailable")
+	}
+	valID, asOfID := setBalanceInputID(a.ID), setBalanceAsOfInputID(a.ID)
+	valInput := []any{css.Class("field", fieldInvalidName(problem, valID)), Attr("id", valID), Attr("data-testid", "acct-setbal-input"),
 		Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")),
-		Step("0.01"), OnInput(onSetBalAmt)}
-	if focusValue {
+		Step(accountedit.MoneyStep(a.Currency)), OnInput(onSetBalAmt)}
+	valInput = append(valInput, fieldInvalidAttrs(problem, valID, errID)...)
+	if valueFirst {
 		valInput = append(valInput, Attr("autofocus", ""))
 	}
 	return Div(css.Class("acct-value-section"), Attr("data-testid", "acct-value-section"),
 		labeledField(uistate.T(updateActionKey(a.Type)), Input(append(valInput, uiw.FieldValue(setBalAmtS.Get()))...)),
-		Span(css.Class("t-caption acct-value-now", tw.TextDim), Attr("data-testid", "acct-value-now"),
-			uistate.T("accounts.currentValueNow", fmtMoney(curBal))),
+		Span(css.Class("t-caption acct-value-now", tw.TextDim), Attr("data-testid", "acct-value-now"), nowText),
 		deltaNode,
-		// C684: shown only once a value is typed, so updating a balance stays one
+		// Shown only once a value is typed, so updating a balance stays one
 		// field for the common case. It answers "when was this true", which is what
 		// makes the resulting checkpoint land in the right month and lets the right
 		// statement retire it later.
 		If(rawAmt != "", labeledField(uistate.T("accounts.setBalanceAsOfLabel"),
-			Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-setbal-asof"),
-				Attr("aria-label", uistate.T("accounts.setBalanceAsOfLabel")),
+			Input(append([]any{css.Class("field", fieldInvalidName(problem, asOfID)), Type("date"), Attr("id", asOfID), Attr("data-testid", "acct-setbal-asof"),
+				AriaLabel(uistate.T("accounts.setBalanceAsOfLabel")),
 				Title(uistate.T("accounts.setBalanceAsOfHint")),
-				OnInput(onSetBalAsOf), uiw.FieldValue(setBalAsOfS.Get())))),
+				OnInput(onSetBalAsOf)}, append(fieldInvalidAttrs(problem, asOfID, errID), uiw.FieldValue(setBalAsOfS.Get()))...)...))),
 		If(rawAmt != "", labeledField(uistate.T("accounts.setBalanceCategoryLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: setBalCatS.Get(),
 				OnChange: func(v string) { setBalCatS.Set(v) }, AriaLabel: uistate.T("accounts.setBalanceCategoryLabel"), TestID: "setbal-cat-select"}))),
@@ -714,57 +887,109 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 	)
 }
 
-// reconcileActions bundles the discrepancy-resolution handlers (QA R3 CF-02)
-// so reconcileForm's signature stays manageable: post an adjustment for the
+// reconcileActions bundles the discrepancy-resolution handlers: post an adjustment for the
 // difference, force-complete with the gap recorded, jump to the cleared ledger
-// to investigate, save the half-done session as a draft, and reopen (undo) the
-// most recent recorded reconciliation.
+// to investigate, save the half-done session as a draft, reopen (undo) the
+// most recent recorded reconciliation, and mark every uncleared row cleared.
 type reconcileActions struct {
 	Adjust, Force, Investigate, SaveDraft, Reopen, MarkAll ui.Handler
 	HasDraft                                               bool
 }
 
+// reconcileProps is everything the reconcile-to-statement editor reads.
+type reconcileProps struct {
+	Account domain.Account
+	// Cleared is the cleared balance, already in the stated convention (positive is money you
+	// have), matching what the account card shows and what the user types off the statement.
+	Cleared  money.Money
+	Conv     reconcile.Convention
+	Session  *reconcile.Session
+	Decimals int
+	App      *appstate.App
+	// Unavailable is set when the balances could not be calculated; the form then says so
+	// and offers no way to record a reconciliation.
+	Unavailable bool
+
+	StmtBal, StmtDate ui.State[string]
+	OnStmtBal         ui.Handler
+	OnStmtDate        ui.Handler
+	Cancel            ui.Handler
+	OnRecord          ui.Handler
+	OnRefresh         func(domain.Account)
+	Actions           reconcileActions
+}
+
 // reconcileForm is the reconcile-to-statement editor. Once the difference hits
-// zero, "Record reconciliation" (onRecord) appends the event to the account's
+// zero, "Record reconciliation" (OnRecord) appends the event to the account's
 // history; the form also shows the "reconciled through" status and the recent
 // history so past reconciliations are inspectable in place. While a typed
 // statement balance still disagrees with the cleared balance, the resolution
-// row (acts) offers the legitimate ways out of the dead end.
-func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Convention, sess *reconcile.Session, dec int, stmtBalS, stmtDateS ui.State[string], onStmtBal, onStmtDate, cancel, onRecord ui.Handler, onRefresh func(domain.Account), app *appstate.App, acts reconcileActions) ui.Node {
-	var allTxns []domain.Transaction
-	if app != nil {
-		allTxns = app.Transactions()
+// row (Actions) offers the legitimate ways out of the dead end.
+func reconcileForm(p reconcileProps) ui.Node {
+	if p.Unavailable {
+		return ui.CreateElement(reconcileUnavailable, p)
 	}
-	stmtTyped := strings.TrimSpace(stmtBalS.Get()) != ""
-	stmtMinor, _ := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
-	// curCleared arrives ALREADY stated (positive is money you have), matching what
-	// the account card shows and what the user types off the statement.
-	result := reconcile.Diff(curCleared.Amount, stmtMinor)
+	return ui.CreateElement(reconcileView, p)
+}
+
+// reconcileUnavailable is the reconcile editor when the balances could not be calculated: it says
+// so and offers only Cancel, because a difference built on a guess is worse than none. It is its
+// own component so the handler hooks of the full editor never change position when the
+// balances become available.
+func reconcileUnavailable(p reconcileProps) ui.Node {
+	return Div(css.Class("acct-edit-form"), Attr("data-testid", "reconcile-statement-mode"),
+		Div(css.Class("modal-scroll"),
+			uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "reconcile-unavailable",
+				Body: Fragment(uistate.T("calculation.unavailable"))})),
+		Div(css.Class("modal-foot"),
+			Button(css.Class("btn"), Type("button"), OnClick(p.Cancel), uistate.T("action.cancel"))),
+	)
+}
+
+// reconcileView is the full reconcile editor, mounted as a component by reconcileForm.
+func reconcileView(p reconcileProps) ui.Node {
+	a, app, acts := p.Account, p.App, p.Actions
+	stmtText := strings.TrimSpace(p.StmtBal.Get())
+	stmtTyped := stmtText != ""
+	stmtMinor, stmtErr := money.ParseMinor(stmtText, p.Decimals)
+	// A figure that cannot be read is not a statement balance of zero: the difference, the resolution
+	// actions and the finish button wait until it is a number.
+	stmtInvalid := stmtTyped && stmtErr != nil
+	stmtOK := stmtTyped && stmtErr == nil
+	// The same checked subtraction the handlers use, so this view and the Finish gate cannot
+	// disagree on a figure large enough to overflow. An overflow is shown as unavailable and
+	// never counts as reconciled.
+	result, diffErr := reconcile.DiffChecked(p.Cleared.Amount, stmtMinor)
+	if diffErr != nil {
+		slog.Error("reconcile: calculate difference", "account_id", a.ID, "error", diffErr)
+		result = reconcile.Result{}
+	}
+	diffOverflow := stmtOK && diffErr != nil
+	reconciled := stmtOK && diffErr == nil && result.Reconciled
 	sym := currency.Symbol(a.Currency)
-	// Signed, symboled, thousands-grouped — matches the cleared-balance figure it
+	// Signed and thousands-grouped, like the cleared-balance figure it
 	// sits beside ("+$40.50" / "−$26,711.50"), not a bare "-26711.50".
-	diffLabel := fmtSignedMoney(result.DifferenceMinor, sym, dec)
-	if result.DifferenceMinor > 0 {
-		diffLabel = "+" + diffLabel
+	diffLabel := signedDiffLabel(result.DifferenceMinor, sym, p.Decimals)
+	if stmtInvalid || diffOverflow {
+		diffLabel = uistate.T("calculation.unavailable")
 	}
-	var unclearedTxns []domain.Transaction
-	for _, t := range allTxns {
-		if t.AccountID == a.ID && !t.Cleared {
-			unclearedTxns = append(unclearedTxns, t)
-		}
+	stmtErrID := "reconcile-statement-err-" + a.ID
+	stmtErrMsg := ""
+	if stmtInvalid {
+		stmtErrMsg = uistate.T("accounts.invalidBalance")
 	}
+	unclearedTxns := reconcile.Uncleared(a.ID, app.Transactions())
 	onToggleClear := func(t domain.Transaction) {
-		if app == nil {
+		p.Session.NoteBefore(t) // so Cancel can put this row back
+		if err := app.PutTransaction(t.MarkCleared(!t.Cleared, time.Now())); err != nil {
+			postAcctWriteError("mark transaction cleared", err)
 			return
 		}
-		sess.NoteBefore(t) // so Cancel can put this row back (C683)
-		t = t.MarkCleared(!t.Cleared, time.Now())
-		_ = app.PutTransaction(t)
-		onRefresh(a) // bumps the data revision → this modal re-derives the difference
+		p.OnRefresh(a) // bumps the data revision → this modal re-derives the difference
 	}
 	keyOfTxn := func(t domain.Transaction) any { return t.ID }
 	renderTxnRow := func(t domain.Transaction) ui.Node {
-		return ui.CreateElement(ReconcileTxnRow, reconcileTxnRowProps{Txn: t, Currency: a.Currency, OnToggle: onToggleClear})
+		return ui.CreateElement(ReconcileTxnRow, reconcileTxnRowProps{Txn: t, OnToggle: onToggleClear})
 	}
 	// "Reconciled through" status + the recent history (newest first, capped at
 	// six rows here — the full capped history stays on the account).
@@ -772,12 +997,15 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 	var histRows []ui.Node
 	for i := len(a.Reconciliations) - 1; i >= 0 && len(histRows) < 6; i-- {
 		r := a.Reconciliations[i]
-		histRows = append(histRows, Div(css.Class("row"), Attr("data-testid", "reconcile-history-row"),
-			Style(map[string]string{"display": "flex", "justify-content": "space-between", "gap": "1rem"}),
-			Span(r.Through().Format("Jan 2, 2006")),
-			If(r.Forced, Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-history-forced"),
-				uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, dec)))),
-			Span(fmtMoney(r.StatementBalance)),
+		// The wrapper carries the row's test id: EntityRow renders the row itself.
+		histRows = append(histRows, Div(css.Class("acct-s3-item"), Attr("data-testid", "reconcile-history-row"),
+			uiw.EntityRow(uiw.EntityRowProps{
+				Title: uistate.CurrentPrefs().FormatDate(r.Through()),
+				Value: Fragment(
+					If(r.Forced, Span(css.Class("t-caption", tw.TextDim, "acct-recon-forced"), Attr("data-testid", "reconcile-history-forced"),
+						uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, p.Decimals)))),
+					Span(fmtMoney(r.StatementBalance))),
+			}),
 		))
 	}
 
@@ -786,22 +1014,26 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 	// match or warn about the gap that would still stand.
 	unclearedAmounts := make([]int64, 0, len(unclearedTxns))
 	for _, t := range unclearedTxns {
-		// Stated, like curCleared: Stated is linear, so a sum of stated legs is the
-		// stated sum. Mixing a stored leg into a stated total is the original bug
-		// one layer down.
-		unclearedAmounts = append(unclearedAmounts, reconcile.Stated(t.Amount.Amount, conv))
+		// Stated, like Cleared. Stated is linear, so a sum of stated legs is the
+		// stated sum. Mixing a stored leg into a stated total would reintroduce the sign
+		// error.
+		unclearedAmounts = append(unclearedAmounts, reconcile.Stated(t.Amount.Amount, p.Conv))
 	}
-	bulk := reconcile.PreviewBulkClear(curCleared.Amount, stmtMinor, unclearedAmounts)
-	bulkDiffLabel := fmtSignedMoney(bulk.Result.DifferenceMinor, sym, dec)
-	if bulk.Result.DifferenceMinor > 0 {
-		bulkDiffLabel = "+" + bulkDiffLabel
+	bulk, bulkErr := reconcile.PreviewBulkClearChecked(p.Cleared.Amount, stmtMinor, unclearedAmounts)
+	if bulkErr != nil {
+		slog.Error("reconcile: preview marking every row cleared", "account_id", a.ID, "error", bulkErr)
+		bulk = reconcile.BulkClear{Count: len(unclearedAmounts)}
 	}
+	bulkDiffLabel := signedDiffLabel(bulk.Result.DifferenceMinor, sym, p.Decimals)
 	remainingCls := "reconcile-remaining"
-	if result.Reconciled {
+	if reconciled {
 		remainingCls += " is-zero"
 	}
 	bulkPreview := uistate.T("accounts.reconMarkAllPreviewGap", bulk.Count, bulkDiffLabel)
-	if bulk.Result.Reconciled {
+	switch {
+	case bulkErr != nil:
+		bulkPreview = uistate.T("calculation.unavailable")
+	case bulk.Result.Reconciled:
 		bulkPreview = uistate.T("accounts.reconMarkAllPreviewMatch", bulk.Count)
 	}
 
@@ -811,117 +1043,141 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 			// difference readout stay anchored to the top while the transaction
 			// list scrolls, so the reconciliation math is always in view.
 			Div(css.Class("reconcile-header"), Attr("data-testid", "reconcile-header"),
-				If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
-					Style(map[string]string{"margin": "0 0 0.5rem"}),
-					uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
-				If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-draft-note"),
-					Style(map[string]string{"margin": "0 0 0.5rem"}),
+				If(hasThrough, P(css.Class("budget-sub", "acct-gap-below"), Attr("data-testid", "reconcile-through"),
+					uistate.T("accounts.reconThrough", uistate.CurrentPrefs().FormatDate(through)))),
+				If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim, "acct-gap-below"), Attr("data-testid", "reconcile-draft-note"),
 					uistate.T("accounts.reconDraftNote"))),
-				labeledField(uistate.T("accounts.statementBalance"),
-					Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
-						Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
-						Placeholder(uistate.T("accounts.statementBalancePh")), OnInput(onStmtBal), uiw.FieldValue(stmtBalS.Get()))),
-				labeledField(uistate.T("accounts.reconStmtDate"),
-					Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
-						Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(onStmtDate), uiw.FieldValue(stmtDateS.Get()))),
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-sign-hint"),
-					Style(map[string]string{"margin": "0 0 0.5rem"}),
+				uiw.Field(uiw.FieldProps{ID: "acct-reconcile-stmt-" + a.ID, Label: uistate.T("accounts.statementBalance"),
+					Control: func(f uiw.FieldA11y) ui.Node {
+						return Input(append([]any{css.Class("field", condName(stmtInvalid, "field-invalid")), Attr("id", f.ID), Attr("autofocus", ""),
+							Attr("data-testid", "reconcile-statement-input"), Type("number"), Step(accountedit.MoneyStep(a.Currency)),
+							Placeholder(uistate.T("accounts.statementBalancePh")), OnInput(p.OnStmtBal)},
+							append(errAttrs(stmtErrID, stmtErrMsg), uiw.FieldValue(p.StmtBal.Get()))...)...)
+					}}),
+				// The input's aria-describedby points at the message span inside the callout.
+				If(stmtInvalid, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "reconcile-statement-invalid",
+					Body: Span(Attr("id", stmtErrID), stmtErrMsg)})),
+				If(diffOverflow, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "reconcile-difference-overflow",
+					Body: Fragment(uistate.T("calculation.unavailable"))})),
+				uiw.Field(uiw.FieldProps{ID: "acct-reconcile-date-" + a.ID, Label: uistate.T("accounts.reconStmtDate"),
+					Control: func(f uiw.FieldA11y) ui.Node {
+						return Input(css.Class("field"), Attr("id", f.ID), Type("date"), Attr("data-testid", "reconcile-statement-date"),
+							AriaLabel(uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(p.OnStmtDate), uiw.FieldValue(p.StmtDate.Get()))
+					}}),
+				P(css.Class("t-caption", tw.TextDim, "acct-gap-below"), Attr("data-testid", "reconcile-sign-hint"),
 					uistate.T(reconSignHintKey(a))),
 				Div(css.Class("reconcile-summary"),
-					Span(css.Class(tw.TextDim), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
+					Span(css.Class(tw.TextDim), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(p.Cleared)),
 					Span(ClassStr(remainingCls), Attr("data-testid", "reconcile-difference"),
 						uistate.T("accounts.reconRemainingLabel"), diffLabel),
-					If(result.Reconciled, Span(css.Class(tw.TextDim), Attr("data-testid", "reconcile-confirmed"),
+					If(reconciled, Span(css.Class(tw.TextDim), Attr("data-testid", "reconcile-confirmed"),
 						uistate.T("accounts.reconciledCheck"))),
 				),
 			),
-			// C690: the arithmetic behind the difference. The header states a number;
+			// The arithmetic behind the difference. The header states a number;
 			// this states which term it is in, which is the difference between a
 			// lead and a dead end.
-			reconcileWorksheet(app, a, strings.TrimSpace(stmtDateS.Get()), stmtMinor, stmtTyped),
+			reconcileWorksheet(app, a, strings.TrimSpace(p.StmtDate.Get()), stmtMinor, stmtOK),
 			// Standing copy: what finishing a reconciliation requires. Shown while
 			// the account isn't yet balanced, so the finish path is never a mystery.
-			If(!result.Reconciled, P(css.Class("t-caption", tw.TextDim, "reconcile-explain"),
+			If(!reconciled, P(css.Class("t-caption", tw.TextDim, "reconcile-explain"),
 				Attr("data-testid", "reconcile-explain"), uistate.T("accounts.reconExplain"))),
-			// Finish path: a prominent, plainly-named action once the difference is
-			// zero. Records the reconciliation (reconciled-through date + history).
-			If(result.Reconciled, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "reconcile-done"),
-				OnClick(onRecord), uistate.T("accounts.reconFinishAction"))),
 			// Bulk action: clear every outstanding row at once, with a preview of the
 			// outcome. Undoable (Ctrl+Z) via the shared undo story.
 			If(len(unclearedTxns) > 0, Div(css.Class("reconcile-markall"), Attr("data-testid", "reconcile-markall"),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-markall-btn"),
 					Title(uistate.T("accounts.reconMarkAllTitle")), OnClick(acts.MarkAll), uistate.T("accounts.reconMarkAll")),
-				If(stmtTyped, Span(css.Class("reconcile-markall-preview"), Attr("data-testid", "reconcile-markall-preview"),
+				If(stmtOK, Span(css.Class("reconcile-markall-preview"), Attr("data-testid", "reconcile-markall-preview"),
 					bulkPreview)))),
-			If(len(unclearedTxns) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+			If(len(unclearedTxns) > 0, Div(css.Class("acct-block-above"),
 				P(css.Class("t-caption"), uistate.T("accounts.unclearedHeading")),
 				Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)))),
-			If(len(unclearedTxns) == 0 && !result.Reconciled,
+			If(len(unclearedTxns) == 0 && !reconciled,
 				P(css.Class("muted"), uistate.T("accounts.noUncleared"))),
-			// The way out of a stuck difference (QA R3 CF-02): adjustment /
+			// The way out of a stuck difference: adjustment /
 			// investigate / force-complete, offered once a balance is typed.
-			If(stmtTyped && !result.Reconciled, Div(Style(map[string]string{"margin-top": "0.75rem"}),
-				Attr("data-testid", "reconcile-resolve"),
-				P(css.Class("t-caption", tw.TextDim), uistate.T("accounts.reconResolveHint")),
-				Div(Style(map[string]string{"display": "flex", "gap": "0.5rem", "flex-wrap": "wrap"}),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-adjust"),
-						OnClick(acts.Adjust), uistate.T("accounts.reconAdjustAction")),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-investigate"),
-						OnClick(acts.Investigate), uistate.T("accounts.reconInvestigate")),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-force"),
-						OnClick(acts.Force), uistate.T("accounts.reconForceAction"))))),
-			If(len(histRows) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+			If(stmtOK && !reconciled, Div(css.Class("acct-block-above"),
+				uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, TestID: "reconcile-resolve",
+					Body: Fragment(
+						P(uistate.T("accounts.reconResolveHint")),
+						Div(css.Class("acct-recon-actions"),
+							uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.reconAdjustAction"), TestID: "reconcile-adjust"}, OnClick(acts.Adjust)),
+							uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.reconInvestigate"), TestID: "reconcile-investigate"}, OnClick(acts.Investigate)),
+							uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.reconForceAction"), TestID: "reconcile-force"}, OnClick(acts.Force)))),
+				}))),
+			If(len(histRows) > 0, Div(css.Class("acct-block-above"),
 				Attr("data-testid", "reconcile-history"),
-				Div(Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "baseline", "gap": "1rem"}),
+				Div(css.Class("acct-recon-hist-head"),
 					P(css.Class("t-caption"), uistate.T("accounts.reconHistoryHeading")),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-reopen"),
 						OnClick(acts.Reopen), uistate.T("accounts.reconReopenAction"))),
 				Div(css.Class("rows"), histRows))),
 		),
 		Div(css.Class("modal-foot"),
-			If(stmtTyped && !result.Reconciled,
+			If(stmtTyped && !reconciled,
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-save-draft"),
 					OnClick(acts.SaveDraft), uistate.T("accounts.reconSaveDraft"))),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), OnClick(p.Cancel), uistate.T("action.cancel")),
+			// Finish is the footer's primary action once the difference is zero, as Save is on Update value.
+			If(reconciled, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "reconcile-done"),
+				OnClick(p.OnRecord), uistate.T("accounts.reconFinishAction"))),
 		),
 	)
 }
 
+// transferProps is everything the transfer-between-accounts editor reads.
+type transferProps struct {
+	Account  domain.Account
+	App      *appstate.App
+	Accounts []domain.Account
+
+	From, To, Amount, Date, Desc ui.State[string]
+	OnAmount, OnDate, OnDesc     ui.Handler
+	OnSubmit, Cancel             ui.Handler
+}
+
 // transferForm is the transfer-between-accounts editor. It shares the eligibility
-// rule (C2) and the cross-currency note (G7) with the page-level form via
+// rule and the cross-currency note with the page-level form via
 // acctTransferOptions / acctTransferFXNote, so both entry points behave identically.
-func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account, xferFromS, xferToS, xferAmtS, xferDateS, xferDescS ui.State[string], onXferAmt, onXferDate, onXferDesc, doTransfer, cancel ui.Handler) ui.Node {
-	fromID, toID := xferFromS.Get(), xferToS.Get()
-	fromOpts, toOpts := acctTransferOptions(accounts, fromID, toID)
+func transferForm(p transferProps) ui.Node {
+	a := p.Account
+	fromID, toID := p.From.Get(), p.To.Get()
+	fromOpts, toOpts := acctTransferOptions(p.Accounts, fromID, toID)
 	sameAcct := fromID != "" && toID != "" && fromID == toID
 	// Same enable rule as the page form: no posting without a valid positive amount.
-	submitDisabled := sameAcct || fromID == "" || toID == "" || !acctTransferAmountOK(app, fromID, xferAmtS.Get())
+	submitDisabled := sameAcct || fromID == "" || toID == "" || !acctTransferAmountOK(p.App, fromID, p.Amount.Get())
+	// The amount is in the source account's currency, so its box takes that currency's decimals.
+	amountStep := accountedit.MoneyStep(a.Currency)
+	for _, acc := range p.Accounts {
+		if acc.ID == fromID {
+			amountStep = accountedit.MoneyStep(acc.Currency)
+		}
+	}
 	return Form(css.Class("acct-edit-form"), Attr("id", "acct-transfer-form-"+a.ID),
-		Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(doTransfer),
+		AriaLabel(uistate.T("accounts.transferFormLabel")), OnSubmit(p.OnSubmit),
 		Div(css.Class("modal-scroll"),
 			labeledField(uistate.T("accounts.transferFromLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: fromID, OnChange: func(v string) { xferFromS.Set(v) },
+				uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: fromID, OnChange: func(v string) { p.From.Set(v) },
 					AriaLabel: uistate.T("accounts.transferFromLabel"), TestID: "acct-xfer-from-select"})),
 			labeledField(uistate.T("accounts.transferToLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: toOpts, Selected: toID, OnChange: func(v string) { xferToS.Set(v) },
+				uiw.SelectInput(uiw.SelectInputProps{Options: toOpts, Selected: toID, OnChange: func(v string) { p.To.Set(v) },
 					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "acct-xfer-to-select"})),
-			If(sameAcct, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferSameAccountErr"))),
+			If(sameAcct, P(css.Class("err"), Role("alert"), uistate.T("accounts.transferSameAccountErr"))),
 			labeledField(uistate.T("accounts.transferAmount"),
 				Input(css.Class("field"), Attr("id", "acct-xfer-amt-"+a.ID), Attr("autofocus", ""),
 					Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
-					Step("0.01"), Attr("min", "0.01"), OnInput(onXferAmt), uiw.FieldValue(xferAmtS.Get()))),
-			// G7: cross-currency semantics — denomination + converted preview / no-rate warning.
-			acctTransferFXNote(app, fromID, toID, xferAmtS.Get()),
+					Step(amountStep), Attr("min", amountStep), OnInput(p.OnAmount), uiw.FieldValue(p.Amount.Get()))),
+			// Cross-currency note: the denomination, a converted preview, or a no-rate warning.
+			acctTransferFXNote(p.App, fromID, toID, p.Amount.Get()),
 			// Before/after balances for both sides (shared with the page form).
-			acctTransferBalancePreview(app, fromID, toID, xferAmtS.Get(), "", ""),
+			acctTransferBalancePreview(p.App, fromID, toID, p.Amount.Get(), "", ""),
 			labeledField(uistate.T("accounts.transferDateLabel"),
-				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onXferDate), uiw.FieldValue(xferDateS.Get()))),
+				Input(css.Class("field"), Type("date"), AriaLabel(uistate.T("accounts.transferDateLabel")), OnInput(p.OnDate), uiw.FieldValue(p.Date.Get()))),
 			labeledField(uistate.T("accounts.transferDescLabel"),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onXferDesc), uiw.FieldValue(xferDescS.Get()))),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(p.OnDesc), uiw.FieldValue(p.Desc.Get()))),
 		),
 		Div(css.Class("modal-foot"),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), OnClick(p.Cancel), uistate.T("action.cancel")),
 			IfElse(submitDisabled,
 				Button(css.Class("btn btn-primary"), Type("submit"), Attr("disabled", "disabled"), uistate.T("accounts.transferSubmit")),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit"))),
@@ -929,251 +1185,263 @@ func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account
 	)
 }
 
-// editForm is the full inline-edit editor (name, owner, balances, type-specific
-// attributes, institution, and custom fields).
-// acctEditExtra carries the account-editor fields added after the original
-// positional signature (AC3 statement day, AC11 exclude-from-net-worth), bundled
-// into one struct so the editForm signature stays additive.
-type acctEditExtra struct {
-	// setBalAsOfS/onSetBalAsOf: the date a newly-entered balance was true as of
-	// (C684), which decides which month the resulting checkpoint lands in and
-	// which statement will later retire it.
-	setBalAsOfS  ui.State[string]
-	onSetBalAsOf ui.Handler
+// editFormState is everything the merged account editor reads: the account and its lists, one
+// state handle per field with its change handler, and the save and cancel actions. The
+// parent builds it so every hook sits in one stable place and the editor itself only renders.
+type editFormState struct {
+	Account domain.Account
+	// Decimals is the account currency's decimal places.
+	Decimals int
+	// CurBal is the current balance as stored; BalancesOK is false when it could not be calculated.
+	CurBal     money.Money
+	BalancesOK bool
+	// Balances is the pre-built 4-way balance and provenance strip.
+	Balances   ui.Node
+	Members    []domain.Member
+	Accounts   []domain.Account
+	Categories []domain.Category
+	CustomDefs []customfields.Def
+	// ValueFirst opens the editor on the value field with the details folded away, as
+	// "Update balance" does; otherwise the name is focused and the details are open.
+	ValueFirst bool
 
-	stmtDayS       ui.State[string]
-	exclNWS        ui.State[bool]
-	onStmtDay      ui.Handler
-	onToggleExclNW ui.Handler
-	// instIDS/onInstID: AC10's structured institution-directory picker.
-	instIDS          ui.State[string]
-	onInstID         func(string)
-	openInstitutions ui.Handler
-	// beneficiaryNoteS/onBeneficiaryNote: AC16's beneficiary / TOD note.
-	beneficiaryNoteS  ui.State[string]
-	onBeneficiaryNote func(string)
-	// revalueDaysS/onRevalueDays: AC5's per-account revaluation-cadence override.
-	revalueDaysS  ui.State[string]
-	onRevalueDays ui.Handler
-	// Stale-balance controls: opt out of freshness tracking / snooze until a date.
-	freshExemptS        ui.State[bool]
-	freshSnoozeS        ui.State[string]
-	onToggleFreshExempt ui.Handler
-	onFreshSnooze       ui.Handler
-	// balancesNode is the pre-built 4-way balance + provenance strip (built by
-	// the parent, which owns the app/cleared/projection inputs).
-	balancesNode ui.Node
+	Name, Type, VarName, Owner, Balance, CreditLimit, APR, MinPayment, DueDay, Lender, Institution ui.State[string]
+	ExpectedReturn, APY, Liquidity, Stability, LockUntil, Notes, SetBalAmt, SetBalCat, SetBalAsOf  ui.State[string]
+	StatementDay, InstitutionID, BeneficiaryNote, RevalueDays, FreshSnooze                         ui.State[string]
+	// Problem is what is wrong with the fields after a refused save, ErrID the id of the error line,
+	// and FoldForced keeps the details open once a refused save has found its problem in them.
+	Problem                                                      formProblem
+	ErrID                                                        string
+	FoldForced                                                   bool
+	AdvOpen, AsLiability, SplitOwn, ExcludeNetWorth, FreshExempt ui.State[bool]
+	Shares                                                       ui.State[map[string]int]
+	CustomVals                                                   ui.State[map[string]string]
+
+	OnName, OnVarName, OnBalance, OnCreditLimit, OnAPR, OnMinPayment, OnDueDay, OnLender ui.Handler
+	OnExpectedReturn, OnAPY, OnLiquidity, OnStability, OnLockUntil                       ui.Handler
+	OnSetBalAmt, OnSetBalAsOf, OnStatementDay, OnRevalueDays, OnFreshSnooze              ui.Handler
+	OnToggleAdv, OnToggleAsLiability, OnToggleSplit, OnToggleExcludeNW                   ui.Handler
+	OnToggleFreshExempt, OpenInstitutions, OnSave, OnCancel                              ui.Handler
+	// The free-text fields go through uiw's self-owning field components, which own the
+	// event hook themselves and so take a plain func.
+	OnInstitution, OnInstitutionID, OnNotes, OnBeneficiaryNote func(string)
+	OnCustomEdit                                               func(key, value string)
 }
 
-func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Member, accounts []domain.Account, categories []domain.Category, accDefs []customfields.Def,
-	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS ui.State[string],
-	setBalAmtS, setBalCatS ui.State[string],
-	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
-	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender ui.Handler,
-	// The free-text fields go through uiw's self-owning field components, which
-	// own the event hook themselves and so take a plain func.
-	onInstitution func(string),
-	onRet, onApy, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn ui.Handler,
-	onNotes func(string),
-	onSetBalAmt ui.Handler,
-	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler, focusValue bool, x acctEditExtra) ui.Node {
+// editForm is the full inline-edit editor: name, owner, balances, type-specific
+// attributes, institution and custom fields.
+func editForm(st editFormState) ui.Node {
+	a, dec, members, accounts := st.Account, st.Decimals, st.Members, st.Accounts
+	saveErrID := st.ErrID
+	idPrefix := "acct-edit-" + a.ID
+	moneyStep := accountedit.MoneyStep(a.Currency)
+	// box is one input of the editor: its id, the danger marking when the last save refused it, and
+	// the change handler. Every box registers no hook of its own, only the handler it is given.
+	box := func(inputType string, field accountedit.Field, handler ui.Handler, value string, opts ...any) ui.Node {
+		id := accountFieldInputID(idPrefix, field)
+		args := append([]any{css.Class("field", fieldInvalidName(st.Problem, id)), Type(inputType), Attr("id", id)}, opts...)
+		args = append(args, fieldInvalidAttrs(st.Problem, id, saveErrID)...)
+		return Input(append(args, OnInput(handler), uiw.FieldValue(value))...)
+	}
 	// The type is editable; the shown attribute fields follow the SELECTED type's
 	// class (not the account's stored class), so switching e.g. a line of credit to a
 	// credit card, or a liability to an asset, reveals the right fields live.
-	selType := domain.AccountType(typeS.Get())
+	selType := domain.AccountType(st.Type.Get())
 	isOther := selType == domain.TypeOther
 	// "Other" accounts can be flagged as a liability (debt) explicitly; that reveals the
 	// liability fields (min payment, due day, …) the debt formulas use.
-	isLiab := selType.Class() == domain.ClassLiability || (isOther && asLiabS.Get())
+	isLiab := accountedit.ClassOf(selType, st.AsLiability.Get()) == domain.ClassLiability
 	typeOptions := uiw.OptionsFrom(domain.AllAccountTypes,
 		func(t domain.AccountType) string { return string(t) },
 		func(t domain.AccountType) string { return humanizeType(string(t)) },
-		typeS.Get())
+		st.Type.Get())
 	// The name field is auto-focused for the "Edit" entry; when opened from "Update
 	// value" the value section takes focus instead, so the fast path is type-and-save.
-	nameInput := []any{css.Class("field"), Attr("id", "acct-edit-"+a.ID), Type("text"),
-		Placeholder(uistate.T("common.name")), OnInput(onName)}
-	if !focusValue {
+	nameInput := []any{css.Class("field", fieldInvalidName(st.Problem, idPrefix)), Attr("id", idPrefix), Type("text"),
+		Placeholder(uistate.T("common.name")), OnInput(st.OnName)}
+	nameInput = append(nameInput, fieldInvalidAttrs(st.Problem, idPrefix, saveErrID)...)
+	if !st.ValueFirst {
 		nameInput = append(nameInput, Attr("autofocus", ""))
 	}
-	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
+	// Asset-only fields (returns, liquidity and similar) show when the account is not a
+	// liability and the advanced section is open. Revalue days also need a revaluable type.
+	showAssetAdvanced := !isLiab && st.AdvOpen.Get()
+	showRevalue := showAssetAdvanced && isRevaluableType(selType)
+	return Form(css.Class("acct-edit-form"), Attr("novalidate", true), OnSubmit(st.OnSave),
 		// Fields scroll inside .modal-scroll; the Cancel/Save bar is pinned below in
 		// .modal-foot (FlushBody on the host), so it never scrolls off a tall form.
 		Div(css.Class("modal-scroll"),
 			// Merged "update value / balance" section, up top so the marquee account action
 			// (record a new value) is the fast path; leaving it blank keeps the balance as-is.
-			x.balancesNode,
-			acctValueUpdateSection(a, curBal, dec, setBalAmtS, setBalCatS, x.setBalAsOfS, onSetBalAmt, x.onSetBalAsOf, categories, focusValue),
-			// QA CF-10: opened from the balance figure ("Update balance"), the account
+			st.Balances,
+			acctValueUpdateSection(a, statedBalance(a, st.CurBal), st.BalancesOK, dec, st.SetBalAmt, st.SetBalCat, st.SetBalAsOf, st.OnSetBalAmt, st.OnSetBalAsOf, st.Categories, st.ValueFirst, st.Problem, saveErrID),
+			// Opened from the balance figure ("Update balance"), the account
 			// METADATA folds behind a native details disclosure so the dialog matches
 			// its label — value on top, everything else opt-in. The Edit entry keeps
 			// the full form expanded.
-			foldAccountDetails(focusValue, Fragment(
-				labeledField(uistate.T("common.name"), Input(append(nameInput, uiw.FieldValue(nameS.Get()))...)),
+			foldAccountDetails(st.ValueFirst, st.FoldForced, Fragment(
+				labeledField(uistate.T("common.name"), Input(append(nameInput, uiw.FieldValue(st.Name.Get()))...)),
 				labeledField(uistate.T("accounts.typeLabel"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options:   typeOptions,
-						Selected:  typeS.Get(),
-						OnChange:  func(v string) { typeS.Set(v) },
+						Selected:  st.Type.Get(),
+						OnChange:  func(v string) { st.Type.Set(v) },
 						AriaLabel: uistate.T("accounts.typeLabel"),
 						TestID:    "acct-edit-type-select",
 					})),
 				// "Other" is the catch-all type with no natural asset/liability class, so let the
 				// user say whether it's a debt — that's what the net-worth and debt formulas read.
-				If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiabS.Get())...)...),
+				If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
+					Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), CheckedIf(st.AsLiability.Get()), OnChange(st.OnToggleAsLiability)),
 					Div(css.Class("row-main"),
 						Span(uistate.T("accounts.countAsLiability")),
 						Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint"))))),
 				labeledField(uistate.T("common.owner"),
-					uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
-						OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),
-				// #66: ownership preview — a changed owner MOVES this account's worth
+					uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, st.Owner.Get()), Selected: st.Owner.Get(),
+						OnChange: func(v string) { st.Owner.Set(v) }, AriaLabel: uistate.T("common.owner")})),
+				// Ownership preview: a changed owner moves this account's worth
 				// between people's net-worth views; say so before the save, not after.
-				If(ownerS.Get() != a.OwnerID,
+				If(st.Owner.Get() != a.OwnerID,
 					P(css.Class("muted"), Attr("data-testid", "acct-owner-preview"),
-						uistate.T("accounts.ownerMovePreview", fmtMoney(curBal),
-							ownerDisplayName(members, a.OwnerID), ownerDisplayName(members, ownerS.Get())))),
-				If(len(members) >= 2, func() ui.Node {
-					shareSum := 0
-					for _, v := range sharesMapS.Get() {
-						shareSum += v
-					}
+						uistate.T("accounts.ownerMovePreview", fmtMoney(statedBalance(a, st.CurBal)),
+							ownerDisplayName(members, a.OwnerID), ownerDisplayName(members, st.Owner.Get())))),
+				If(accountedit.SplitAvailable(len(members)), func() ui.Node {
+					memberIDs := memberIDsOf(members)
+					shares := st.Shares.Get()
+					// A figure that is not a whole percentage leaves the member's share as it was;
+					// the new map still re-renders the row, which puts the previous figure back.
 					onShareChange := func(memberID string, valStr string) {
-						n, _ := strconv.Atoi(valStr)
-						m := sharesMapS.Get()
-						nm := make(map[string]int, len(m)+1)
-						for k, v := range m {
-							nm[k] = v
-						}
-						nm[memberID] = n
-						sharesMapS.Set(nm)
+						st.Shares.Set(accountedit.WithShare(st.Shares.Get(), memberID, valStr))
 					}
 					return Div(
-						Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(splitOwnS.Get())), OnClick(onToggleSplitOwn),
-							IfElse(splitOwnS.Get(), Text(uistate.T("account.splitOwnership")+" ▴"), Text(uistate.T("account.splitOwnership")+" ▾"))),
-						If(splitOwnS.Get(), Div(
+						Button(css.Class("btn cf-adv-toggle"), Type("button"), AriaExpanded(st.SplitOwn.Get()), OnClick(st.OnToggleSplit),
+							IfElse(st.SplitOwn.Get(), Text(uistate.T("account.splitOwnership")+" ▴"), Text(uistate.T("account.splitOwnership")+" ▾"))),
+						If(st.SplitOwn.Get(), Div(
 							P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
 							MapKeyed(members, func(m domain.Member) any { return m.ID }, func(m domain.Member) ui.Node {
-								return ui.CreateElement(OwnerShareRow, ownerShareRowProps{Member: m, Share: sharesMapS.Get()[m.ID], OnChange: onShareChange})
+								return ui.CreateElement(OwnerShareRow, ownerShareRowProps{Member: m, Share: shares[m.ID], OnChange: onShareChange})
 							}),
-							If(shareSum != 100, P(css.Class("err"), Attr("role", "alert"), uistate.T("account.shareSumError", shareSum))),
+							If(!accountedit.SharesValid(shares, memberIDs), P(css.Class("err"), uistate.T("account.shareSumError", accountedit.ShareTotal(shares, memberIDs)))),
 						)),
 					)
 				}()),
 				labeledField(uistate.T("accounts.openingBalance"),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"), OnInput(onBal), uiw.FieldValue(balS.Get()))),
+					box("number", accountedit.FieldOpening, st.OnBalance, st.Balance.Get(), Placeholder(uistate.T("accounts.openingBalance")), Step(moneyStep))),
 				If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step("0.01"), OnInput(onClim), uiw.FieldValue(climS.Get())))),
+					box("number", accountedit.FieldCreditLimit, st.OnCreditLimit, st.CreditLimit.Get(), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step(moneyStep)))),
 				If(isLiab, labeledField(uistate.T("accounts.apr"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step("0.01"), OnInput(onApr), uiw.FieldValue(aprS.Get())))),
+					box("number", accountedit.FieldAPR, st.OnAPR, st.APR.Get(), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step(rateStep)))),
 				If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step("0.01"), OnInput(onMinp), uiw.FieldValue(minpS.Get())))),
+					box("number", accountedit.FieldMinPayment, st.OnMinPayment, st.MinPayment.Get(), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step(moneyStep)))),
 				If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), OnInput(onDue), uiw.FieldValue(dueS.Get())))),
-				// AC3: statement-close day — the day the billing cycle closes, distinct from the
+					box("number", accountedit.FieldDueDay, st.OnDueDay, st.DueDay.Get(), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay"))))),
+				// Statement-close day: the day the billing cycle closes, distinct from the
 				// payment due day above. Powers real due dates in the bill calendar and a tighter
 				// on-time payment window.
 				If(isLiab, labeledField(uistate.T("accountsstmt.statementDay"),
-					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), OnInput(x.onStmtDay), uiw.FieldValue(x.stmtDayS.Get())))),
+					box("number", accountedit.FieldStatementDay, st.OnStatementDay, st.StatementDay.Get(), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay"))))),
 				If(isLiab, labeledField(uistate.T("accounts.lender"),
-					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(onLender), uiw.FieldValue(lenderS.Get())))),
-				// C6: ONE Institution section. The directory picker leads (it colors the row
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(st.OnLender), uiw.FieldValue(st.Lender.Get())))),
+				// One institution section. The directory picker leads (it colors the row
 				// and powers multi-institution analytics); picking an entry also sets the
 				// free-text label, which only shows as a fallback input while nothing is
 				// picked — so the modal never presents two competing "Institution" fields.
 				labeledField(uistate.T("accounts.institution"),
 					Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-						uiw.SelectInput(uiw.SelectInputProps{Options: institutionPickerOptions(appstate.Default), Selected: x.instIDS.Get(),
-							OnChange: x.onInstID, AriaLabel: uistate.T("accounts.institution"), TestID: "acct-edit-institution-select"}),
+						uiw.SelectInput(uiw.SelectInputProps{Options: institutionPickerOptions(appstate.Default), Selected: st.InstitutionID.Get(),
+							OnChange: st.OnInstitutionID, AriaLabel: uistate.T("accounts.institution"), TestID: "acct-edit-institution-select"}),
 						Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-edit-manage-institutions"),
-							OnClick(x.openInstitutions), uistate.T("accounts.manageInstitutionsLink")))),
-				If(x.instIDS.Get() == "", labeledField(uistate.T("accounts.institutionFreeLabel"),
-					uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
-						AriaLabel: uistate.T("accounts.institutionFreeLabel"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID}))),
+							OnClick(st.OpenInstitutions), uistate.T("accounts.manageInstitutionsLink")))),
+				If(st.InstitutionID.Get() == "", labeledField(uistate.T("accounts.institutionFreeLabel"),
+					uiw.Combobox(uiw.SuggestProps{Value: st.Institution.Get(), Placeholder: uistate.T("accounts.institutionHint"),
+						AriaLabel: uistate.T("accounts.institutionFreeLabel"), OnInput: st.OnInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID}))),
 				// Free-text notes. Plain text (rides the dataset export/sync) — logins/secrets
 				// go in the encrypted credential vault, never here.
 				labeledField(uistate.T("accounts.notes"),
-					uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
-						AriaLabel: uistate.T("accounts.notes"), OnInput: onNotes})),
-				// C7: the mega-form is grouped — identity + money essentials stay visible;
-				// plumbing (variable name), estate planning, and tuning live behind ONE
+					uiw.TextAreaInput(uiw.TextFieldProps{Value: st.Notes.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
+						AriaLabel: uistate.T("accounts.notes"), OnInput: st.OnNotes})),
+				// The form is grouped: identity and money essentials stay visible;
+				// plumbing (variable name), estate planning and tuning sit behind one
 				// disclosure, available for every class (a mortgage has a beneficiary too).
-				Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "acct-edit-more"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
-					IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
+				Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "acct-edit-more"), AriaExpanded(st.AdvOpen.Get()), OnClick(st.OnToggleAdv),
+					IfElse(st.AdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
 				// Optional explicit variable name for formulas/widgets (engine plumbing).
-				If(editAdvOpen.Get(), labeledField(uistate.T("accounts.varNameLabel"),
-					entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName))),
-				// AC16: who inherits this account — a plain beneficiary / transfer-on-death
+				If(st.AdvOpen.Get(), labeledField(uistate.T("accounts.varNameLabel"),
+					entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", st.VarName.Get(), st.Name.Get(), st.OnVarName))),
+				// Who inherits this account: a plain beneficiary / transfer-on-death
 				// note surfaced (compassionately, never with a password) in the estate
 				// emergency pack.
-				If(editAdvOpen.Get(), Fragment(
+				If(st.AdvOpen.Get(), Fragment(
 					labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
-						uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
-							AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
-					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
-					// AC11: keep this account visible in its class views but out of net worth.
-					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
+						uiw.TextAreaInput(uiw.TextFieldProps{Value: st.BeneficiaryNote.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
+							AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: st.OnBeneficiaryNote})),
+					P(css.Class("t-caption", tw.TextDim, "acct-hint-tuck"), uistate.T("accounts.beneficiaryNoteHint")),
+					// Keep this account visible in its class views but out of net worth.
+					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
+						Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), CheckedIf(st.ExcludeNetWorth.Get()), OnChange(st.OnToggleExcludeNW)),
 						Div(css.Class("row-main"),
 							Span(uistate.T("accountsstmt.excludeNetWorth")),
 							Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
 					// Stale-balance reminders: opt out for good, or snooze until a date.
-					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), OnChange(x.onToggleFreshExempt)}, checkedAttr(x.freshExemptS.Get())...)...),
+					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
+						Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), CheckedIf(st.FreshExempt.Get()), OnChange(st.OnToggleFreshExempt)),
 						Div(css.Class("row-main"),
 							Span(uistate.T("accounts.freshExempt")),
 							Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.freshExemptHint")))),
-					If(!x.freshExemptS.Get(), labeledField(uistate.T("accounts.freshSnoozeLabel"),
-						Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-edit-fresh-snooze"),
-							Attr("aria-label", uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint")), OnInput(x.onFreshSnooze), uiw.FieldValue(x.freshSnoozeS.Get())))),
+					If(!st.FreshExempt.Get(), labeledField(uistate.T("accounts.freshSnoozeLabel"),
+						box("date", accountedit.FieldSnoozeUntil, st.OnFreshSnooze, st.FreshSnooze.Get(), Attr("data-testid", "acct-edit-fresh-snooze"),
+							AriaLabel(uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint"))))),
 				)),
-				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
-					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step("0.01"), OnInput(onRet), uiw.FieldValue(retS.Get())))),
-				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),
-					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Step("0.01"), OnInput(onApy), uiw.FieldValue(apyS.Get())))),
-				// The canonical score scale is 0..100 (domain, validate, allocate). These
-				// inputs briefly enforced 1-5, which made every sample account with a
-				// seeded score (e.g. liquidity 100) fail native validation on Save.
-				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), OnInput(onLiq), uiw.FieldValue(liqS.Get())))),
-				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), OnInput(onStab), uiw.FieldValue(stabS.Get())))),
-				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
-					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), OnInput(onLock), uiw.FieldValue(lockS.Get())))),
-				// AC5: how often to refresh a periodically-ESTIMATED asset (property, vehicle,
+				If(showAssetAdvanced, labeledField(uistate.T("accounts.expReturn"),
+					box("number", accountedit.FieldExpectedRet, st.OnExpectedReturn, st.ExpectedReturn.Get(), Title(uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step(rateStep)))),
+				If(showAssetAdvanced, labeledField(uistate.T("accounts.apyLabel"),
+					box("number", accountedit.FieldAPY, st.OnAPY, st.APY.Get(), Title(uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Step(rateStep)))),
+				// Scores run from 0 to 100, the scale the domain, validation and allocation use.
+				// The inputs enforce that range natively, so Save never fails on a seeded score.
+				// Keep these inputs within that range.
+				If(showAssetAdvanced, labeledField(uistate.T("accounts.liquidity"),
+					box("number", accountedit.FieldLiquidity, st.OnLiquidity, st.Liquidity.Get(), Attr("min", "0"), Attr("max", "100"), Step("1"), Title(uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity"))))),
+				If(showAssetAdvanced, labeledField(uistate.T("accounts.stability"),
+					box("number", accountedit.FieldStability, st.OnStability, st.Stability.Get(), Attr("min", "0"), Attr("max", "100"), Step("1"), Title(uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability"))))),
+				If(showAssetAdvanced, labeledField(uistate.T("accounts.lockUntilEdit"),
+					box("date", accountedit.FieldLockUntil, st.OnLockUntil, st.LockUntil.Get(), AriaLabel(uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit"))))),
+				// How often to refresh a periodically estimated asset (property, vehicle,
 				// crypto, or an "Other" you're treating as one) — 0/blank keeps the type's
-				// default cadence (internal/revalue). The freshness machinery already reads
-				// Account.RevalueDays; this is only the missing input.
-				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), labeledField(uistate.T("accounts.revalueDaysLabel"),
-					Input(css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
-						Placeholder(uistate.T("accounts.revalueDaysPh")), OnInput(x.onRevalueDays), uiw.FieldValue(x.revalueDaysS.Get())))),
-				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
-				If(len(accDefs) > 0, Fragment(
-					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
-					MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
+				// default cadence (internal/revalue). The freshness machinery reads
+				// Account.RevalueDays; this input sets it.
+				If(showRevalue, labeledField(uistate.T("accounts.revalueDaysLabel"),
+					box("number", accountedit.FieldRevalueDays, st.OnRevalueDays, st.RevalueDays.Get(), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
+						Placeholder(uistate.T("accounts.revalueDaysPh"))))),
+				If(showRevalue, P(css.Class("t-caption", tw.TextDim, "acct-hint-tuck"), uistate.T("accounts.revalueDaysHint"))),
+				If(len(st.CustomDefs) > 0, Fragment(
+					P(css.Class("t-caption", tw.TextDim, "acct-hint-label"), uistate.T("accounts.customFieldsLabel")),
+					MapKeyed(st.CustomDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: st.CustomVals.Get()[d.Key], OnChange: st.OnCustomEdit}))
 					}),
 				)),
 			)),
+			// The refusal message sits outside the fold, so it is visible whichever way the
+			// editor opened.
+			errText(saveErrID, st.Problem.Message),
 		),
 		Div(css.Class("modal-foot"),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), OnClick(st.OnCancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),
 	)
 }
 
-// foldAccountDetails wraps the account-metadata fields. From the balance figure
-// ("Update balance", QA CF-10) they fold behind a native <details> disclosure so
-// the dialog is as narrow as its label; from Edit they render expanded as before.
-// A native disclosure keeps this stateless — no extra hooks, and the field nodes
-// are built identically in both modes so hook order never shifts.
-func foldAccountDetails(fold bool, fields ui.Node) ui.Node {
-	if !fold {
+// foldAccountDetails wraps the account-metadata fields. When the value comes first
+// ("Update balance") they fold behind a native <details> disclosure so the dialog is as
+// narrow as its label; from Edit they render expanded. A native disclosure keeps this
+// stateless — no extra hooks, and the field nodes are built identically in both modes so
+// hook order never shifts. forceOpen opens the fold for a problem inside it, and the person can
+// still close it by hand afterwards.
+func foldAccountDetails(valueFirst, forceOpen bool, fields ui.Node) ui.Node {
+	if !valueFirst {
 		return fields
 	}
-	return Details(css.Class("csv-help acct-edit-fold"), Attr("data-testid", "acct-edit-details-fold"),
+	return Details(css.Class("csv-help acct-edit-fold"), Attr("data-testid", "acct-edit-details-fold"), AttrIf(forceOpen, "open", ""),
 		Summary(uistate.T("accounts.editDetailsFold")),
 		fields,
 	)

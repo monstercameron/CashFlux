@@ -17,7 +17,7 @@ func TestGeneratedHasKeyRules(t *testing.T) {
 	wants := []string{
 		":root{", "--bg:#0e0e0f", "--accent:#2e8b57",
 		"--control-border:#9a9aa2", "--control-border:#56565c",
-		".fctrl-input:focus-visible{outline:2px solid var(--accent);outline-offset:2px",
+		".fctrl-search:focus-within{border-color:color-mix",
 		"*{", "box-sizing:border-box",
 		"body{", "#boot{", "@keyframes boot-spin{",
 		".btn{", ".bento", ".topbar", ".txn-table",

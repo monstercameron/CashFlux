@@ -7,8 +7,10 @@ package uistate
 import (
 	"encoding/json"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 const (
@@ -22,7 +24,14 @@ const (
 // it to place each widget; drag-reorder (Move) and resize (ResizeItem) rewrite it
 // and persist via PersistItems.
 func UseLayoutItems() state.Atom[[]dashlayout.Item] {
-	return state.UseAtom(layoutAtomID, loadItems())
+	return useLayoutItemsWithLoader(loadItems)
+}
+
+// Cache only this mounted reader's default. Reconciliation and Focus migration
+// remain in loadItems; remounted/late readers never replace an existing atom.
+func useLayoutItemsWithLoader(load func() []dashlayout.Item) state.Atom[[]dashlayout.Item] {
+	initial := ui.UseMemo(load, appstate.Default)
+	return state.UseAtom(layoutAtomID, initial)
 }
 
 // PersistItems saves the ordered items to localStorage. Call it after writing the

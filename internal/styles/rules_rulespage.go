@@ -18,7 +18,7 @@ func registerRulesSurface() {
 		prop("overflow", "visible"),
 	)
 	rule(".bento.bento-rules > .w:has(.add-menu:not(.hidden-menu))",
-		prop("z-index", "30"),
+		prop("z-index", "var(--z-lift)"),
 	)
 	// The rule's weight column: how many transactions its phrase catches.
 	rule(".rule-figure",

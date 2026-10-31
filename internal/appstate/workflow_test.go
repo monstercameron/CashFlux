@@ -3,10 +3,45 @@
 package appstate
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
+
+func TestPutWorkflowRejectsSameAccountTransferAtPersistenceBoundary(t *testing.T) {
+	a := newApp(t, false)
+	err := a.PutWorkflow(workflow.Workflow{
+		ID: "wf-invalid", Name: "Move to itself", Enabled: true,
+		Trigger: workflow.Trigger{Kind: workflow.TriggerScheduled},
+		Actions: []workflow.Action{{
+			Kind: workflow.ActionTransfer, TransferFromAccountID: "checking", TransferToAccountID: "checking", TransferAmount: 100,
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "different accounts") {
+		t.Fatalf("PutWorkflow same-account transfer error = %v", err)
+	}
+	if got := a.Workflows(); len(got) != 0 {
+		t.Fatalf("invalid workflow was persisted: %+v", got)
+	}
+}
+
+func TestRunWorkflowRejectsSameAccountTransferAtExecutionBoundary(t *testing.T) {
+	a := newApp(t, false)
+	result, err := a.RunWorkflow(workflow.Workflow{
+		ID: "wf-invalid-run", Name: "Move to itself", Enabled: true,
+		Trigger: workflow.Trigger{Kind: workflow.TriggerScheduled},
+		Actions: []workflow.Action{{
+			Kind: workflow.ActionTransfer, TransferFromAccountID: "checking", TransferToAccountID: "checking", TransferAmount: 100,
+		}},
+	}, false)
+	if err == nil || !strings.Contains(err.Error(), "different accounts") {
+		t.Fatalf("RunWorkflow same-account transfer error = %v", err)
+	}
+	if result.ID != "" || len(a.WorkflowRuns()) != 0 || len(a.Transactions()) != 0 {
+		t.Fatalf("invalid workflow was applied or logged: result=%+v runs=%d txns=%d", result, len(a.WorkflowRuns()), len(a.Transactions()))
+	}
+}
 
 // TestRunWorkflowApplies proves the apply path: a matching workflow's actions
 // actually change state (a task is created) and the run is recorded, while a dry

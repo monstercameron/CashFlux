@@ -19,9 +19,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgetAnnualGridProps feeds the BG9 annual grid: the raw dataset it projects and
@@ -87,12 +87,14 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	}
 	// GWC compares slices by base pointer. Length makes a reslice an invalidation.
 	deps = append(deps, props.Budgets, len(props.Budgets), props.Txns, len(props.Txns), props.Cats, len(props.Cats), props.Rates)
-	build := ui.UseMemo(func() budgetview.AnnualBuild {
+	build := ui.UseMemo(func() *budgetview.AnnualBuild {
 		if !open.Get() {
-			return budgetview.AnnualBuild{}
+			return &budgetview.AnnualBuild{}
 		}
-		return budgetview.BuildAnnual(props.Budgets, props.Txns, props.Cats, year.Get(), props.Rates, props.WeekStart, props.Now)
+		value := budgetview.BuildAnnual(props.Budgets, props.Txns, props.Cats, year.Get(), props.Rates, props.WeekStart, props.Now)
+		return &value
 	}, deps...)
+	projection := useBudgetAnnualProjection(props, build, open.Get(), revision)
 	header := ui.CreateElement(annualGridHeader, annualGridHeaderProps{Open: open.Get(), Year: year.Get(), Budgets: props.Budgets, Rates: props.Rates, Toggle: func() { open.Set(!open.Get()) }})
 	if !open.Get() {
 		return Div(css.Class("budget-annualgrid"), header)
@@ -100,7 +102,6 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	if build.Err != nil {
 		return Div(css.Class("budget-annualgrid"), header, Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
 	}
-	projection := budgetview.ProjectAnnual(build.Grid, build.Covers, props.Recurrings, props.Goals, props.Now, props.Rates)
 	if projection.Err != nil {
 		return Div(css.Class("budget-annualgrid"), header, Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
 	}

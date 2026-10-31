@@ -9,8 +9,8 @@ package engineenv
 // DefaultMolecules, a real formula over these atoms (floor(Σ score×weight),
 // clamped) — so the number is auditable via Explain, referenceable in any
 // formula or dashboard widget, and even re-weightable by editing the molecule.
-// The inputs derivation (CreditInputs) is the single source shared by the
-// /credit page, the /debt embed, and these variables.
+// The engine uses checked currency-aware aggregates; legacy credit-page inputs
+// retain their existing shape for callers of CreditInputs.
 
 import (
 	"github.com/monstercameron/CashFlux/internal/credithealth"
@@ -47,7 +47,7 @@ func creditInputs(d Data, bals map[string]money.Money) credithealth.Inputs {
 		if a.Type != domain.TypeCreditCard || a.Archived {
 			continue
 		}
-		if bal, ok := bals[a.ID]; ok {
+		if bal, ok := bals[a.ID]; ok && bal.Currency == a.Currency {
 			balances[a.ID] = bal.Amount
 		}
 	}
@@ -59,39 +59,35 @@ func creditInputs(d Data, bals map[string]money.Money) credithealth.Inputs {
 	}
 }
 
-// addCreditVars runs the credit-health model over the shared CreditInputs
-// derivation and exposes each factor's score + exact weight (a missing on-time
-// or age factor scores 0 with zero weight), plus the pay-down targets summed
-// across cards in the base currency. The credit_proxy molecule then reproduces
-// credithealth.Evaluate's ProxyScore exactly.
-func addCreditVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
-	for _, name := range CreditVarNames {
-		out[name] = 0
+// addCreditVars uses native card targets and a checked base-currency aggregate.
+// Unknown required FX, missing balances and arithmetic errors omit monetary
+// factors; independent on-time/age scores and their known weights remain usable.
+// The retained compatibility converter is deliberately unused: tolerant FX
+// conversion cannot establish an available credit-health result.
+func addCreditVars(out map[string]float64, d Data, major func(int64) float64, _ func(int64, string) int64, bals map[string]money.Money) {
+	rates := d.Rates
+	if rates.Base == "" {
+		rates.Base = "USD"
 	}
-	r := credithealth.Evaluate(creditInputs(d, bals))
-	out["credit_util_score"] = float64(credithealth.UtilScore(r.Agg.UtilPct))
+	r := credithealth.EvaluateWithRates(creditInputs(d, bals), rates)
 	out["credit_util_weight"] = r.Weights.Util
+	out["credit_ontime_score"] = 0
+	out["credit_ontime_weight"] = r.Weights.OnTime
 	if r.OnTimeScore >= 0 {
 		out["credit_ontime_score"] = float64(r.OnTimeScore)
-		out["credit_ontime_weight"] = r.Weights.OnTime
 	}
+	out["credit_age_score"] = 0
+	out["credit_age_weight"] = r.Weights.Age
 	if r.AgeScore >= 0 {
 		out["credit_age_score"] = float64(r.AgeScore)
-		out["credit_age_weight"] = r.Weights.Age
 	}
-	cur := func(id string) string {
-		for _, a := range d.Accounts {
-			if a.ID == id {
-				return a.Currency
-			}
-		}
-		return d.Rates.Base
+	if r.UtilErr == nil {
+		out["credit_util_score"] = float64(r.UtilScore)
 	}
-	var to30, to10 int64
-	for _, c := range r.Cards {
-		to30 += toBase(c.Target30Minor, cur(c.AccountID))
-		to10 += toBase(c.Target10Minor, cur(c.AccountID))
+	if r.PayTo30Err == nil {
+		out["credit_pay_to_30"] = major(r.PayTo30.Amount)
 	}
-	out["credit_pay_to_30"] = major(to30)
-	out["credit_pay_to_10"] = major(to10)
+	if r.PayTo10Err == nil {
+		out["credit_pay_to_10"] = major(r.PayTo10.Amount)
+	}
 }

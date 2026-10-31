@@ -7,11 +7,9 @@ package i18n
 // does not touch the shared en.go.
 var accountsACKeys = Catalog{
 	// AC1 — account groups.
-	"accounts.groupsAction": "Groups",
 	// QA CF-27: the menu item says what clicking does, by state.
 	"accounts.newGroupAction":     "New group…",
 	"accounts.manageGroupsAction": "Manage groups",
-	"accounts.groupsManageTitle":  "Organize your accounts into groups",
 	"accounts.newGroup":           "New group",
 	"accounts.editGroup":          "Edit group",
 	"accounts.groupNameLabel":     "Group name",
@@ -27,10 +25,9 @@ var accountsACKeys = Catalog{
 	"accounts.groupSaved":       "Group saved.",
 	"accounts.ungroupedSection": "Ungrouped",
 	// %s = formatted net subtotal.
-	"accounts.groupSubtotal":     "Net %s",
-	"accounts.groupSubtotalAria": "Group net subtotal: %s",
-	"accounts.editGroupTitle":    "Rename this group or change its accounts",
-	"accounts.groupRowAria":      "Account group %s",
+	"accounts.groupSubtotal":  "Net %s",
+	"accounts.editGroupTitle": "Rename this group or change its accounts",
+	"accounts.groupRowAria":   "Account group %s",
 	// AC2 — balance sparkline.
 	// %s = account name. Describes the 90-day trend line for screen readers.
 	"accounts.sparklineAria": "%s balance over the last 90 days",

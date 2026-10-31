@@ -25,11 +25,11 @@ type AccountDocRef struct {
 	Label string `json:"label,omitempty"`
 	// AttachedAt is when the document was filed against the account. Used to sort the
 	// drawer newest-first and to pick the most-recent doc per label.
-	AttachedAt time.Time `json:"attachedAt,omitempty"`
+	AttachedAt time.Time `json:"attachedAt,omitzero"`
 	// ExpiresAt is an optional renewal / expiry date (insurance policy, registration,
 	// warranty). When set, AC17 generates a reminder task ahead of this date. Zero
 	// means the document never expires and produces no reminder.
-	ExpiresAt time.Time `json:"expiresAt,omitempty"`
+	ExpiresAt time.Time `json:"expiresAt,omitzero"`
 }
 
 // DisplayLabel returns the label to show for the ref, falling back to the supplied

@@ -16,19 +16,19 @@
 package screens
 
 import (
-	"sort"
 	"strconv"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/taskview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // maxTodoCalChips caps how many task chips a day cell shows before collapsing the rest
@@ -94,47 +94,9 @@ func TodoCalAddBtn(props todoCalAddBtnProps) ui.Node {
 		uiw.Icon(icon.Plus, css.Class(tw.W3, tw.H3)))
 }
 
-// tasksByDueDay buckets tasks with a due date by their local calendar date (ISO key).
-// Tasks are ordered within a day by priority (high first) then title, so the chips a
-// day shows first are the ones that matter most.
-func tasksByDueDay(tasks []domain.Task) map[string][]domain.Task {
-	m := make(map[string][]domain.Task)
-	for _, t := range tasks {
-		if t.Due.IsZero() {
-			continue
-		}
-		key := dateutil.FormatDate(t.Due)
-		m[key] = append(m[key], t)
-	}
-	for k := range m {
-		day := m[k]
-		sort.SliceStable(day, func(i, j int) bool {
-			pi, pj := priorityRank(day[i].Priority), priorityRank(day[j].Priority)
-			if pi != pj {
-				return pi < pj
-			}
-			return day[i].Title < day[j].Title
-		})
-		m[k] = day
-	}
-	return m
-}
-
-// priorityRank orders priorities high(0) → medium(1) → low(2) for within-day sorting.
-func priorityRank(p domain.TaskPriority) int {
-	switch p {
-	case domain.PriorityHigh:
-		return 0
-	case domain.PriorityLow:
-		return 2
-	default:
-		return 1
-	}
-}
-
 // todoCalendarView renders the calendar schedule view over the reusable uiw.Calendar.
 func todoCalendarView(props todoCalendarProps) ui.Node {
-	buckets := tasksByDueDay(props.Tasks)
+	buckets := taskview.ByDueDay(props.Tasks)
 
 	// DayContent is hook-free: it only composes child components + static nodes.
 	dayContent := func(day time.Time, inMonth bool) ui.Node {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"sort"
 	"strings"
 
@@ -20,6 +21,9 @@ import (
 // ErrUnknownRate is returned when a conversion needs a rate that the table does
 // not provide.
 var ErrUnknownRate = errors.New("currency: no exchange rate for currency")
+
+// ErrInvalidRate is returned when a required rate is not finite and positive.
+var ErrInvalidRate = errors.New("currency: exchange rate must be finite and positive")
 
 // Currency describes a currency for display and minor-unit math.
 type Currency struct {
@@ -138,8 +142,8 @@ func (r Rates) rateToBase(code string) (float64, error) {
 	if !ok {
 		return 0, fmt.Errorf("%w: %q (base %q)", ErrUnknownRate, code, r.Base)
 	}
-	if rate <= 0 {
-		return 0, fmt.Errorf("currency: non-positive rate for %q", code)
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		return 0, fmt.Errorf("%w: %q", ErrInvalidRate, code)
 	}
 	return rate, nil
 }
@@ -151,7 +155,8 @@ func (r Rates) ToBase(m money.Money) (money.Money, error) {
 
 // Convert converts a Money value into the target currency by routing through the
 // base currency. Amounts are rounded to the target currency's minor units
-// (half away from zero).
+// (half away from zero). Invalid rates return ErrInvalidRate; a rounded result
+// outside the int64 range returns an error wrapping money.ErrOverflow.
 func (r Rates) Convert(m money.Money, toCurrency string) (money.Money, error) {
 	to := normalize(toCurrency)
 	if m.Currency == to {
@@ -170,9 +175,42 @@ func (r Rates) Convert(m money.Money, toCurrency string) (money.Money, error) {
 	fromMajor := float64(m.Amount) / pow10(Decimals(m.Currency))
 	baseMajor := fromMajor * fromRate
 	toMajor := baseMajor / toRate
-	toMinor := int64(math.Round(toMajor * pow10(Decimals(to))))
+	rounded := math.Round(toMajor * pow10(Decimals(to)))
+	// Ordinary amounts retain the existing fast rounding path. Near the integer
+	// limits, float64 loses whole minor units; an exact fallback distinguishes
+	// valid MaxInt64/MinInt64 results from overflow before converting to int64.
+	// It also preserves finite final values when an intermediate overflowed or
+	// lost precision to underflow before division by the target rate.
+	if math.IsNaN(rounded) || math.IsInf(rounded, 0) || math.Abs(rounded) >= 0x1p62 ||
+		m.Amount != 0 && math.Abs(baseMajor) < 0x1p-1022 {
+		return convertExact(m, to, fromRate, toRate)
+	}
+	toMinor := int64(rounded)
 
 	return money.New(toMinor, to), nil
+}
+
+func convertExact(m money.Money, to string, fromRate, toRate float64) (money.Money, error) {
+	var result, rate big.Rat
+	result.SetInt64(m.Amount)
+	rate.SetFloat64(fromRate)
+	result.Mul(&result, &rate)
+	rate.SetFloat64(toRate)
+	result.Quo(&result, &rate)
+	rate.SetFrac64(int64(pow10(Decimals(to))), int64(pow10(Decimals(m.Currency))))
+	result.Mul(&result, &rate)
+
+	var rounded, remainder big.Int
+	rounded.QuoRem(result.Num(), result.Denom(), &remainder)
+	remainder.Abs(&remainder)
+	remainder.Lsh(&remainder, 1)
+	if remainder.Cmp(result.Denom()) >= 0 {
+		rounded.Add(&rounded, big.NewInt(int64(result.Sign())))
+	}
+	if !rounded.IsInt64() {
+		return money.Money{}, fmt.Errorf("currency: convert %s to %s: %w", m, to, money.ErrOverflow)
+	}
+	return money.New(rounded.Int64(), to), nil
 }
 
 // ConvertBetween converts amt (in integer minor units of from) to integer minor

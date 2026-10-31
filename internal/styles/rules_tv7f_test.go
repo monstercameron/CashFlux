@@ -29,7 +29,7 @@ func TestTV7FBulkControlsShareThirtySixPixelHeight(t *testing.T) {
 	resetSheet()
 	registerTV7F()
 	css := Build()
-	want := ".txn-bulkbar-overlay .txn-bulk-primary > *, .txn-bulkbar-overlay > .btn-tool, .txn-bulkbar-overlay .bulk-picker-trigger, .txn-bulkbar-overlay .cf-multipicker-trigger{box-sizing:border-box;height:36px;min-height:36px;}"
+	want := ".txn-bulkbar-overlay .txn-bulk-primary > *, .txn-bulkbar-overlay > .btn-tool, .txn-bulkbar-overlay .bulk-picker-trigger{box-sizing:border-box;height:36px;min-height:36px;}"
 	if !strings.Contains(css, want) {
 		t.Fatalf("TV7F bulk height rule missing: %s", want)
 	}

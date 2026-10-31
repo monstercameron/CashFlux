@@ -20,7 +20,7 @@ var qpassCKeys = Catalog{
 	"accounts.reconFinishAction": "Finish reconciliation",
 
 	// --- "Mark all cleared" bulk action -------------------------------------
-	"accounts.reconMarkAll":      "Mark all cleared",
+	"accounts.reconMarkAll":      "Mark all transactions cleared",
 	"accounts.reconMarkAllTitle": "Mark every uncleared transaction on this account as cleared",
 	// Outcome preview shown beside the bulk button once a statement balance is
 	// typed. %d = how many transactions would flip to cleared.

@@ -5,53 +5,48 @@
 package screens
 
 import (
-	"math"
-	"sort"
+	"errors"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/accountflow"
-	"github.com/monstercameron/CashFlux/internal/acctseries"
-	"github.com/monstercameron/CashFlux/internal/acctsort"
+	"github.com/monstercameron/CashFlux/internal/accountselect"
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/idlecash"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
-	"github.com/monstercameron/CashFlux/internal/provisional"
-	"github.com/monstercameron/CashFlux/internal/smart"
-	"github.com/monstercameron/CashFlux/internal/smartengine"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // accounts_tiles.go holds the Native widget bodies the /accounts surface host
-// composes (see accounts_widget.go). Each is a self-contained engine tile: it reads
-// the live store (props.App) and the shared accounts-page atoms (filter / transfer
-// sub-view), never surface-local closures, so the host can place each tile through
-// the same spec/render pipeline the dashboard and /transactions use. The rich
-// per-account row (AccountRow) is reused verbatim — these tiles only restructure the
-// page around it.
+// composes (see accounts_widget.go). Each is a self-contained engine tile. It reads
+// the live store (props.App) and the shared accounts-page atoms (filter and transfer
+// open state), never surface-local closures, so the host can place each tile through
+// the same spec/render pipeline the dashboard and /transactions use. The per-account
+// row (AccountRow) is reused as is. These tiles only arrange the page around it.
 //
-// AC7 sweep rules: the config manager lives in the "acct-sweep-btn" toolbar modal
-// (SweepRulesHost → SweepRulesForm, accounts_sweep_config.go), and the
-// preview-approve proposal card renders above the bento in accounts_widget.go
-// (accountsSweepCards, accounts_sweep_card.go), mirroring the GL1 waterfall card.
+// Sweep rules: the config manager opens from the "acct-sweep-btn" toolbar item
+// (SweepRulesHost, which renders SweepRulesForm in accounts_sweep_config.go). The
+// proposal cards render above the bento (accountsSweepCards, accounts_sweep_card.go).
 
 // --- shared tile props ----------------------------------------------------------
 
@@ -88,7 +83,7 @@ type acctFormulaProps struct{ App *appstate.App }
 
 // --- shared helpers -------------------------------------------------------------
 
-// acctActiveMemberID resolves the legacy single-owner filter from the top-bar active
+// acctActiveMemberID resolves the single-owner filter from the top-bar active
 // scope: when exactly one owner is scoped, return its id (rows are filtered to that
 // member); otherwise "" (all members). It calls the UseActiveScope hook, so invoke it
 // at a stable position near the top of a tile body.
@@ -99,51 +94,42 @@ func acctActiveMemberID() string {
 	return ""
 }
 
-// partitionAssetAccounts splits the account set into the visible asset rows and the
-// archived asset rows, applying owner scoping and excluding liabilities (which live
-// on /debt). Assets are sorted by base-converted balance, largest first, so the
-// accounts that move net worth most sit at the top. Pure (no hooks) so any tile can
-// call it after fetching its data.
-func partitionAssetAccounts(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, base, activeMemberID string) (assets, archived []domain.Account) {
-	for _, ac := range accounts {
-		if !ownerVisibleTo(ac.OwnerID, activeMemberID) {
-			continue
-		}
-		if ac.Class == domain.ClassLiability {
-			continue
-		}
-		if ac.Archived {
-			archived = append(archived, ac)
-		} else {
-			assets = append(assets, ac)
-		}
-	}
-	convBal := func(ac domain.Account) int64 {
-		bal, _ := ledger.Balance(ac, txns)
-		if c, err := rates.Convert(bal, base); err == nil {
-			return c.Amount
-		}
-		return bal.Amount
-	}
-	sort.SliceStable(assets, func(i, j int) bool { return convBal(assets[i]) > convBal(assets[j]) })
-	return assets, archived
-}
+// accountRowKey is the MapKeyed key for an account row.
+func accountRowKey(ac domain.Account) any { return ac.ID }
 
-// acctRowCallbacks bundles the per-row mutation handlers the asset/archived list
-// tiles hand to each AccountRow. They are plain funcs (no hooks) that mutate the
-// store and bump the shared data revision so the whole surface re-renders in step;
-// OnView is supplied separately by the tile (it closes over the router + tx filter).
+// acctRowCallbacks bundles the per-row mutation handlers that the list tiles pass to
+// each AccountRow. They are plain funcs (no hooks). Each one changes the store and
+// bumps the shared data revision so the whole surface re-renders together. OnView is
+// supplied separately by the tile, since it needs the router.
 type acctRowCallbacks struct {
-	OnDelete                func(string)
-	OnArchive               func(domain.Account)
+	OnDelete  func(string)
+	OnArchive func(domain.Account)
+	// OnRefresh marks the account's balance as confirmed today and posts a notice. OnRerender only
+	// redraws the surface; the reconcile panel uses it after a change that needs no stamp.
 	OnRefresh               func(domain.Account)
-	OnSave                  func(domain.Account)
-	OnSetBalance            func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
-	OnTransfer              func(fromID, toID, amountStr, dateStr, desc string)
+	OnRerender              func(domain.Account)
+	OnSave                  func(domain.Account) bool
+	OnSetBalance            func(ac domain.Account, newBalStr, catID, asOfISO string) bool
+	OnTransfer              func(fromID, toID, amountStr, dateStr, desc string) bool
 	OnSetDefaultHousehold   func(string)
 	OnClearDefaultHousehold func()
 	OnSetDefaultMember      func(accountID, memberID string)
 	OnClearDefaultMember    func(memberID string)
+}
+
+// deleteTemplatesFor removes the quick-add templates that post to the account, so a deleted account
+// leaves no favourite that points at it. The ids are gathered first because deleting rewrites the list
+// being read.
+func deleteTemplatesFor(accountID string) {
+	var ids []string
+	for _, t := range uistate.TxnTemplates() {
+		if t.AccountID == accountID {
+			ids = append(ids, t.ID)
+		}
+	}
+	for _, id := range ids {
+		uistate.DeleteTxnTemplate(id)
+	}
 }
 
 // buildAcctRowCallbacks wires the store mutations for AccountRow. Errors surface
@@ -152,13 +138,11 @@ type acctRowCallbacks struct {
 func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 	return acctRowCallbacks{
 		OnDelete: func(accountID string) {
-			// Refuse to delete an account that still has transactions (including the far
-			// leg of a transfer): deleting it would orphan them. Archive keeps history.
-			for _, t := range app.Transactions() {
-				if t.AccountID == accountID || t.TransferAccountID == accountID {
-					uistate.PostNotice(uistate.T("accounts.deleteHasTxns"), true)
-					return
-				}
+			// Refuse to delete an account that still has transactions, including the far
+			// leg of a transfer, because deleting it would orphan them. Archiving keeps history.
+			if app.AccountHasTransactions(accountID) {
+				uistate.PostNotice(uistate.T("accounts.deleteHasTxns"), true)
+				return
 			}
 			name := ""
 			for _, ac := range app.Accounts() {
@@ -167,17 +151,19 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 					break
 				}
 			}
-			// C8: confirm THEN undo — the same destructive-action contract as goals and
-			// budgets, so delete behaves identically across sibling pages.
+			// Confirm first, then offer undo. Goals and budgets follow the same rule, so
+			// deleting behaves the same on every page. The row that had focus is noted before
+			// the modal opens, because opening it moves focus away.
+			restoreFocus := captureRowFocus(".rows", ".row")
 			uistate.ConfirmModal(uistate.T("accounts.deleteConfirm", name), true, func(ok bool) {
 				if !ok {
 					return
 				}
-				restoreFocus := captureRowFocus(".rows", ".row")
 				if err := app.DeleteAccount(accountID); err != nil {
-					uistate.PostNotice(err.Error(), true)
+					postAcctWriteError("delete account", err)
 					return
 				}
+				deleteTemplatesFor(accountID)
 				uistate.BumpDataRevision()
 				restoreFocus()
 				auditview.CaptureNow()
@@ -187,12 +173,12 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 		OnArchive: func(ac domain.Account) {
 			ac.Archived = !ac.Archived
 			if err := app.PutAccount(ac); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				postAcctWriteError("archive account", err)
 				return
 			}
 			uistate.BumpDataRevision()
-			// G4: archiving used to be silent — the row just vanished. Name what
-			// happened and offer the one-click way back.
+			// Name the change and offer a one-click undo, so archiving does not look like
+			// the row simply vanished.
 			if ac.Archived {
 				uistate.PostUndoable(uistate.T("accounts.archivedToast", ac.Name))
 			} else {
@@ -200,24 +186,25 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			}
 		},
 		OnRefresh: func(ac domain.Account) {
-			ac.BalanceAsOf = time.Now()
-			if err := app.PutAccount(ac); err != nil {
-				uistate.PostNotice(err.Error(), true)
+			if _, err := app.MarkBalancesUpdated([]string{ac.ID}, time.Now()); err != nil {
+				postAcctWriteError("mark balance updated", err)
 				return
 			}
 			uistate.BumpDataRevision()
 			uistate.PostNotice(uistate.T("accounts.markUpdatedToast", ac.Name), false)
 		},
-		OnSave: func(ac domain.Account) {
+		OnRerender: func(domain.Account) { uistate.BumpDataRevision() },
+		OnSave: func(ac domain.Account) bool {
 			if err := app.PutAccount(ac); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				return
+				postAcctWriteError("save account", err)
+				return false
 			}
 			uistate.BumpDataRevision()
+			return true
 		},
 		OnSetDefaultHousehold: func(accountID string) {
 			if err := app.SetDefaultAccountID(accountID); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				postAcctWriteError("set default account", err)
 				return
 			}
 			uistate.BumpDataRevision()
@@ -226,7 +213,7 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 		},
 		OnClearDefaultHousehold: func() {
 			if err := app.ClearDefaultAccountID(); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				postAcctWriteError("clear default account", err)
 				return
 			}
 			uistate.BumpDataRevision()
@@ -234,320 +221,234 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			uistate.PostNotice(uistate.T("defaultAccount.householdCleared"), false)
 		},
 		OnSetDefaultMember: func(accountID, memberID string) {
-			accountFound := false
-			for _, account := range app.Accounts() {
-				if account.ID == accountID && !account.Archived {
-					accountFound = true
-					break
-				}
-			}
-			if !accountFound {
-				uistate.PostNotice(uistate.T("defaultAccount.archivedError"), true)
-				return
-			}
-			for _, member := range app.Members() {
-				if member.ID != memberID {
-					continue
-				}
-				member.Prefs.DefaultAccountID = accountID
-				if err := app.PutMember(member); err != nil {
-					uistate.PostNotice(err.Error(), true)
-					return
-				}
-				uistate.BumpDataRevision()
-				uistate.RequestPersist()
-				uistate.PostNotice(uistate.T("defaultAccount.memberSet", member.Name), false)
-				return
-			}
-			uistate.PostNotice(uistate.T("defaultAccount.memberMissing"), true)
-		},
-		OnClearDefaultMember: func(memberID string) {
-			for _, member := range app.Members() {
-				if member.ID != memberID {
-					continue
-				}
-				member.Prefs.DefaultAccountID = ""
-				if err := app.PutMember(member); err != nil {
-					uistate.PostNotice(err.Error(), true)
-					return
-				}
-				uistate.BumpDataRevision()
-				uistate.RequestPersist()
-				uistate.PostNotice(uistate.T("defaultAccount.memberCleared", member.Name), false)
-				return
-			}
-			uistate.PostNotice(uistate.T("defaultAccount.memberMissing"), true)
-		},
-		OnSetBalance: func(ac domain.Account, currentBal money.Money, newStr, catID, asOfISO string) {
-			dec := currency.Decimals(ac.Currency)
-			target, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
+			name, err := app.SetMemberDefaultAccount(memberID, accountID)
 			if err != nil {
-				uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
-				return
-			}
-			// C684: the difference is posted as a provisional balance CHECKPOINT, not
-			// as an ordinary adjustment. It is real for the balance and invisible to
-			// reporting, because the money was not earned or spent — the account
-			// simply held more than the ledger knew. Making that the user's job to
-			// remember (tag it, tick "exclude from reports", delete it when the
-			// statement lands) is what produced a run of August-dated adjustments
-			// counting as income.
-			//
-			// Only one guess per account stands at a time, so a previous checkpoint
-			// is replaced rather than stacked — otherwise checking a balance twice
-			// leaves two adjustments both claiming to explain the same gap.
-			now := time.Now()
-			// The date the balance was true as of. A figure read on Friday and
-			// entered on Monday belongs to Friday; an unparseable or absent one
-			// falls back to now rather than refusing the update over a date field.
-			asOf := now
-			if parsed, perr := dateutil.ParseDate(asOfISO); perr == nil && !parsed.IsZero() {
-				asOf = parsed
-			}
-			if cp, ok := provisional.New(id.New(), ac.ID, uistate.T("accounts.balanceCheckpointDesc"),
-				currentBal.Amount, target, ac.Currency, asOf, now); ok {
-				cp.CategoryID = catID
-				replaced := 0
-				app.BulkMutate(func() {
-					for _, old := range provisional.Of(ac.ID, app.Transactions()) {
-						if err := app.DeleteTransaction(old.ID); err == nil {
-							replaced++
-						}
-					}
-					if err := app.PutTransaction(cp); err != nil {
-						uistate.PostNotice(err.Error(), true)
-					}
-				})
-				if replaced > 0 {
-					uistate.PostNotice(uistate.T("accounts.balanceCheckpointReplaced", replaced), false)
-				}
-			}
-			ac.BalanceAsOf = time.Now()
-			if err := app.PutAccount(ac); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				postMemberDefaultError(err)
 				return
 			}
 			uistate.BumpDataRevision()
-			// G3: a balance set posts a real transaction — one-click reversible. Since
-			// C684 that row is a provisional CHECKPOINT: it moves the balance and stays
-			// out of reports, and it is retired when a statement covers its date.
-			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))))
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("defaultAccount.memberSet", name), false)
 		},
-		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) {
-			doAccountTransfer(app, fromID, toID, amountStr, "", "", dateStr, desc)
+		OnClearDefaultMember: func(memberID string) {
+			name, err := app.ClearMemberDefaultAccount(memberID)
+			if err != nil {
+				postMemberDefaultError(err)
+				return
+			}
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("defaultAccount.memberCleared", name), false)
+		},
+		OnSetBalance: func(ac domain.Account, newStr, catID, asOfISO string) bool {
+			typed, err := money.ParseMinor(strings.TrimSpace(newStr), currency.Decimals(ac.Currency))
+			if err != nil {
+				uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
+				return false
+			}
+			// The date the balance was true as of. A figure read on Friday and entered on Monday
+			// belongs to Friday; a blank one means today, and a date that does not parse is refused.
+			asOf, asOfOK := balanceAsOfDate(asOfISO, time.Now())
+			if !asOfOK {
+				uistate.PostNotice(uistate.T("accounts.setBalanceAsOfInvalid"), true)
+				return false
+			}
+			// The account's own edits are saved first, so the preview reads the account as it now is.
+			if err := app.PutAccount(ac); err != nil {
+				postAcctWriteError("save account before balance update", err)
+				return false
+			}
+			// The account's own edits are stored from here on, so the surface redraws even when
+			// the balance step below fails.
+			uistate.BumpDataRevision()
+			// The difference is posted as one provisional balance checkpoint, which replaces any
+			// earlier checkpoint for the account in the same atomic commit. It moves the balance but
+			// stays out of reports, because the money was not earned or spent.
+			preview, err := app.PreviewAccountReconciliation(ac.ID, typed, asOf)
+			if err != nil {
+				postAcctWriteError("preview balance update", err)
+				return false
+			}
+			if _, err := app.CommitAccountReconciliation(preview.WithCategory(catID), uistate.T("accounts.balanceCheckpointDesc")); err != nil {
+				postAcctWriteError("commit balance update", err)
+				return false
+			}
+			uistate.BumpDataRevision()
+			// A debt with no opening balance has no recorded sign convention, so the sign it
+			// was entered in was inferred from the booked balance. The toast says so.
+			_, conventionKnown := reconcile.ConventionOf(ac, accountSnapshot(app).Balances[ac.ID].Amount)
+			key := "accounts.balanceUpdated"
+			if !conventionKnown {
+				key = "accounts.balanceUpdatedGuessed"
+			}
+			// The toast offers undo.
+			uistate.PostUndoable(uistate.T(key, ac.Name, fmtMoney(money.New(typed, ac.Currency))))
+			return true
+		},
+		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) bool {
+			return doAccountTransfer(app, fromID, toID, amountStr, "", "", dateStr, desc)
 		},
 	}
 }
 
-// acctTransferOptions builds the From/To pickers for BOTH transfer forms with one
-// eligibility rule (C2): money moves FROM liquid cash only (a 401(k) or the condo
-// can't be a source of a spending transfer), and it lands anywhere except a
-// valuation-only holding (property/vehicle) — a transfer TO a liability is a payment
-// and says so on the option label. Each side still excludes the other's selection.
+// postMemberDefaultError tells the user why a member default could not be saved.
+func postMemberDefaultError(err error) {
+	switch {
+	case errors.Is(err, appstate.ErrAccountNotFound), errors.Is(err, appstate.ErrDefaultAccountArchived):
+		uistate.PostNotice(uistate.T("defaultAccount.archivedError"), true)
+	case errors.Is(err, appstate.ErrMemberNotFound):
+		uistate.PostNotice(uistate.T("defaultAccount.memberMissing"), true)
+	default:
+		postAcctWriteError("set member default account", err)
+	}
+}
+
+// acctTransferOptions builds the From/To pickers for both transfer forms from the
+// shared eligibility rule in accountselect.TransferCandidates. A transfer TO a
+// liability is a payment, and the option label says so.
 func acctTransferOptions(accounts []domain.Account, fromID, toID string) (fromOpts, toOpts []uiw.SelectOption) {
+	from, to := accountselect.TransferCandidates(accounts, fromID, toID)
 	fromOpts = []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
 	toOpts = []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
-	// Ordered for a picker rather than left in store order — which is the order the
-	// accounts happened to be created, and answers no question anyone has while
-	// looking for one. See acctsort.ForPicker for why this is not the risk-first
-	// order the accounts page itself uses.
-	for _, ac := range acctsort.ForPicker(accounts) {
-		if ac.Archived {
-			continue
+	for _, c := range from {
+		fromOpts = append(fromOpts, uiw.SelectOption{Value: c.ID, Label: c.Label})
+	}
+	for _, c := range to {
+		label := c.Label
+		if c.LiabilityPayment {
+			label += uistate.T("accounts.transferPaymentSuffix")
 		}
-		// Annotate the currency — unless the account NAME already carries it (e.g. the
-		// sample "Travel Card (EUR)"), which would read as "Travel Card (EUR) (EUR)".
-		lbl := ac.Name
-		if !strings.Contains(strings.ToUpper(ac.Name), "("+strings.ToUpper(ac.Currency)+")") {
-			lbl += " (" + ac.Currency + ")"
-		}
-		if ac.ID != toID && earmarkEligibleType(ac.Type) {
-			fromOpts = append(fromOpts, uiw.SelectOption{Value: ac.ID, Label: lbl})
-		}
-		if ac.ID != fromID && ac.Type != domain.TypeProperty && ac.Type != domain.TypeVehicle {
-			toLbl := lbl
-			if ac.Class == domain.ClassLiability {
-				toLbl += uistate.T("accounts.transferPaymentSuffix")
-			}
-			toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: toLbl})
-		}
+		toOpts = append(toOpts, uiw.SelectOption{Value: c.ID, Label: label})
 	}
 	return fromOpts, toOpts
 }
 
-// acctTransferFXNote surfaces the cross-currency semantics BEFORE the transfer is
-// posted (G7): the amount is denominated in the source currency, and either lands
-// converted at the saved rate (with a live ≈ preview of the typed amount) or — when
-// no rate exists — a warning that it would land unconverted, pointing at Manage
-// exchange rates. Renders nothing for same-currency pairs or incomplete picks.
+// acctTransferFXNote shows the cross-currency meaning of a transfer before it posts.
+// The amount is in the source currency. It lands converted at the saved rate, with a
+// live ≈ preview of the typed amount. When no rate exists, a warning says it would land
+// unconverted and points to Manage exchange rates. Renders nothing for same-currency
+// pairs or incomplete picks.
 func acctTransferFXNote(app *appstate.App, fromID, toID, amountStr string) ui.Node {
-	if app == nil || fromID == "" || toID == "" {
+	if app == nil {
 		return Fragment()
 	}
-	var fromAc, toAc domain.Account
-	for _, ac := range app.Accounts() {
-		if ac.ID == fromID {
-			fromAc = ac
-		}
-		if ac.ID == toID {
-			toAc = ac
-		}
-	}
-	if fromAc.ID == "" || toAc.ID == "" || fromAc.Currency == toAc.Currency {
+	_, rates := accountBaseAndRates(app)
+	note := accountselect.TransferFXNote(app.Accounts(), rates, fromID, toID, amountStr)
+	switch note.Kind {
+	case accountselect.FXNoRate:
+		return uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "xfer-fx-norate",
+			Body: Span(uistate.T("accounts.fxNoteNoRate", note.From, note.To)),
+		})
+	case accountselect.FXConverted:
+		return uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutInfo, TestID: "xfer-fx-note",
+			Body: Span(uistate.T("accounts.fxNoteAmountIn", note.From, note.To, fmtMoney(note.Landed))),
+		})
+	default:
 		return Fragment()
 	}
-	s := app.Settings()
-	rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
-	dec := currency.Decimals(fromAc.Currency)
-	amtMinor, perr := money.ParseMinor(strings.TrimSpace(amountStr), dec)
-	if perr != nil || amtMinor <= 0 {
-		amtMinor = int64(1)
-		for i := 0; i < dec; i++ {
-			amtMinor *= 10
-		} // preview 1.00 until an amount is typed
-	}
-	conv, cerr := rates.Convert(money.New(amtMinor, fromAc.Currency), toAc.Currency)
-	if cerr != nil {
-		return P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "xfer-fx-norate"),
-			uistate.T("accounts.fxNoteNoRate", fromAc.Currency, toAc.Currency))
-	}
-	return P(css.Class("budget-sub"), Attr("data-testid", "xfer-fx-note"),
-		Style(map[string]string{"margin": "0"}),
-		uistate.T("accounts.fxNoteAmountIn", fromAc.Currency, toAc.Currency, fmtMoney(conv)))
 }
 
-// acctTransferBalancePreview shows what the transfer would do to both booked
-// balances before it posts — "Checking: $1,000.00 → $950.00" for each side —
-// via appstate.PreviewTransferPair, which shares the exact leg math (FX
-// conversion + liability payment sign) with the real post. Renders nothing
-// until both accounts are picked and a valid positive amount is typed.
-// receivedStr/feeStr are the optional landed-amount override (destination
-// currency) and fee (source currency); pass "" for none — invalid text is
-// treated as absent here (the form gates submit on it separately).
+// acctTransferBalancePreview shows what the transfer would do to both booked balances
+// before it posts, such as "Checking: $1,000.00 → $950.00" for each side. It uses
+// appstate.PreviewTransferPair, which shares the exact leg math (FX conversion and the
+// liability payment sign) with the real post. Renders nothing until both accounts are
+// picked and a valid positive amount is typed. receivedStr and feeStr are the optional
+// landed-amount override (destination currency) and fee (source currency). Pass ""
+// for none. Invalid text counts as absent here, since the form gates submit separately.
 func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr, receivedStr, feeStr string) ui.Node {
-	if app == nil || fromID == "" || toID == "" || fromID == toID {
+	if app == nil {
 		return Fragment()
 	}
-	fromCcy := acctCurrencyOf(app, fromID)
-	amtMinor, perr := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(fromCcy))
-	if perr != nil || amtMinor <= 0 {
+	pending, ok := accountselect.PreviewTransfer(app.Accounts(), fromID, toID, amountStr, receivedStr, feeStr)
+	if !ok {
 		return Fragment()
 	}
-	recvMinor, _ := acctParseOptionalMinor(receivedStr, acctCurrencyOf(app, toID))
-	feeMinor, _ := acctParseOptionalMinor(feeStr, fromCcy)
-	pv, err := app.PreviewTransferPair(appstate.TransferParams{
-		FromAccountID: fromID, ToAccountID: toID, AmountMinor: amtMinor,
-		ReceivedMinor: recvMinor, FeeMinor: feeMinor,
-	})
+	preview, err := app.PreviewTransferPair(pending.Params)
 	if err != nil {
 		return Fragment()
 	}
-	var fromName, toName string
-	for _, ac := range app.Accounts() {
-		switch ac.ID {
-		case fromID:
-			fromName = ac.Name
-		case toID:
-			toName = ac.Name
-		}
+	// One plain sentence states what each side does and that neither leg is spending.
+	// A liability destination reads as paying down what is owed, not as an increase.
+	amtStr := money.FormatMinor(pending.Params.AmountMinor, currency.Decimals(accountselect.CurrencyOf(app.Accounts(), fromID)))
+	semanticsKey := "accounts.xferSemanticsAsset"
+	if pending.ToLiability {
+		semanticsKey = "accounts.xferSemanticsLiability"
 	}
-	// #63: state the transfer's SEMANTICS in one plain sentence — what each side
-	// does and that neither leg is spending. A liability destination reads as
-	// paying down what's owed, not as an increase.
-	amtStr := money.FormatMinor(amtMinor, currency.Decimals(fromCcy))
-	semantics := uistate.T("accounts.xferSemanticsAsset", fromName, amtStr, toName)
-	for _, ac := range app.Accounts() {
-		if ac.ID == toID && ac.Class == domain.ClassLiability {
-			semantics = uistate.T("accounts.xferSemanticsLiability", fromName, amtStr, toName)
-			break
-		}
-	}
-	return Div(css.Class("budget-sub"), Attr("data-testid", "xfer-balance-preview"),
-		Style(map[string]string{"margin": "0", "display": "grid", "gap": "0.15rem"}),
-		Span(uistate.T("accounts.xferPreviewTitle")),
-		Span(Attr("data-testid", "xfer-preview-from"),
-			uistate.T("accounts.xferPreviewLine", fromName, fmtMoney(pv.FromBefore), fmtMoney(pv.FromAfter))),
-		Span(Attr("data-testid", "xfer-preview-to"),
-			uistate.T("accounts.xferPreviewLine", toName, fmtMoney(pv.ToBefore), fmtMoney(pv.ToAfter))),
-		Span(css.Class(tw.TextDim), Attr("data-testid", "xfer-semantics"), semantics),
-	)
+	return uiw.Callout(uiw.CalloutProps{
+		Tone: uiw.CalloutInfo, TestID: "xfer-balance-preview",
+		Body: Div(css.Class("acct-xfer-preview"),
+			Span(uistate.T("accounts.xferPreviewTitle")),
+			Span(Attr("data-testid", "xfer-preview-from"),
+				uistate.T("accounts.xferPreviewLine", pending.FromName, fmtMoney(preview.FromBefore), fmtMoney(preview.FromAfter))),
+			Span(Attr("data-testid", "xfer-preview-to"),
+				uistate.T("accounts.xferPreviewLine", pending.ToName, fmtMoney(preview.ToBefore), fmtMoney(preview.ToAfter))),
+			Span(css.Class(tw.TextDim), Attr("data-testid", "xfer-semantics"),
+				uistate.T(semanticsKey, pending.FromName, amtStr, pending.ToName)),
+		),
+	})
 }
 
-// acctCurrencyOf returns the currency code of the given account ("" when the
-// id isn't picked yet or unknown).
-func acctCurrencyOf(app *appstate.App, accountID string) string {
-	if app == nil || accountID == "" {
-		return ""
+// amountStep is the step of a money input in the currency: one minor unit, so the field accepts
+// exactly the precision the currency has.
+func amountStep(ccy string) string {
+	dec := currency.Decimals(ccy)
+	if dec <= 0 {
+		return "1"
 	}
-	for _, ac := range app.Accounts() {
-		if ac.ID == accountID {
-			return ac.Currency
-		}
-	}
-	return ""
+	return "0." + strings.Repeat("0", dec-1) + "1"
 }
 
-// acctTransferAmountOK reports whether amountStr parses as a positive amount in
-// the source account's minor units — the shared submit-enable rule for both
-// transfer forms (the button used to enable with a blank amount; 2026-07-18
-// assessment, High: validation defect).
+// acctTransferAmountOK reports whether amountStr parses as a positive amount in the
+// source account's minor units. Both transfer forms use it to decide whether submit is
+// enabled, so a blank amount never enables the button.
 func acctTransferAmountOK(app *appstate.App, fromID, amountStr string) bool {
-	dec := currency.Decimals(acctCurrencyOf(app, fromID))
-	amtMinor, err := money.ParseMinor(strings.TrimSpace(amountStr), dec)
-	return err == nil && amtMinor > 0
+	return accountselect.AmountOK(app.Accounts(), fromID, amountStr)
 }
 
-// acctParseOptionalMinor parses an optional amount field: blank or an explicit
-// zero both mean "none" (0, true) — a typed "0" fee is a statement, not an
-// error; otherwise it must parse as a positive amount in the given currency.
-func acctParseOptionalMinor(s, ccy string) (int64, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, true
+// doAccountTransfer creates a transfer pair from the page or row transfer forms and reports
+// whether it posted, so a form can stay open with its input when it did not. It has no hooks.
+// accountselect.ParseTransfer validates the amounts and the date and fills in the description when
+// it is blank, then the revision is bumped. receivedStr and feeStr are the optional cross-currency
+// landed amount (destination currency) and transfer fee (source currency). Blank means none.
+func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, receivedStr, feeStr, dateStr, desc string) bool {
+	params, err := accountselect.ParseTransfer(app.Accounts(), accountselect.TransferInput{
+		FromID: fromID, ToID: toID, Amount: amountStr, Received: receivedStr, Fee: feeStr,
+		Date: dateStr, Desc: desc, DefaultDesc: uistate.T("accounts.transferDefaultDesc"),
+	})
+	if err != nil {
+		uistate.PostNotice(transferFormError(err), true)
+		return false
 	}
-	v, err := money.ParseMinor(s, currency.Decimals(ccy))
-	if err != nil || v < 0 {
-		return 0, false
-	}
-	return v, true
-}
-
-// doAccountTransfer creates a transfer pair from the page/row transfer forms. Pure
-// (no hooks): validates the amounts, defaults the date/desc, and bumps the revision.
-// receivedStr/feeStr are the optional cross-currency landed amount (destination
-// currency) and transfer fee (source currency); blank means none.
-func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, receivedStr, feeStr, dateStr, desc string) {
-	fromCcy := acctCurrencyOf(app, fromID)
-	dec := currency.Decimals(fromCcy)
-	amtMinor, err := money.ParseMinor(strings.TrimSpace(amountStr), dec)
-	if err != nil || amtMinor <= 0 {
-		uistate.PostNotice(uistate.T("accounts.transferInvalidAmount"), true)
-		return
-	}
-	recvMinor, recvOK := acctParseOptionalMinor(receivedStr, acctCurrencyOf(app, toID))
-	feeMinor, feeOK := acctParseOptionalMinor(feeStr, fromCcy)
-	if !recvOK || !feeOK {
-		uistate.PostNotice(uistate.T("accounts.transferInvalidExtra"), true)
-		return
-	}
-	var when time.Time
-	if d, e := time.Parse("2006-01-02", strings.TrimSpace(dateStr)); e == nil {
-		when = d
-	}
-	d := strings.TrimSpace(desc)
-	if d == "" {
-		d = uistate.T("accounts.transferDefaultDesc")
-	}
-	if _, _, err := app.CreateTransferPair(appstate.TransferParams{
-		FromAccountID: fromID, ToAccountID: toID, AmountMinor: amtMinor,
-		ReceivedMinor: recvMinor, FeeMinor: feeMinor, Date: when, Desc: d,
-	}); err != nil {
-		uistate.PostNotice(err.Error(), true)
-		return
+	if _, _, err := app.CreateTransferPair(params); err != nil {
+		postAcctWriteError("transfer", err)
+		return false
 	}
 	uistate.BumpDataRevision()
-	// G3: a transfer posts two real transactions — one-click reversible.
+	// A transfer posts two real transactions, so the toast offers one-click undo.
 	uistate.PostUndoable(uistate.T("accounts.transferDone"))
+	return true
+}
+
+// transferFormError is the user-facing text for a transfer form that did not validate.
+func transferFormError(err error) string {
+	switch {
+	case errors.Is(err, accountselect.ErrTransferAmount):
+		return uistate.T("accounts.transferInvalidAmount")
+	case errors.Is(err, accountselect.ErrTransferExtra):
+		return uistate.T("accounts.transferInvalidExtra")
+	case errors.Is(err, accountselect.ErrTransferDate):
+		return uistate.T("accounts.transferInvalidDate")
+	case errors.Is(err, accountselect.ErrTransferSameAccount):
+		return uistate.T("accounts.transferSameAccountErr")
+	case errors.Is(err, accountselect.ErrTransferUnknownAccount):
+		return uistate.T("accounts.transferUnknownAccount")
+	case errors.Is(err, accountselect.ErrTransferAccountNotAllowed):
+		return uistate.T("accounts.transferNotAllowed")
+	default:
+		return acctWriteErrorText(err)
+	}
 }
 
 // acctViewTransactions returns an OnView handler that pins the ledger filter to one
@@ -578,67 +479,101 @@ func acctViewBillPayments(nav router.Navigator, txFilter state.Atom[uistate.TxFi
 
 // acctSummaryWidget is the net-worth-dominant summary tile: a hero net-worth figure
 // (with a smart explainer + month-to-date trend) beside assets and a liabilities
-// total that links through to /debt, plus a missing-exchange-rate notice (L4).
+// total that links through to /debt, plus a notice when exchange rates are missing.
 func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// Subscribe to the shared data revision so a mutation in any tile (a transfer, a
 	// balance update, a delete) re-renders this tile — its props are the same *App
 	// pointer across host renders, so without this the engine would memoize it stale.
-	_ = uistate.UseDataRevision().Get()
+	rev := uistate.UseDataRevision().Get()
 	app := props.App
 	nav := router.UseNavigate()
-	// AC15: client-side nav for the idle-cash line's "See allocation options" link,
-	// declared unconditionally (stable hook position) like acctListWidget's goToDebt.
+	// Client-side navigation for the idle-cash line's "See allocation options" link.
+	// Declared unconditionally so the hook position is stable, like goToDebt in acctListWidget.
 	goToAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	nw, _ := ledger.NetWorthExplained(accounts, txns, props.Rates)
+	nw := netWorthBalanceSnapshot(app, accounts, accountSnapshot(app).Balances, props.Rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
-	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st,
-	// read through the one seam every "this month" figure in the app shares
-	// (nwchange, C341) so this tile, the dashboard hero, /networth and /reports
-	// cannot answer the same question differently. The window's UTC-midnight
-	// boundary matters: txn dates are UTC-midnight calendar dates, so a local
-	// month start (Jul 1 00:00-04:00 = Jul 1 04:00Z) used to exclude
-	// first-of-month transactions and this tile said "No change this month"
-	// while the hero showed the real delta.
-	mtd, _ := nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
-	nwDelta, haveDelta := mtd.Delta(), mtd.Known
+	// Month-to-date net-worth delta: the honest change since the 1st, read through the
+	// shared nwchange seam so this tile, the dashboard hero, /networth and /reports answer
+	// the same question the same way. The window starts at UTC midnight because
+	// transaction dates are UTC-midnight calendar dates. A local month start would miss
+	// the first-of-month transactions.
+	mtd := nwchange.Change{}
+	mtdKnown := nw.Complete()
+	if nw.Complete() {
+		var err error
+		if mtd, err = nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now()); err != nil {
+			slog.Warn("accounts: month-to-date net-worth change is unavailable", "err", err)
+			mtdKnown = false
+		}
+	}
+	deltaMinor, deltaErr := mtd.DeltaMinorChecked()
+	nwDelta, haveDelta := money.New(deltaMinor, props.Base), mtdKnown && deltaErr == nil
+	netText, assetsText, liabilitiesText, tone := "—", "—", "—", tw.ColorClass("text-dim")
+	// The liabilities figure reads as a negative amount: it is what the debts take off net worth.
+	if nw.Known {
+		netText, assetsText, liabilitiesText, tone = fmtMoney(net), fmtMoney(assets), fmtMoney(money.New(reconcile.StatedOwed(liabilities.Amount), liabilities.Currency)), accentFor(net)
+	}
 
 	smartSettings := uistate.LoadSmartSettings()
 
-	body := Div(
-		Div(css.Class("nw-summary"),
-			Div(css.Class("stat stat-hero"),
-				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					uistate.T("dashboard.netWorth"),
-					smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")),
-				),
-				Div(ClassStr("stat-value "+accentFor(net)), fmtMoney(net)),
-				netWorthDeltaLine(nwDelta, haveDelta),
-			),
-			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
-			Div(css.Class("stat"),
-				A(css.Class("stat-label"), Href(uistate.RoutePath("/debt")), uistate.T("dashboard.liabilities")),
-				Div(ClassStr("stat-value neg"), fmtMoney(liabilities)),
-			),
+	// The six-month net-worth shape the Dashboard hero also draws, so the two agree.
+	now := time.Now()
+	// The trend is deferred one settle, as the Dashboard hero defers its own, so the
+	// header never adds work to the first paint.
+	settled := useAfterDelay("acct-headline", 700*time.Millisecond)
+	spark := ui.UseMemo(func() []float64 {
+		if !settled || !nw.Complete() {
+			return nil
+		}
+		return dashboardview.BuildNetWorthTrend(accounts, txns, props.Rates, now).Spark
+	}, rev, settled, now.Format(dateutil.Layout), nw.Complete())
+	trendVisual := uiw.PageHeadlineTrend(uiw.PageHeadlineTrendProps{
+		Values: spark, Label: uistate.T("dashboard.netWorth"), GradientID: "acct-headline-trend",
+		Pending: nw.Complete() && !settled, PendingLabel: uistate.T("accounts.trendLoading"),
+	})
+
+	body := Div(css.Class("acct-summary-body"),
+		Div(css.Class("acct-summary-frame"),
+			// One Add control for both things the page can add. Each item names what it creates. It sits
+			// pinned to the summary's top-right corner (see rules_pageheadline.go) as the green main action.
+			Div(css.Class("acct-add-menu"),
+				uiw.OverflowMenu(uiw.OverflowMenuProps{
+					TriggerText:    uistate.T("accounts.addMenu"),
+					TriggerLabel:   uistate.T("accounts.addMenuTitle"),
+					TriggerTestID:  "accounts-add",
+					TriggerVariant: "primary",
+					TriggerIcon:    icon.Plus,
+					Items: []uiw.OverflowMenuItem{
+						{Label: uistate.T("accounts.addAccountItem"), Icon: icon.Accounts, TestID: "accounts-add-account", OnSelect: func() { uistate.SetAddTarget("account") }},
+						{Label: uistate.T("accounts.addServiceItem"), Icon: icon.Repeat, TestID: "accounts-add-service", OnSelect: func() { uistate.SetAddTarget("service") }},
+					},
+				})),
+			acctHeadline(acctHeadlineProps{
+				NetText: netText, AssetsText: assetsText, LiabilitiesText: liabilitiesText, NetTone: tone,
+				Delta: nwDelta, HaveDelta: haveDelta,
+				NetTip: smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")),
+				Visual: trendVisual, Footer: acctLiquidityLine(app, props.Base, props.Rates),
+			}),
 		),
-		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
-			uistate.T("accounts.nwExcludes", plural(len(nw.ExcludedAccounts), "account"), strings.Join(nw.MissingCurrencies, ", ")))),
-		// AC11: disclose accounts left out of net worth by the household's choice.
-		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
-			uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice)))),
-		// AC15: a quiet idle-cash line — liquid cash beyond this month's bills + goal
-		// set-asides, priced at the user's own benchmark rate (never a live feed).
-		// Renders nothing until a benchmark is set in Settings and there's enough
-		// idle cash to be worth naming.
-		acctIdleCashLine(app, props.Base, goToAllocate),
-		// Liquidity breakdown: the asset side grouped by how usable the money is.
-		acctLiquidityLine(app, props.Base, props.Rates),
-		// E3: where the app's own numbers disagree with each other — a transfer
-		// with one leg, holdings that do not add up to their account's balance.
-		// Always on, and absent entirely when the data agrees.
+		If(!nw.Complete(), uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutWarn, Live: uiw.CalloutLiveStatus, TestID: "acct-networth-note",
+			Body: Span(netWorthAvailabilityNote(nw)),
+		})),
+		// Disclose accounts the household has left out of net worth.
+		If(len(nw.ExcludedByChoice) > 0, uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutInfo, Live: uiw.CalloutLiveStatus, TestID: "acct-nw-excludes-by-choice",
+			Body: Span(uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice))),
+		})),
+		// A quiet idle-cash line: liquid cash beyond this month's bills and goal set-asides,
+		// priced at the user's own benchmark rate (never a live feed). It renders nothing
+		// until a benchmark is set in Settings and there is enough idle cash to be worth naming.
+		acctIdleCashLine(app, props.Rates, goToAllocate),
+		// Where the app's own numbers disagree: a transfer with one leg, or holdings that
+		// do not add up to their account's balance. It is absent when the data agrees.
 		ui.CreateElement(contradictionStrip, contradictionStripProps{
 			Kinds: []string{"account", "transaction"},
 		}),
@@ -649,8 +584,8 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	})
 }
 
-// excludesByChoiceKey picks the singular or plural AC11 disclosure key for n
-// accounts left out of net worth by the household's choice.
+// excludesByChoiceKey picks the singular or plural disclosure key for n accounts the
+// household has left out of net worth.
 func excludesByChoiceKey(n int) string {
 	if n == 1 {
 		return "accountsstmt.excludesByChoice"
@@ -658,181 +593,107 @@ func excludesByChoiceKey(n int) string {
 	return "accountsstmt.excludesByChoicePlural"
 }
 
-// moneyFromMajor rebuilds a money.Money from an engine-variable major-unit float
-// (the surface liveEngineVars/engineenv.Vars returns), rounding to the currency's
-// minor unit. Display-only — never used for ledger arithmetic.
-func moneyFromMajor(v float64, base string) money.Money {
-	dec := currency.Decimals(base)
-	mult := 1.0
-	for i := 0; i < dec; i++ {
-		mult *= 10
-	}
-	return money.New(int64(math.Round(v*mult)), base)
-}
-
-// acctIdleCashLine renders the AC15 idle-cash summary — liquid cash beyond this
-// month's committed bills and goal set-asides, priced at the user's own benchmark
-// rate — as a quiet line linking to /allocate. It renders nothing until a benchmark
-// is set (Settings → Preferences) and the idle amount clears the same buffer
-// idlecash.DefaultThresholdMinor uses, so a small cash cushion never reads as a nag.
-func acctIdleCashLine(app *appstate.App, base string, onAllocate ui.Handler) ui.Node {
-	vars := liveEngineVars(app)
-	benchmark := vars["idle_cash_benchmark"]
+// acctIdleCashLine renders the idle-cash summary: liquid cash beyond this month's
+// committed bills and goal set-asides, priced at the user's own benchmark rate. It is
+// a quiet line linking to /allocate. It renders nothing until a benchmark is set
+// (Settings, then Preferences) and the idle amount clears idlecash.DefaultThresholdMinor,
+// so a small cash cushion never reads as a nag, and nothing when the figures cannot
+// be computed exactly.
+func acctIdleCashLine(app *appstate.App, rates currency.Rates, onAllocate ui.Handler) ui.Node {
+	benchmark := uistate.LoadPrefs().IdleCashBenchmarkAPR
 	if benchmark <= 0 {
 		return Fragment()
 	}
-	idle := moneyFromMajor(vars["idle_cash"], base)
-	if idle.Amount < idlecash.DefaultThresholdMinor {
+	res, err := idlecash.FromLedger(idlecash.LedgerInputs{
+		Accounts: app.Accounts(), Balances: accountSnapshot(app).Balances,
+		Recurring: app.Recurring(), Goals: app.Goals(),
+		Rates: rates, Now: time.Now(), BenchmarkAPRPercent: benchmark,
+	})
+	if err != nil {
+		slog.Warn("accounts: idle cash is unavailable", "err", err)
 		return Fragment()
 	}
-	forgone := moneyFromMajor(vars["idle_cash_forgone_annual"], base)
-	benchStr := strconv.FormatFloat(benchmark, 'f', -1, 64)
+	if !res.Flag {
+		return Fragment()
+	}
+	idle := money.New(res.IdleMinor, rates.Base)
+	forgone := money.New(res.ForgoneAnnualMinor, rates.Base)
+	benchStr := strconv.FormatFloat(res.BenchmarkAPRPercent, 'f', -1, 64)
 	return P(css.Class("t-caption", tw.TextDim, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Attr("data-testid", "acct-idle-cash-line"),
 		Span(uistate.T("accounts.idleCashLine", fmtMoney(idle), fmtMoney(forgone), benchStr)),
 		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-idle-cash-link"), OnClick(onAllocate), uistate.T("accounts.idleCashLink")),
 	)
 }
 
-// acctLiquidityLine renders the asset side grouped by how usable the money is
-// right now (internal/liquidity): Available cash · Restricted · Investments ·
-// Held assets, each base-converted. Empty buckets stay silent, and the whole
-// line renders nothing until at least two buckets hold money — a single-bucket
-// household learns nothing from it. Rate-less accounts are skipped (consistent
-// with the net-worth exclusion disclosure above).
+// liquidityBucketCopy names the copy and test id of each liquidity bucket.
+var liquidityBucketCopy = map[liquidity.Class]struct{ key, testID string }{
+	liquidity.Available:   {"accounts.liqAvailable", "acct-liq-available"},
+	liquidity.Restricted:  {"accounts.liqRestricted", "acct-liq-restricted"},
+	liquidity.Investments: {"accounts.liqInvestments", "acct-liq-investments"},
+	liquidity.Held:        {"accounts.liqHeld", "acct-liq-held"},
+}
+
+// acctLiquidityLine renders the asset side grouped by how usable the money is right
+// now (internal/liquidity), each bucket base-converted. accountview decides which
+// buckets show and in what order. Rate-less accounts are skipped, consistent with the
+// net-worth exclusion disclosure above.
 func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.Node {
-	txns := app.Transactions()
-	totals := liquidity.Totals(app.Accounts(), time.Now(), func(a domain.Account) (int64, bool) {
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			return 0, false
-		}
-		c, cerr := rates.Convert(bal, base)
-		if cerr != nil {
-			return 0, false
-		}
-		return c.Amount, true
-	})
-	type item struct {
-		cls    liquidity.Class
-		key    string
-		testid string
-	}
-	items := []item{
-		{liquidity.Available, "accounts.liqAvailable", "acct-liq-available"},
-		{liquidity.Restricted, "accounts.liqRestricted", "acct-liq-restricted"},
-		{liquidity.Investments, "accounts.liqInvestments", "acct-liq-investments"},
-		{liquidity.Held, "accounts.liqHeld", "acct-liq-held"},
-	}
-	nonzero := 0
-	for _, it := range items {
-		if totals[it.cls] != 0 {
-			nonzero++
-		}
-	}
-	if nonzero < 2 {
+	v := accountview.Liquidity(app.Accounts(), accountSnapshot(app).Balances, rates, base, time.Now())
+	if !v.Visible() {
 		return Fragment()
 	}
-	kids := []any{css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-liquidity-line"),
-		Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.25rem 1rem"}),
+	kids := []any{css.Class("t-caption", tw.TextDim, "acct-liquidity"), Attr("data-testid", "acct-liquidity-line"),
 		Title(uistate.T("accounts.liqTitle"))}
-	for _, it := range items {
-		if totals[it.cls] == 0 {
-			continue
-		}
-		kids = append(kids, Span(Attr("data-testid", it.testid),
-			uistate.T(it.key, fmtMoney(money.New(totals[it.cls], base)))))
+	for _, b := range v.Buckets() {
+		copyOf := liquidityBucketCopy[b.Class]
+		kids = append(kids, Span(Attr("data-testid", copyOf.testID),
+			uistate.T(copyOf.key, fmtMoney(money.New(b.Amount, base)))))
+	}
+	if v.Incomplete {
+		kids = append(kids, Span(Attr("data-testid", "acct-liquidity-incomplete"), uistate.T("accounts.liquidityIncomplete")))
 	}
 	return P(kids...)
 }
 
 // --- acct-toolbar ---------------------------------------------------------------
 
-// acctToolbarGlyph renders one accounts-toolbar action as a standard labeled button
-// (the .btn-tool treatment shared with the transactions toolbar): a slightly-grayed
-// leading glyph, an always-visible text label, and a small muted trailing badge that
-// says what the button DOES — kind "modal" opens a flip modal (⧉), "nav" navigates to
-// another page (↗), "action" acts in place (no badge). The visible label removes the
-// hover-to-decode step of the old icon-only treatment. variant tints it ("" neutral,
-// "primary" accent, "stale" amber); open keeps a modal opener highlighted while its
-// modal is showing.
-func acctToolbarGlyph(testID string, ic icon.Name, label, title, kind, variant string, open bool, onClick ui.Handler) ui.Node {
-	cls := "btn btn-tool"
-	switch variant {
-	case "primary":
-		cls += " btn-primary"
-	case "stale":
-		cls += " bt-stale"
-	}
-	if open {
-		cls += " is-open"
-	}
-	// The hover tooltip explains what the action MEANS when the label alone is
-	// ambiguous (e.g. "Mark all updated" is a powerful global trust action); an empty
-	// title falls back to the label so the tooltip is never blank.
-	if title == "" {
-		title = label
-	}
-	// A single leading glyph + the text label — no trailing kind badge (the button's
-	// behaviour is conveyed by aria + the label, not a second glyph on the right).
-	args := []any{
-		css.Class(cls), Type("button"), Attr("data-testid", testID),
-		Attr("aria-label", label), Attr("title", title), OnClick(onClick),
-		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(label),
-	}
-	if kind == "modal" {
-		args = append(args, Attr("aria-haspopup", "dialog"), Attr("aria-expanded", boolStr(open)))
-	}
-	return Button(args...)
-}
-
-// markAllStalePrompt is the shared "Mark all updated" action (#77): it collects the
-// non-archived stale accounts, previews the blast radius in the confirm (how many
-// balances and which), and — on confirm — stamps every balance now as one undoable
-// batch. Pure of hooks so any component can call it from a UseEvent; a no-op when
-// nothing is stale. Used by both the toolbar's Mark-all button and the accounts
-// list's stale-summary line, so the two stay in lockstep.
+// markAllStalePrompt is the shared "Mark all updated" action. It collects the stale
+// accounts and names them in the confirm, including how many balances it will touch.
+// On confirm it stamps every balance as updated now, as one undoable batch. It holds
+// no hooks, so any component can call it from a UseEvent, and it does nothing when no
+// account is stale. The toolbar, the account list's stale summary and the net-worth
+// quality prompt all use it, so they stay in step.
 func markAllStalePrompt(app *appstate.App) {
-	w := app.FreshnessWindows()
-	now := time.Now()
-	var staleAccts []domain.Account
-	for _, ac := range app.Accounts() {
-		if !ac.Archived && freshness.IsStale(ac, w, now) {
-			staleAccts = append(staleAccts, ac)
-		}
-	}
-	if len(staleAccts) == 0 {
+	stale := freshness.StaleAccounts(app.Accounts(), app.FreshnessWindows(), time.Now())
+	if len(stale) == 0 {
 		return
 	}
+	ids := make([]string, 0, len(stale))
 	names := make([]string, 0, 3)
-	for i, ac := range staleAccts {
-		if i == 3 {
-			break
+	for i, ac := range stale {
+		ids = append(ids, ac.ID)
+		if i < 3 {
+			names = append(names, ac.Name)
 		}
-		names = append(names, ac.Name)
 	}
 	list := strings.Join(names, ", ")
-	if len(staleAccts) > 3 {
-		list = uistate.T("accounts.markAllMore", list, len(staleAccts)-3)
+	if len(stale) > 3 {
+		list = uistate.T("accounts.markAllMore", list, len(stale)-3)
 	}
-	uistate.ConfirmModalLabeled(uistate.T("accounts.markAllConfirm", plural(len(staleAccts), "balance"), list)+" "+uistate.T("acctxn.markAllMeaning"),
+	confirm := uistate.TN("accounts.markAllConfirmOne", "accounts.markAllConfirmMany", len(stale), list)
+	uistate.ConfirmModalLabeled(confirm+" "+uistate.T("acctxn.markAllMeaning"),
 		uistate.T("accounts.markAll"), false, func(ok bool) {
 			if !ok {
 				return
 			}
-			n := 0
-			for _, ac := range staleAccts {
-				ac.BalanceAsOf = time.Now()
-				if err := app.PutAccount(ac); err != nil {
-					uistate.PostNotice(uistate.T("accounts.markErr", err.Error()), true)
-					continue
-				}
-				n++
+			written, err := app.MarkBalancesUpdated(ids, time.Now())
+			if err != nil {
+				postAcctWriteError("mark balances updated", err)
 			}
 			uistate.BumpDataRevision()
-			if n > 0 {
+			if written > 0 {
 				auditview.CaptureNow()
-				uistate.PostUndoable(uistate.T("accounts.markedUpdated", plural(n, "balance")))
+				uistate.PostUndoable(uistate.TN("accounts.markedUpdatedOne", "accounts.markedUpdatedMany", written))
 			}
 		})
 }
@@ -849,7 +710,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	app := props.App
 	filterAtom := uistate.UseAccountsFilter()
 	transferAtom := uistate.UseAcctTransferOpen()
-	formulasAtom := uistate.UseAcctShowFormulas()
 	activeMemberID := acctActiveMemberID()
 	f := filterAtom.Get()
 
@@ -860,15 +720,12 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	}
 	onSearch := func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Search = v }) }
 
-	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
-	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
-	openTransfer := ui.UseEvent(Prevent(func() { transferAtom.Set(true) }))
-	// G1: page-local account creation — every sibling page anchors its toolbar with Add.
-	openAdd := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
-	// AC1: open the account-group manager. When at least one group exists, jump
-	// straight to editing the first (its header carries per-group edit too); with
-	// none, start a new group. Plain funcs (not UseEvent): they run from the
-	// Manage overflow menu, whose item component owns the click hook.
+	// Menu items take plain funcs (the item owns its click hook), so the transfer opener is one too.
+	openTransfer := func() { transferAtom.Set(true) }
+	// Open the account-group manager. When a group exists, jump straight to editing the
+	// first one (each group header also has its own edit button). With none, start a new
+	// group. These are plain funcs, not UseEvent, because the Manage menu's item owns the
+	// click hook.
 	groupEditAtom := uistate.UseAccountGroupEdit()
 	openGroups := func() {
 		target := "new"
@@ -877,82 +734,88 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		}
 		groupEditAtom.Set(target)
 	}
-	// AC10: open the institution directory (add/rename/color/delete banks and lenders).
+	// Open the institution directory, where banks and lenders are added, renamed, colored or deleted.
 	institutionsAtom := uistate.UseInstitutionsManager()
 	openInstitutions := func() { institutionsAtom.Set(true) }
-	// AC7: open the surplus-sweep rules manager.
+	// Open the surplus-sweep rules manager.
 	sweepAtom := uistate.UseSweepRulesOpen()
 	openSweep := func() { sweepAtom.Set(true) }
 	openFX := func() { uistate.OpenGlobalSettingsAt("household") }
-	// #77: a high-impact bulk write previews its blast radius first — the confirm
-	// names how many balances it touches (and which) — and the apply is undoable
-	// (one capture for the whole batch, so a single Undo restores every stamp). The
-	// preview/apply body is shared (markAllStalePrompt) so the accounts list's
-	// stale-summary line triggers the identical action.
+	// Marking every balance updated is a high-impact bulk write. The confirm names the
+	// balances it will touch, and the change is undoable as one batch, so a single Undo
+	// restores every balance. The shared markAllStalePrompt runs the action, so the
+	// stale summary in the account list does exactly the same thing.
 	markAll := ui.UseEvent(Prevent(func() { markAllStalePrompt(app) }))
 
 	accounts := app.Accounts()
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
+	// The transfer and sweep pickers need a valid source and a different valid destination: archived
+	// accounts are left out, and property or vehicle accounts can neither send nor receive.
+	canTransfer := accountselect.HasTransferPair(accounts)
+	base, _ := accountBaseAndRates(app)
 
-	// Type filter options: the asset types actually present in the scoped set.
-	typeSet := map[string]bool{}
-	hasForeign := false
-	windows := app.FreshnessWindows()
-	now := time.Now()
-	staleCount := 0
-	for _, ac := range accounts {
-		if freshness.IsStale(ac, windows, now) {
-			staleCount++
-		}
-		if ac.Currency != "" && ac.Currency != base {
-			hasForeign = true
-		}
-		if !ownerVisibleTo(ac.OwnerID, activeMemberID) {
-			continue
-		}
-		typeSet[string(ac.Type)] = true
+	// Type filter options: the types actually present in the scoped set.
+	choices := accountview.FilterOptions(accounts, activeMemberID, base, app.FreshnessWindows(), time.Now())
+	typeOpts := make([]uiw.PickerOption, 0, len(choices.Types))
+	for _, t := range choices.Types {
+		typeOpts = append(typeOpts, uiw.PickerOption{Value: t, Label: humanizeType(t)})
 	}
-	types := make([]string, 0, len(typeSet))
-	for t := range typeSet {
-		types = append(types, t)
+	typeSummary := uistate.T("accounts.allTypes")
+	switch n := len(f.Types); {
+	case n > 2:
+		typeSummary = uistate.TN("accounts.typesSelectedOne", "accounts.typesSelectedMany", n)
+	case n > 0:
+		names := make([]string, 0, n)
+		for _, t := range f.Types {
+			names = append(names, humanizeType(t))
+		}
+		typeSummary = strings.Join(names, ", ")
 	}
-	sort.Strings(types)
-	typeOpts := withAllOption(uistate.T("accounts.allTypes"),
-		uiw.OptionsFrom(types, func(s string) string { return s }, func(s string) string { return humanizeType(s) }, ""))
+	toggleType := func(v string) { setFilter(func(x *uistate.AccountsFilter) { *x = x.ToggleType(v) }) }
 
-	archLabel := uistate.T("accounts.showArchived")
+	archivedValue := "hide"
 	if f.ShowArchived {
-		archLabel = uistate.T("accounts.hideArchived")
-	}
-	formulasLabel := uistate.T("accounts.showFormulas")
-	if formulasAtom.Get() {
-		formulasLabel = uistate.T("accounts.hideFormulas")
+		archivedValue = "show"
 	}
 	filtersBody := Div(css.Class("filter-fields"),
-		filterSelect(uistate.T("accounts.filterType"), f.Type, typeOpts, func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Type = v }) }),
-		withFieldLabel(uistate.T("accounts.archived"),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(f.ShowArchived)),
-				Attr("data-testid", "acct-toggle-archived"), OnClick(onToggleArch), Text(archLabel))),
-		withFieldLabel(uistate.T("accounts.formulaTitle"),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
-				Attr("data-testid", "acct-toggle-formulas"), OnClick(onToggleFormulas), Text(formulasLabel))),
+		withFieldLabel(uistate.T("accounts.filterType"), uiw.MultiPicker(uiw.MultiPickerProps{
+			ID: "acct-filter-type", Label: uistate.T("accounts.filterType"), Placeholder: typeSummary,
+			Options: typeOpts, Selected: f.Types, OnToggle: toggleType, TestID: "acct-type-picker",
+		})),
+		withFieldLabel(uistate.T("accounts.archived"), uiw.RadioGroup(uiw.RadioGroupProps{
+			Label: uistate.T("accounts.archived"), Value: archivedValue,
+			Options: []uiw.RadioOption{
+				{Value: "hide", Label: uistate.T("accounts.hideArchived"), Icon: icon.EyeOff, TestID: "acct-archived-hide"},
+				{Value: "show", Label: uistate.T("accounts.showArchived"), Icon: icon.Eye, TestID: "acct-archived-show"},
+			},
+			OnChange: func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = v == "show" }) },
+		})),
 	)
 
 	chips := []uiw.Chip{}
 	if f.Search != "" {
 		chips = append(chips, uiw.Chip{Key: "search", Label: uistate.T("accounts.chipSearch", f.Search)})
 	}
-	if f.Type != "" {
-		chips = append(chips, uiw.Chip{Key: "type", Label: uistate.T("accounts.chipType", humanizeType(f.Type))})
+	for _, t := range f.Types {
+		chips = append(chips, uiw.Chip{Key: "type:" + t, Label: uistate.T("accounts.chipType", humanizeType(t))})
 	}
-	removeChip := func(key string) { filterAtom.Set(f.Without(key).Normalize()) }
-	clearAll := func() { filterAtom.Set(uistate.AccountsFilter{ShowArchived: f.ShowArchived}.Normalize()) }
+	removeChip := func(key string) { filterAtom.Set(filterAtom.Get().Without(key).Normalize()) }
+	clearAll := func() {
+		filterAtom.Set(uistate.AccountsFilter{ShowArchived: filterAtom.Get().ShowArchived}.Normalize())
+	}
 
-	showFX := hasForeign || len(app.Settings().FXRates) > 0
+	showFX := choices.HasForeign || len(app.Settings().FXRates) > 0
 
+	// Mark all updated appears only while some balances are stale. An empty actions row
+	// would still reserve a gap under the search, so the list is built only when it has an entry.
+	// OnClick registers a hook, so it runs on every render whether or not the button shows.
+	markAllClick := OnClick(markAll)
+	var staleActions []ui.Node
+	if choices.StaleCount > 0 {
+		staleActions = append(staleActions, uiw.ToolButton(uiw.ToolButtonProps{
+			Label: uistate.T("accounts.markAll"), Icon: icon.Refresh, Title: uistate.T("acctxn.markAllMeaning"),
+			Variant: "stale", TestID: "acct-markall-btn",
+		}, markAllClick))
+	}
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search:       f.Search,
 		SearchLabel:  uistate.T("accounts.searchPlaceholder"),
@@ -963,7 +826,7 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 			if n == 0 {
 				return uistate.T("accounts.filters")
 			}
-			return uistate.T("accounts.filtersActiveAria", plural(n, "filter"))
+			return uistate.TN("accounts.filtersActiveAriaOne", "accounts.filtersActiveAriaMany", n)
 		},
 		FilterFields:  filtersBody,
 		Chips:         chips,
@@ -971,22 +834,16 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		OnClearAll:    clearAll,
 		ClearAllLabel: uistate.T("accounts.clearFilters"),
 		RemoveLabel:   uistate.T("accounts.removeFilter"),
-		Actions: []ui.Node{
-			// 2026-07-17 audit: the everyday actions stay labeled buttons — Mark-all
-			// (contextual, amber), Transfer money, and the primary "+ Add account" —
-			// while the setup/management surfaces (Groups, Institutions, Sweep rules,
-			// Exchange rates) fold into ONE labeled "Account settings" menu (renamed
-			// from the vague "Manage"), so the row before the account list stops
-			// presenting seven equally weighted verbs.
-			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
-				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
-			If(len(accounts) >= 1, uiw.OverflowMenu(uiw.OverflowMenuProps{
+		// The More menu sits on the search row, beside Filters, so the setup actions are
+		// one click away from where the list is filtered.
+		PrimaryActions: []ui.Node{
+			If(len(accounts) > 0, uiw.OverflowMenu(uiw.OverflowMenuProps{
 				TriggerText:   uistate.T("acctxn.acctSettingsMenu"),
 				TriggerLabel:  uistate.T("acctxn.acctSettingsMenuTitle"),
 				TriggerTestID: "acct-manage-btn",
-				TriggerClass:  "btn btn-tool",
 				Items: []uiw.OverflowMenuItem{
-					// QA CF-27: the item's label matches what clicking DOES — with no
+					{Label: uistate.T("accounts.transferMoney"), Icon: icon.Repeat, TestID: "page-transfer-btn", OnSelect: openTransfer, Hidden: !canTransfer},
+					// The item's label matches what clicking does. With no
 					// groups yet it opens the creation form, so it says "New group…";
 					// with groups it opens the manager.
 					{Label: func() string {
@@ -996,17 +853,12 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 						return uistate.T("accounts.manageGroupsAction")
 					}(), Icon: icon.Tag, TestID: "acct-groups-btn", OnSelect: openGroups},
 					{Label: uistate.T("accounts.institutionsAction"), Icon: icon.Landmark, TestID: "acct-institutions-btn", OnSelect: openInstitutions},
-					{Label: uistate.T("acctSweepCfg.title"), Icon: icon.TrendingUp, TestID: "acct-sweep-btn", OnSelect: openSweep, Hidden: len(accounts) < 2},
+					{Label: uistate.T("acctSweepCfg.title"), Icon: icon.TrendingUp, TestID: "acct-sweep-btn", OnSelect: openSweep, Hidden: !canTransfer},
 					{Label: uistate.T("accounts.manageFXRates"), Icon: icon.Scale, TestID: "acct-fx-btn", OnSelect: openFX, Hidden: !showFX},
 				},
 			})),
-			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
-				uistate.T("accounts.transferMoney"), "", "modal", "", transferAtom.Get(), openTransfer)),
-			// G1 + primary-last convention: "+ Add account" anchors the right end, exactly
-			// like the budgets and goals toolbars.
-			acctToolbarGlyph("accounts-add", icon.Plus,
-				uistate.T("accounts.addTitle"), "", "modal", "primary", false, openAdd),
 		},
+		Actions: staleActions,
 	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -1021,7 +873,7 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 // doAccountTransfer / CreateTransferPair, then calls OnDone. It renders inside the
 // shell-root flip modal (AccountTransferHost) — not an inline tile — so it centers on
 // the viewport like the other account editors. From/To option lists each exclude the
-// other side so the same account can't be picked twice (C69).
+// other side, so the same account cannot be picked for both.
 func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	app := props.App
 	done := props.OnDone
@@ -1033,78 +885,121 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	amtS := ui.UseState("")
 	recvS := ui.UseState("")
 	feeS := ui.UseState("")
-	dateS := ui.UseState(time.Now().Format("2006-01-02"))
+	dateS := ui.UseState(time.Now().Format(dateutil.Layout))
 	descS := ui.UseState("")
-	onAmt := ui.UseEvent(func(v string) { amtS.Set(v) })
-	onRecv := ui.UseEvent(func(v string) { recvS.Set(v) })
-	onFee := ui.UseEvent(func(v string) { feeS.Set(v) })
-	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
-	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	cancel := ui.UseEvent(Prevent(func() { done() }))
+	// The received amount only applies to a cross-currency pair. For any other pair the field is
+	// hidden, so whatever it still holds is left out and cannot block the post.
+	formInput := func() accountselect.TransferInput {
+		received := ""
+		if accountselect.IsCrossCurrency(app.Accounts(), fromS.Get(), toS.Get()) {
+			received = recvS.Get()
+		}
+		return accountselect.TransferInput{
+			FromID: fromS.Get(), ToID: toS.Get(), Amount: amtS.Get(), Received: received, Fee: feeS.Get(),
+			Date: dateS.Get(), Desc: descS.Get(),
+		}
+	}
 	submit := ui.UseEvent(Prevent(func() {
-		from, to := fromS.Get(), toS.Get()
-		if from == "" || to == "" || from == to {
+		in := formInput()
+		if !accountselect.CanPostTransfer(app.Accounts(), in) {
 			return
 		}
-		doAccountTransfer(app, from, to, amtS.Get(), recvS.Get(), feeS.Get(), dateS.Get(), descS.Get())
-		done()
+		if doAccountTransfer(app, in.FromID, in.ToID, in.Amount, in.Received, in.Fee, in.Date, in.Desc) {
+			done()
+		}
 	}))
 
 	pfrom, pto := fromS.Get(), toS.Get()
-	// C2: one shared eligibility rule for both transfer forms (liquid sources; no
+	// One shared eligibility rule for both transfer forms (liquid sources; no
 	// property/vehicle destinations; liabilities labelled as payments).
-	fromOpts, toOpts := acctTransferOptions(app.Accounts(), pfrom, pto)
+	accounts := app.Accounts()
+	fromOpts, toOpts := acctTransferOptions(accounts, pfrom, pto)
 	sameAcct := pfrom != "" && pto != "" && pfrom == pto
-	fromCcy, toCcy := acctCurrencyOf(app, pfrom), acctCurrencyOf(app, pto)
-	crossCcy := fromCcy != "" && toCcy != "" && fromCcy != toCcy
-	_, recvOK := acctParseOptionalMinor(recvS.Get(), toCcy)
-	_, feeOK := acctParseOptionalMinor(feeS.Get(), fromCcy)
-	// The button stays disabled until the form would actually post: both
-	// accounts, a valid positive amount, and clean optional fields.
-	submitDisabled := sameAcct || pfrom == "" || pto == "" ||
-		!acctTransferAmountOK(app, pfrom, amtS.Get()) || !recvOK || !feeOK
+	fromCcy, toCcy := accountselect.CurrencyOf(accounts, pfrom), accountselect.CurrencyOf(accounts, pto)
+	crossCcy := accountselect.IsCrossCurrency(accounts, pfrom, pto)
+	_, recvOK := accountselect.ParseOptionalMinor(recvS.Get(), toCcy)
+	recvOK = recvOK || !crossCcy
+	_, feeOK := accountselect.ParseOptionalMinor(feeS.Get(), fromCcy)
+	// The button stays disabled until the form would actually post.
+	submitDisabled := !accountselect.CanPostTransfer(accounts, formInput())
 
-	return Form(css.Class("acct-edit-form"), Attr("data-testid", "page-transfer-form"),
-		Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(submit),
+	return Form(css.Class("acct-edit-form", "acct-xfer-form"), Attr("data-testid", "page-transfer-form"),
+		AriaLabel(uistate.T("accounts.transferFormLabel")), OnSubmit(submit),
 		Div(css.Class("modal-scroll"),
-			labeledField(uistate.T("accounts.transferFromLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: pfrom, OnChange: func(v string) { fromS.Set(v) },
-					AriaLabel: uistate.T("accounts.transferFromLabel"), TestID: "page-xfer-from-select"})),
-			labeledField(uistate.T("accounts.transferToLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: toOpts, Selected: pto, OnChange: func(v string) { toS.Set(v) },
-					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})),
-			If(sameAcct, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferSameAccountErr"))),
-			labeledField(uistate.T("accounts.transferAmount"),
-				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
-					Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
-					Step("0.01"), Attr("min", "0.01"), OnInput(onAmt), uiw.FieldValue(amtS.Get()))),
-			// G7: cross-currency semantics said out loud — denomination + live converted
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferFromLabel"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: pfrom, ID: a.ID, OnChange: func(v string) { fromS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferFromLabel"), TestID: "page-xfer-from-select"})
+				},
+			}),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferToLabel"),
+				Error: ifStr(sameAcct, uistate.T("accounts.transferSameAccountErr"), ""),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.SelectInput(uiw.SelectInputProps{Options: toOpts, Selected: pto, ID: a.ID, OnChange: func(v string) { toS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})
+				},
+			}),
+			uiw.Field(uiw.FieldProps{
+				ID: "page-xfer-amt", Label: uistate.T("accounts.transferAmount"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.MoneyInput(uiw.MoneyInputProps{
+						Value: amtS.Get(), Currency: fromCcy, ID: a.ID, TestID: "page-xfer-amt",
+						Placeholder: uistate.T("accounts.transferAmount"), AriaLabel: uistate.T("accounts.transferAmount"),
+						OnInput: func(v string) { amtS.Set(v) },
+						Extra:   append(acctXferDescribeAttrs(a), Attr("inputmode", "decimal"), Attr("autofocus", ""), Attr("min", amountStep(fromCcy))),
+					})
+				},
+			}),
+			// Cross-currency: say what the amount means, with a live converted
 			// preview at the saved rate, or a no-rate warning before anything posts.
 			acctTransferFXNote(app, pfrom, pto, amtS.Get()),
 			// Cross-currency only: the actual landed amount, overriding the saved
 			// rate; hidden for same-currency pairs where it can't apply.
-			If(crossCcy, Fragment(
-				labeledField(uistate.T("accounts.transferReceivedLabel", toCcy),
-					Input(css.Class("field"), Attr("data-testid", "page-xfer-received"),
-						Type("number"), Step("0.01"), Attr("min", "0.01"),
-						Attr("title", uistate.T("accounts.transferReceivedHint")), OnInput(onRecv), uiw.FieldValue(recvS.Get()))),
-				If(!recvOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
-			)),
-			If(fromCcy != "", Fragment(
-				labeledField(uistate.T("accounts.transferFeeLabel", fromCcy),
-					Input(css.Class("field"), Attr("data-testid", "page-xfer-fee"),
-						Type("number"), Step("0.01"), Attr("min", "0.01"),
-						Attr("title", uistate.T("accounts.transferFeeHint")), OnInput(onFee), uiw.FieldValue(feeS.Get()))),
-				If(!feeOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
-			)),
+			If(crossCcy, uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferReceivedLabel", toCcy),
+				Error: ifStr(!recvOK, uistate.T("accounts.transferInvalidExtra"), ""),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.NumberInput(uiw.TextFieldProps{
+						Value: recvS.Get(), OnInput: func(v string) { recvS.Set(v) },
+						Extra: append(acctXferControlAttrs(a), Attr("data-testid", "page-xfer-received"),
+							Step(amountStep(toCcy)), Attr("min", amountStep(toCcy)), Title(uistate.T("accounts.transferReceivedHint"))),
+					})
+				},
+			})),
+			If(fromCcy != "", uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferFeeLabel", fromCcy),
+				Error: ifStr(!feeOK, uistate.T("accounts.transferInvalidExtra"), ""),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.NumberInput(uiw.TextFieldProps{
+						Value: feeS.Get(), OnInput: func(v string) { feeS.Set(v) },
+						Extra: append(acctXferControlAttrs(a), Attr("data-testid", "page-xfer-fee"),
+							Step(amountStep(fromCcy)), Attr("min", "0"), Title(uistate.T("accounts.transferFeeHint"))),
+					})
+				},
+			})),
 			// Before/after balances for both sides, straight from the same leg
 			// math the post will use (PreviewTransferPair) — including the typed
 			// received override and fee.
 			acctTransferBalancePreview(app, pfrom, pto, amtS.Get(), recvS.Get(), feeS.Get()),
-			labeledField(uistate.T("accounts.transferDateLabel"),
-				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get()))),
-			labeledField(uistate.T("accounts.transferDescLabel"),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferDateLabel"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return Input(append(acctXferControlAttrs(a), css.Class("field"), Type("date"),
+						AriaLabel(uistate.T("accounts.transferDateLabel")), OnInput(func(v string) { dateS.Set(v) }), uiw.FieldValue(dateS.Get()))...)
+				},
+			}),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferDescLabel"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.TextInput(uiw.TextFieldProps{
+						Value: descS.Get(), Placeholder: uistate.T("accounts.transferDefaultDesc"), OnInput: func(v string) { descS.Set(v) },
+						Extra: acctXferControlAttrs(a),
+					})
+				},
+			}),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
@@ -1115,15 +1010,74 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	)
 }
 
+// acctXferControlAttrs are the id and accessibility attributes Field hands to a transfer control.
+func acctXferControlAttrs(a uiw.FieldA11y) []any {
+	return append([]any{ID(a.ID)}, acctXferDescribeAttrs(a)...)
+}
+
+// acctXferDescribeAttrs are the description and validity attributes Field hands to a transfer
+// control, for a control that sets its own id.
+func acctXferDescribeAttrs(a uiw.FieldA11y) []any {
+	var attrs []any
+	if a.DescribedBy != "" {
+		attrs = append(attrs, Attr("aria-describedby", a.DescribedBy))
+	}
+	if a.Invalid {
+		attrs = append(attrs, Attr("aria-invalid", "true"))
+	}
+	return attrs
+}
+
+// --- account row feed -----------------------------------------------------------
+
+// acctRowFeed holds what every AccountRow in a tile shares: the household records a
+// row displays and the handlers it calls. The list and archived tiles build their
+// row props from one feed, so a row looks the same in both.
+type acctRowFeed struct {
+	Members     []domain.Member
+	AccountDefs []customfields.Def
+	InstByID    map[string]domain.Institution
+	Snapshot    accountview.Snapshot
+	Windows     freshness.Windows
+	Now         time.Time
+	Callbacks   acctRowCallbacks
+	OnView      func(string)
+	OnViewBills func(string)
+}
+
+// newAcctRowFeed reads the shared row inputs from the store. snapshot is the ledger
+// index the tile already holds, and onView and onViewBills are the drill-down
+// handlers the tile built from its router and filter hooks.
+func newAcctRowFeed(app *appstate.App, snapshot accountview.Snapshot, onView, onViewBills func(string), now time.Time) acctRowFeed {
+	return acctRowFeed{
+		Members:     app.Members(),
+		AccountDefs: app.CustomFieldDefsFor("account"), InstByID: domain.InstitutionByID(app.Institutions()),
+		Snapshot: snapshot, Windows: app.FreshnessWindows(), Now: now,
+		Callbacks: buildAcctRowCallbacks(app), OnView: onView, OnViewBills: onViewBills,
+	}
+}
+
+// props builds the row props every tile shares for one account. A tile sets the
+// fields only it needs on the result.
+func (f acctRowFeed) props(ac domain.Account) accountRowProps {
+	return accountRowProps{
+		Account: ac, Balance: f.Snapshot.Balances[ac.ID], Cleared: f.Snapshot.Cleared[ac.ID],
+		Stale: freshness.IsStale(ac, f.Windows, f.Now), DaysStale: freshness.DaysSinceUpdate(ac, f.Now),
+		Members:  f.Members,
+		OnDelete: f.Callbacks.OnDelete, OnArchive: f.Callbacks.OnArchive, OnRefresh: f.Callbacks.OnRefresh,
+		OnSave: f.Callbacks.OnSave, OnView: f.OnView,
+		AccountDefs: f.AccountDefs, InstByID: f.InstByID,
+		BillPayment: f.Snapshot.BillPayments[ac.ID], OnViewBills: f.OnViewBills,
+	}
+}
+
 // --- acct-list ------------------------------------------------------------------
 
-// acctListWidget is the accounts-list tile: the owner-scoped, search/type-filtered
-// account rows rendered as AccountRow inside an EntityListSection. A segmented
-// "All / Assets / Liabilities" toggle in the section header narrows by class so
-// both sides of net worth can be spot-checked in one place (assets and liabilities
-// used to be two separate tiles, which listed every asset twice). Rows sort by
-// signed balance high to low, so the biggest holdings sit on top and the heaviest
-// debts (most negative) at the bottom. The tile owns the per-row callbacks and the
+// acctListWidget is the accounts-list tile: the owner-scoped, search and type-filtered
+// account rows, rendered as AccountRow inside an EntityListSection. A segmented
+// "All / Assets / Liabilities" toggle in the section header narrows the list by class.
+// Rows sort risk-first: accounts that need attention lead, and within each group the
+// signed balance decides the order. The tile owns the per-row callbacks and the
 // "view transactions" navigation.
 func acctListWidget(props acctListProps) ui.Node {
 	// Subscribe to the data revision so balances/rows re-render after any mutation.
@@ -1135,182 +1089,82 @@ func acctListWidget(props acctListProps) ui.Node {
 	activeMemberID := acctActiveMemberID()
 	f := filterAtom.Get()
 
-	// Client-side navigation to /debt for the "Manage debts" link. Declared
-	// unconditionally (stable hook position); it prevents the anchor's default full
-	// page load — which otherwise re-booted the app and, with app-lock on, dropped
-	// the user onto the lock screen.
+	// Client-side navigation to /debt for the "Manage debts" link. It prevents the
+	// anchor's default full page load, which would restart the app and, with app-lock
+	// on, drop the user onto the lock screen. Declared unconditionally so the hook
+	// position is stable.
 	goToDebt := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/debt")) }))
-	// C365: the investment-section header's "Open investments" link. Declared
-	// unconditionally (stable hook position) alongside goToDebt.
-	goToInvestments := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/investments")) }))
-	// The stale-summary line's "Mark all updated" (shown when most accounts are
-	// stale) reuses the toolbar's exact action. Declared unconditionally so the hook
-	// position stays stable even when the summary line isn't rendered.
+	// The stale-summary line's "Mark all updated" reuses the toolbar's exact action.
+	// Declared unconditionally so the hook position stays stable even when the summary
+	// line isn't rendered.
 	markAllStale := ui.UseEvent(Prevent(func() { markAllStalePrompt(app) }))
 
-	accounts := app.Accounts()
-	txns := app.Transactions()
+	snapshot := accountSnapshot(app)
+	// Services are recurring bills, not accounts. They have their own class view, which
+	// stays on once it is chosen, even before the household has any service, so its
+	// empty state can be seen.
+	serviceList := app.Services()
+	hasServices := len(serviceList) > 0
+	list := accountview.List(accountview.ListInput{
+		Accounts: app.Accounts(), MemberID: activeMemberID, Class: f.Class,
+		ServicesClass: serviceClassView, Match: f.Matches,
+	})
+	hasLiab := len(list.Liabilities) > 0
+	classView := list.Class
+	shown := list.Shown
 
-	// Base-converted net-worth contribution: assets positive, liabilities the
-	// negative of their owed magnitude. Taking -Abs for liabilities keeps a debt
-	// below the assets regardless of how its balance is signed at rest (the sample
-	// stores debts negative; the "amount you owe" add form stores them positive).
-	// Falls back to the raw amount for rate-less accounts.
-	convBal := func(ac domain.Account) int64 {
-		bal, _ := ledger.Balance(ac, txns)
-		m := bal.Amount
-		if c, err := props.Rates.Convert(bal, props.Base); err == nil {
-			m = c.Amount
-		}
-		if ac.Class == domain.ClassLiability {
-			if m < 0 {
-				m = -m
-			}
-			return -m
-		}
-		return m
-	}
-
-	// Active, owner-visible accounts split by class (archived live in their own tile).
-	var active, liabs []domain.Account
-	for _, ac := range accounts {
-		if ac.Archived || !ownerVisibleTo(ac.OwnerID, activeMemberID) {
-			continue
-		}
-		active = append(active, ac)
-		if ac.Class == domain.ClassLiability {
-			liabs = append(liabs, ac)
-		}
-	}
-	hasLiab := len(liabs) > 0
-
-	// The class view. With no liabilities the toggle is pointless, so force the
-	// assets-only view (and hide the segment) — the page reads exactly as before.
-	classView := f.Class
-	if !hasLiab {
-		classView = string(domain.ClassAsset)
-	}
-	assetsOnly := classView == string(domain.ClassAsset)
-
-	var shown []domain.Account
-	for _, ac := range active {
-		if assetsOnly && ac.Class == domain.ClassLiability {
-			continue
-		}
-		if classView == string(domain.ClassLiability) && ac.Class != domain.ClassLiability {
-			continue
-		}
-		if f.Matches(ac.Name, string(ac.Type)) {
-			shown = append(shown, ac)
-		}
-	}
-	// Risk-first ordering (AC-refresh): accounts that need attention — stale ones,
-	// past their freshness window — lead the list so the rows worth acting on sit on
-	// top, instead of being buried under big healthy balances. Within each freshness
-	// tier the familiar "signed high to low" order holds (biggest holdings lead, the
-	// heaviest debts trail). The comparison itself is the pure acctsort.RiskFirstLess
-	// (native-tested); here we only supply the stale flag + the signed balance.
+	// Risk-first ordering: accounts that need attention (stale, or past their freshness
+	// window) lead the list, so the rows worth acting on sit at the top instead of being
+	// buried under large healthy balances. accountview.SortRiskFirst ranks each account
+	// by freshness, then from the biggest signed balance down so the heaviest debts trail.
 	windows := app.FreshnessWindows()
 	now := time.Now()
-	staleOf := func(ac domain.Account) bool { return freshness.IsStale(ac, windows, now) }
-	sort.SliceStable(shown, func(i, j int) bool {
-		return acctsort.RiskFirstLess(staleOf(shown[i]), staleOf(shown[j]), convBal(shown[i]), convBal(shown[j]))
-	})
+	accountview.SortRiskFirst(shown, snapshot.Balances, windows, props.Rates, props.Base, now)
 
-	// Stale-badge prioritisation collapse: once more than half the visible accounts are
-	// stale, a per-row STALE badge on nearly every line ranks nothing — so collapse the
-	// badges to subdued dots and lead the list with one summary line + Mark-all instead.
-	// Below the threshold each row keeps its full badge.
-	staleShown := 0
-	for _, ac := range shown {
-		if staleOf(ac) {
-			staleShown++
-		}
-	}
-	staleCollapsed := len(shown) > 0 && staleShown*2 > len(shown)
+	// Once more than half the visible accounts are stale, a STALE badge on nearly every
+	// row ranks nothing. The rows then collapse their badges to subdued dots and the
+	// list leads with one summary line and a Mark-all action.
+	stale := accountview.Stale(shown, windows, now)
 
 	smartSettings := uistate.LoadSmartSettings()
 	pr := uistate.UsePrefs().Get()
 	smartIn := buildSmartInput(app, pr.WeekStartWeekday())
-	accountInsights := smartengine.RunPage(smartIn, smartSettings, smart.PageAccounts)
+	accountInsights := accountsPageInsights(app, smartIn, smartSettings, pr.WeekStartWeekday())
 	accountByEntity := insightsByEntity(accountInsights)
 
-	categories := app.Categories()
-	members := app.Members()
-	accDefs := app.CustomFieldDefsFor("account")
-	cbs := buildAcctRowCallbacks(app)
-	viewTxns := acctViewTransactions(nav, txFilter)
-	viewBills := acctViewBillPayments(nav, txFilter)
+	feed := newAcctRowFeed(app, snapshot, acctViewTransactions(nav, txFilter), acctViewBillPayments(nav, txFilter), now)
 	householdDefaultID := app.DefaultAccountID()
-	// AC10: index the institution directory once so every row can color its edge
-	// and show a chip for its Account.InstitutionID.
-	instByID := domain.InstitutionByID(app.Institutions())
 
-	// AC2/AC9: the 90-day sparkline window and this-month flow window, computed once.
-	monthStart, monthEnd := dateutil.MonthRange(now)
-
-	// C413: the earliest transaction date per account, folded once, so each row can
-	// size its "all" balance-history window without re-scanning the ledger per row.
-	earliestByAcct := map[string]time.Time{}
-	for _, t := range txns {
-		if e, ok := earliestByAcct[t.AccountID]; !ok || t.Date.Before(e) {
-			earliestByAcct[t.AccountID] = t.Date
-		}
-	}
-	// C413: cap the "all" window at ~20 years of daily points so a stray far-past
-	// date can't blow up the fold.
-	const allWindowCapDays = 366 * 20
+	// The row shares the ledger index. Compact rows need balances only; their chart
+	// windows, flows and recurring projections are prepared on disclosure.
+	detailContext := newAccountDetailContext(app, snapshot, props.Rates, props.Base, now)
 
 	renderRow := func(ac domain.Account) ui.Node {
-		defaultMemberID, defaultMemberName := accountDefaultMemberTarget(ac, members, activeMemberID)
+		defaultMemberID, defaultMemberName := accountDefaultMemberTarget(ac, feed.Members, activeMemberID)
 		var defaultMemberIDs []string
 		if !ac.Archived {
-			for _, member := range members {
+			for _, member := range feed.Members {
 				if member.Prefs.DefaultAccountID == ac.ID {
 					defaultMemberIDs = append(defaultMemberIDs, member.ID)
 				}
 			}
 		}
-		bal, _ := ledger.Balance(ac, txns)
-		cleared, _ := ledger.ClearedBalance(ac, txns)
-		// C413: size the range picker's windows. Only compute the wider series when
-		// the account actually has more than 90 days of history (HasRange), so the
-		// picker stays hidden — and the extra folds skipped — for young accounts.
-		allDays := acctseries.AllDays(now, acctseries.Days90, allWindowCapDays, earliestByAcct[ac.ID])
-		hasRange := acctseries.HasRange(allDays)
-		var s12m, sall []int64
-		if hasRange {
-			s12m = accountflow.BalanceSeries(ac, txns, now, acctseries.Days12m)
-			sall = accountflow.BalanceSeries(ac, txns, now, allDays)
-		}
-		return ui.CreateElement(AccountRow, accountRowProps{
-			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
-			StaleCollapsed: staleCollapsed,
-			Members:        members, Accounts: accounts, Categories: categories,
-			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
-			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
-			DefaultHousehold: !ac.Archived && householdDefaultID == ac.ID, DefaultMembers: defaultMemberIDs,
-			DefaultMemberID: defaultMemberID, DefaultMemberName: defaultMemberName,
-			OnSetDefaultHousehold: cbs.OnSetDefaultHousehold, OnClearDefaultHousehold: cbs.OnClearDefaultHousehold,
-			OnSetDefaultMember:   cbs.OnSetDefaultMember,
-			OnClearDefaultMember: cbs.OnClearDefaultMember,
-			SmartSettings:        smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
-			AccountDefs: accDefs, InstByID: instByID,
-			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
-			Sparkline:    accountflow.BalanceSeries(ac, txns, now, acctseries.Days90),
-			Sparkline12m: s12m, SparklineAll: sall, HasRange: hasRange,
-			Flow:       accountflow.PeriodFlow(ac, txns, monthStart, monthEnd),
-			ShowFlow:   true,
-			Projection: app.ProjectAccount(ac.ID, now, 30),
-		})
+		row := feed.props(ac)
+		row.StaleCollapsed = stale.Collapsed
+		row.DefaultHousehold = !ac.Archived && householdDefaultID == ac.ID
+		row.DefaultMembers = defaultMemberIDs
+		row.DefaultMemberID, row.DefaultMemberName = defaultMemberID, defaultMemberName
+		row.OnSetDefaultHousehold, row.OnClearDefaultHousehold = feed.Callbacks.OnSetDefaultHousehold, feed.Callbacks.OnClearDefaultHousehold
+		row.OnSetDefaultMember, row.OnClearDefaultMember = feed.Callbacks.OnSetDefaultMember, feed.Callbacks.OnClearDefaultMember
+		row.SmartSettings, row.SmartByEntity = smartSettings, accountByEntity
+		row.DetailContext = detailContext
+		return ui.CreateElement(AccountRow, row)
 	}
-	keyOf := func(ac domain.Account) any { return ac.ID }
-
-	// AC1: user-defined groups render as sections with a net subtotal each, followed
-	// by an "Ungrouped" catch-all. Built only for the "default" body case below.
+	// User-defined groups render as sections, each with a net subtotal, followed
+	// by an "Ungrouped" catch-all. Used as the body only when at least one group exists.
 	groups := app.AccountGroups()
 	groupedBody := func() ui.Node {
-		sections := groupSections(shown, groups, txns, props.Rates, props.Base)
+		sections := groupSections(shown, groups, snapshot.Balances, props.Rates, props.Base)
 		return Div(css.Class("acct-groups"),
 			MapKeyed(sections, func(s acctGroupSection) any {
 				if s.Group.ID == "" {
@@ -1318,7 +1172,7 @@ func acctListWidget(props acctListProps) ui.Node {
 				}
 				return s.Group.ID
 			}, func(s acctGroupSection) ui.Node {
-				// C412: each section collapses to just its header (name + subtotal); the
+				// Each section collapses to just its header (name and subtotal). The
 				// collapsed state is read fresh here and persisted per group. Collapsed is
 				// threaded into the header prop so the memoized header re-renders on change.
 				collapsed := isAcctGroupCollapsed(s.Group.ID)
@@ -1328,37 +1182,45 @@ func acctListWidget(props acctListProps) ui.Node {
 				}
 				return Div(ClassStr(groupCls),
 					ui.CreateElement(acctGroupHeader, acctGroupHeaderProps{Section: s, Collapsed: collapsed}),
-					If(!collapsed, Div(css.Class("rows"), MapKeyed(s.Accounts, keyOf, renderRow))),
+					If(!collapsed, Div(css.Class("rows"), MapKeyed(s.Accounts, accountRowKey, renderRow))),
 				)
 			}),
 		)
 	}
 
-	var bodyContent ui.Node
-	switch {
-	case len(active) == 0:
-		bodyContent = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
-	case len(shown) == 0 && f.HasNarrowing():
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noMatch"))
-	case len(shown) == 0 && classView == string(domain.ClassLiability):
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noLiabilities"))
-	case len(shown) == 0:
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noAssets"))
-	case len(groups) > 0:
-		bodyContent = groupedBody()
-	default:
-		bodyContent = Div(css.Class("rows"), MapKeyed(shown, keyOf, renderRow))
-	}
+	bodyContent := ui.Match().
+		When(list.InServices, func() ui.Node {
+			return servicesBody(app, serviceList, props.Base, props.Rates)
+		}).
+		When(len(list.Active) == 0, func() ui.Node {
+			return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
+		}).
+		When(len(shown) == 0 && f.HasNarrowing(), func() ui.Node {
+			return acctEmptyCallout("acct-list-nomatch", uistate.T("accounts.noMatch"))
+		}).
+		When(len(shown) == 0 && classView == string(domain.ClassLiability), func() ui.Node {
+			return acctEmptyCallout("acct-list-noliabilities", uistate.T("accounts.noLiabilities"))
+		}).
+		When(len(shown) == 0, func() ui.Node {
+			return acctEmptyCallout("acct-list-noassets", uistate.T("accounts.noAssets"))
+		}).
+		When(len(groups) > 0, groupedBody).
+		Default(func() ui.Node {
+			return Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
+		})
 
 	// Collapsed-stale state: one summary line leads the list, its Mark-all reusing the
 	// toolbar action. Prepended so it sits above the (grouped or flat) rows.
-	if staleCollapsed {
+	if stale.Collapsed {
 		bodyContent = Fragment(
-			Div(css.Class("acct-stale-summary"), Attr("data-testid", "acct-stale-summary"), Attr("role", "status"),
-				Span(uistate.T("accounts.staleSummary")),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-stale-summary-markall"),
-					Title(uistate.T("acctxn.markAllMeaning")), OnClick(markAllStale), uistate.T("accounts.markAll")),
-			),
+			uiw.Callout(uiw.CalloutProps{
+				Tone: uiw.CalloutInfo, Live: uiw.CalloutLiveStatus, TestID: "acct-stale-summary",
+				Body: Span(uistate.T("accounts.staleSummary")),
+				Action: uiw.ToolButton(uiw.ToolButtonProps{
+					Label: uistate.T("accounts.markAll"), Title: uistate.T("acctxn.markAllMeaning"),
+					Variant: "stale", TestID: "acct-stale-summary-markall",
+				}, OnClick(markAllStale)),
+			}),
 			bodyContent,
 		)
 	}
@@ -1377,76 +1239,74 @@ func acctListWidget(props acctListProps) ui.Node {
 		}
 	}
 
-	var classSeg ui.Node = Fragment()
-	if hasLiab {
-		classSeg = uiw.Segmented(uiw.SegmentedProps{
-			Label:    uistate.T("accounts.classFilterLabel"),
-			Selected: classView,
-			Options: []uiw.SegOption{
+	classSeg := ui.If(hasLiab || hasServices || list.InServices, func() ui.Node {
+		return uiw.RadioGroup(uiw.RadioGroupProps{
+			Label: uistate.T("accounts.classFilterLabel"),
+			Value: classView,
+			Options: []uiw.RadioOption{
 				{Value: "", Label: uistate.T("accounts.classAll"), TestID: "acct-class-all"},
 				{Value: string(domain.ClassAsset), Label: uistate.T("accounts.classAssets"), TestID: "acct-class-assets"},
 				{Value: string(domain.ClassLiability), Label: uistate.T("accounts.classLiabilities"), TestID: "acct-class-liabilities"},
+				{Value: serviceClassView, Label: uistate.T("accounts.classServices"), TestID: "acct-class-services"},
 			},
-			OnSelect: func(v string) {
+			OnChange: func(v string) {
 				nf := filterAtom.Get()
 				nf.Class = v
 				filterAtom.Set(nf.Normalize())
+				// The class view is a viewer preference, not household data, so saving it does not
+				// touch the dataset or schedule a save.
 				uistate.PersistAcctClass(v)
-				// Flush now so a quick reload after toggling doesn't race the
-				// autosave ticker and lose the choice (same guard as sample load, C2).
-				uistate.RequestPersist()
 			},
 		})
-	}
+	})
 
+	if list.InServices {
+		title = uistate.T("accounts.servicesTitle")
+	}
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: title,
-		// The class filter (All / Assets / Liabilities) is the only header action; the
-		// old "Smart" sparkle shortcut was dropped here as noise (the Smart hub is one
-		// nav click away and the page already carries the inline Smart strip up top).
+		// The class filter (All / Assets / Liabilities / Services) is the header action.
+		// Adding is in the summary's Add menu.
 		HeaderAction: classSeg,
 		Body:         bodyContent,
 	})
 
 	// A shortcut to /debt, where liabilities carry the richer payoff surface (min
 	// payment, utilization, payoff order). When the assets-only view hides them, the
-	// link names how many are tucked away (C346); otherwise it's a plain shortcut.
+	// link names how many are tucked away; otherwise it is a plain shortcut.
 	// Left-click navigates client-side (goToDebt prevents the full reload); the href
 	// stays for keyboard/middle-click. Built via If (not a Go `if`) so the OnClick
 	// hook is always registered at a stable position.
 	debtLinkText := uistate.T("accounts.manageDebtLink")
 	debtLinkTestID := "acct-manage-debt"
-	if assetsOnly {
-		debtLinkText = uistate.T("accounts.liabilitiesStub", len(liabs))
+	if list.AssetsOnly {
+		debtLinkText = uistate.T("accounts.liabilitiesStub", len(list.Liabilities))
 		debtLinkTestID = "acct-liabilities-stub"
 	}
 	debtLink := If(hasLiab,
 		Div(css.Class(tw.Mt3),
-			A(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
-				Href(uistate.RoutePath("/debt")),
-				Attr("data-testid", debtLinkTestID),
+			uiw.ToolButton(uiw.ToolButtonProps{
+				Label: debtLinkText, Icon: icon.CreditCard, Href: uistate.RoutePath("/debt"), TestID: debtLinkTestID,
+			},
 				OnClick(goToDebt),
-				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				debtLinkText,
 			),
 		),
 	)
 
-	// C365: an investment-section header linking Accounts to the holdings experience.
-	// Shown above the list whenever the household has investment accounts and the
-	// liabilities-only view isn't active (investments are assets). Its chips mirror the
-	// /investments summary hero (value / gain / return%), so the two pages agree.
-	var investBanner ui.Node = Fragment()
-	if classView != string(domain.ClassLiability) {
-		investBanner = acctInvestmentsBanner(app, goToInvestments)
-	}
-
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(investBanner, section, debtLink),
+		Body: Div(section, debtLink),
 	})
 }
 
+// acctEmptyCallout is the notice a list tile shows in place of its rows when none are left to show.
+func acctEmptyCallout(testID, text string) ui.Node {
+	return uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutInfo, TestID: testID, Body: Span(text)})
+}
+
+// accountDefaultMemberTarget picks the member a row's "default account for member"
+// action applies to: the member in the active scope when there is one, otherwise the
+// account's owner. It returns empty strings when neither is found.
 func accountDefaultMemberTarget(account domain.Account, members []domain.Member, activeID string) (string, string) {
 	want := strings.TrimSpace(activeID)
 	for _, member := range members {
@@ -1463,65 +1323,12 @@ func accountDefaultMemberTarget(account domain.Account, members []domain.Member,
 	return "", ""
 }
 
-// acctInvestmentsBanner renders the Accounts investment-section header (C365): a
-// labelled strip with the portfolio value / gain / return% chips (from the shared
-// invest view, matching the /investments hero) and an "Open investments" link, so
-// the holdings experience is one click away. Renders nothing when the household has
-// no investment accounts. onOpen navigates to /investments (a stable hook from the
-// caller). Styled inline (theme tokens) so it needs no stylesheet rule.
-func acctInvestmentsBanner(app *appstate.App, onOpen ui.Handler) ui.Node {
-	v := computeInvestView(app)
-	if !v.HasAny {
-		return Fragment()
-	}
-	gainTone := tw.ColorClass(gainToneClass(v.SecSummary.TotalGainMinor))
-	chip := func(testid, label, value, toneFold string) ui.Node {
-		return Div(css.Class("acct-invest-chip"),
-			Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.1rem"}),
-			Span(css.Class("t-caption", tw.TextDim), label),
-			Span(ClassStr("acct-invest-chip-val "+tw.Fold(tw.FontDisplay)+toneFold), Attr("data-testid", testid), value),
-		)
-	}
-	toneCls := ""
-	if gainTone != "" {
-		toneCls = " " + gainTone
-	}
-	return Div(css.Class("acct-invest-banner"), Attr("data-testid", "acct-invest-banner"),
-		Attr("role", "group"), Attr("aria-label", uistate.T("accountsInvest.bannerAria")),
-		Style(map[string]string{
-			"display": "flex", "flex-wrap": "wrap", "align-items": "center", "gap": "0.75rem 1.5rem",
-			"padding": "0.75rem 1rem", "margin": "0 0 0.75rem", "border": "1px solid var(--border)",
-			"border-radius": "0.5rem", "background": "var(--bg-card)",
-		}),
-		Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
-			Style(map[string]string{"margin-right": "auto"}),
-			uiw.Icon(icon.Reports, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)),
-			Span(css.Class(tw.FontMedium), uistate.T("accountsInvest.sectionTitle")),
-		),
-		chip("acct-invest-value", uistate.T("accountsInvest.value"), fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec), ""),
-		chip("acct-invest-gain", uistate.T("accountsInvest.gain"), fmtSignedMoney(v.SecSummary.TotalGainMinor, v.Sym, v.Dec), toneCls),
-		chip("acct-invest-return", uistate.T("accountsInvest.returnPct"), strconv.FormatFloat(v.SecSummary.ReturnPct, 'f', 2, 64)+"%", toneCls),
-		Button(css.Class("btn-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "acct-open-investments"),
-			Title(uistate.T("accountsInvest.openTitle")), OnClick(onOpen),
-			Span(uistate.T("accountsInvest.open")),
-			uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
-		// Reconciliation sub-caption (wraps to its own full-width line): spells out how the
-		// tracked-securities value relates to the investment-account total, so this banner's
-		// figure can't be mistaken for a second, conflicting "investment value".
-		If(investHasReconcile(v),
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-invest-reconcile"),
-				Title(investReconcileTitle(v)),
-				Style(map[string]string{"width": "100%", "flex-basis": "100%", "margin": "0.15rem 0 0"}),
-				investReconcileLine(v))),
-	)
-}
-
 // --- acct-archived --------------------------------------------------------------
 
 // acctArchivedWidget is the archived-accounts tile, placed by the host only when the
-// "show archived" toggle is on and archived accounts exist. Rows reuse AccountRow
-// (so an archived account can still be restored, viewed, or edited).
+// "show archived" toggle is on and archived accounts exist. It lists archived assets
+// and liabilities alike. Rows reuse AccountRow (so an archived account can still be
+// restored, viewed, or edited).
 func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
@@ -1531,47 +1338,24 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	activeMemberID := acctActiveMemberID()
 	f := filterAtom.Get()
 
-	accounts := app.Accounts()
-	txns := app.Transactions()
-	_, archived := partitionAssetAccounts(accounts, txns, props.Rates, props.Base, activeMemberID)
-
 	var shown []domain.Account
-	for _, ac := range archived {
+	for _, ac := range accountview.Archived(app.Accounts(), activeMemberID) {
 		if f.Matches(ac.Name, string(ac.Type)) {
 			shown = append(shown, ac)
 		}
 	}
 
-	windows := app.FreshnessWindows()
-	now := time.Now()
-	categories := app.Categories()
-	members := app.Members()
-	accDefs := app.CustomFieldDefsFor("account")
-	cbs := buildAcctRowCallbacks(app)
-	viewTxns := acctViewTransactions(nav, txFilter)
-	viewBills := acctViewBillPayments(nav, txFilter)
-	instByID := domain.InstitutionByID(app.Institutions())
-
+	feed := newAcctRowFeed(app, accountSnapshot(app), acctViewTransactions(nav, txFilter), acctViewBillPayments(nav, txFilter), time.Now())
 	renderRow := func(ac domain.Account) ui.Node {
-		bal, _ := ledger.Balance(ac, txns)
-		cleared, _ := ledger.ClearedBalance(ac, txns)
-		return ui.CreateElement(AccountRow, accountRowProps{
-			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
-			Members: members, Accounts: accounts, Categories: categories,
-			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
-			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
-			ValuationHistory: app.BalanceHistory(ac.ID), AccountDefs: accDefs, InstByID: instByID,
-			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
-		})
+		row := feed.props(ac)
+		row.ValuationHistory = app.BalanceHistory(ac.ID)
+		return ui.CreateElement(AccountRow, row)
 	}
-	keyOf := func(ac domain.Account) any { return ac.ID }
-
-	var bodyContent ui.Node
-	if len(shown) == 0 {
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noMatch"))
-	} else {
-		bodyContent = Div(css.Class("rows"), MapKeyed(shown, keyOf, renderRow))
-	}
+	bodyContent := ui.If(len(shown) == 0, func() ui.Node {
+		return acctEmptyCallout("acct-archived-nomatch", uistate.T("accounts.noMatch"))
+	}, func() ui.Node {
+		return Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
+	})
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{Title: uistate.T("accounts.archived"), Body: bodyContent})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-archived", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -1587,7 +1371,7 @@ func acctWelcomeWidget(props acctWelcomeProps) ui.Node {
 	app := props.App
 	loadSample := ui.UseEvent(Prevent(func() {
 		if err := app.LoadSample(); err != nil {
-			uistate.PostNotice(err.Error(), true)
+			postAcctWriteError("load sample", err)
 			return
 		}
 		uistate.SetSampleActive(true)
@@ -1617,11 +1401,26 @@ func acctWelcomeWidget(props acctWelcomeProps) ui.Node {
 // numeric custom field on your accounts, then compute over it here.
 func acctFormulaWidget(props acctFormulaProps) ui.Node {
 	body := Div(
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("accounts.formulaHint")),
+		P(css.Class("t-caption", tw.TextDim, "acct-gap-below"), uistate.T("accounts.formulaHint")),
 		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("accounts.formulaTitle"), ShowSaved: true}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-formula", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// balanceAsOfDate reads the date a balance update was true as of. A blank date means now; any other
+// text must be a real YYYY-MM-DD date, and the second result is false when it is not. The edit form's
+// date check (valueUpdateProblem) applies the same rule.
+func balanceAsOfDate(raw string, now time.Time) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return now, true
+	}
+	parsed, err := dateutil.ParseDate(raw)
+	if err != nil || parsed.IsZero() {
+		return time.Time{}, false
+	}
+	return parsed, true
 }

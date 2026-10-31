@@ -16,7 +16,7 @@ func registerUXT1() {
 		width("100%"),
 		minWidth("0"),
 		color("var(--text)"),
-		fontSize("var(--type-14)"),
+		fontSize("var(--fs-body)"),
 	)
 	rule(".txn-count-band",
 		display("flex"),
@@ -32,7 +32,7 @@ func registerUXT1() {
 		alignItems("baseline"),
 		flexWrap("wrap"),
 		gap("0.35rem 1rem"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 	rule(".txn-count-future-period",
@@ -69,16 +69,17 @@ func registerUXT1() {
 		outlineOffset("3px"),
 	)
 	rule(".txn-count-value",
-		fontSize("17px"),
+		fontSize("var(--fs-body)"),
 		fontWeight("600"),
 		lineHeight("1.25"),
 		fontVariantNumeric("tabular-nums"),
 		fontFeatureSettings("tnum"),
 		whiteSpace("nowrap"),
 	)
+	// Labels take the Accounts fact-label tokens: body size, regular weight, dimmed.
 	rule(".txn-count-label",
-		fontSize("12px"),
-		fontWeight("500"),
+		fontSize("var(--fs-body)"),
+		fontWeight("400"),
 		lineHeight("1.3"),
 		color("var(--text-dim)"),
 	)
@@ -117,10 +118,20 @@ func registerUXT1() {
 		background("var(--text-dim)"),
 		cursor("pointer"),
 	)
-	rule(".txn-category-segment:nth-child(2)", background("color-mix(in srgb, var(--text-dim) 82%, var(--bg) 18%)"))
-	rule(".txn-category-segment:nth-child(3)", background("color-mix(in srgb, var(--text-dim) 66%, var(--bg) 34%)"))
-	rule(".txn-category-segment:nth-child(4)", background("color-mix(in srgb, var(--text-dim) 50%, var(--bg) 50%)"))
-	rule(".txn-category-segment:nth-child(5)", background("color-mix(in srgb, var(--text-dim) 34%, var(--bg) 66%)"))
+	rule(".txn-category-segment:nth-child(1)", background("var(--chart-4)"))
+	rule(".txn-category-item:nth-child(1)::before", background("var(--chart-4)"))
+	rule(".txn-category-segment:nth-child(2)", background("var(--chart-3)"))
+	rule(".txn-category-item:nth-child(2)::before", background("var(--chart-3)"))
+	rule(".txn-category-segment:nth-child(3)", background("var(--chart-5)"))
+	rule(".txn-category-item:nth-child(3)::before", background("var(--chart-5)"))
+	rule(".txn-category-segment:nth-child(4)", background("var(--chart-1)"))
+	rule(".txn-category-item:nth-child(4)::before", background("var(--chart-1)"))
+	rule(".txn-category-segment:nth-child(5)", background("var(--chart-2)"))
+	rule(".txn-category-item:nth-child(5)::before", background("var(--chart-2)"))
+	rule(".txn-category-segment-other", background("var(--border)"))
+	rule(".txn-category-item::before",
+		content("\"\""), display("inline-block"), width("8px"), height("8px"), marginRight("0.4rem"), borderRadius("2px"), flex("0 0 auto"),
+	)
 	rule(".txn-category-segment.is-selected",
 		background("var(--accent)"),
 	)
@@ -152,8 +163,8 @@ func registerUXT1() {
 		border("0"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("var(--type-12)"),
-		fontWeight("500"),
+		fontSize("var(--fs-body)"),
+		fontWeight("400"),
 		textAlign("left"),
 		cursor("pointer"),
 		maxWidth("22%"),
@@ -181,10 +192,16 @@ func registerUXT1() {
 		color("var(--text-dim)"),
 		cursor("default"),
 	)
+	// The caption names the bar below it, in the footer's quiet meta size.
+	rule(".txn-category-caption",
+		fontSize("var(--fs-meta)"),
+		fontWeight("400"),
+		color("var(--text-dim)"),
+	)
 	rule(".txn-category-more",
 		flex("0 0 auto"),
 		color("var(--text-dim)"),
-		fontSize("12px"),
+		fontSize("var(--fs-body)"),
 	)
 	rule(".txn-category-item.is-selected, .txn-category-item:hover",
 		color("var(--accent)"),
@@ -195,8 +212,11 @@ func registerUXT1() {
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 	)
+	// The amount reads as a value, as the Accounts fact values do: semibold, full text colour.
 	rule(".txn-category-amount",
 		flexShrink("0"),
+		fontWeight("600"),
+		color("var(--text)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".txn-count-secondary",
@@ -206,7 +226,7 @@ func registerUXT1() {
 		gap("0.35rem 1rem"),
 		minWidth("0"),
 		color("var(--text-dim)"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("500"),
 		lineHeight("1.4"),
 	)
@@ -231,7 +251,7 @@ func registerUXT1() {
 	rule(".txn-count-upcoming-fact",
 		flex("0 0 auto"),
 		marginLeft("auto"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 	)
 	rule(".txn-count-secondary",
 		paddingLeft("0"),

@@ -20,9 +20,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // CatSuggestFormID links the form to the modal's pinned Save button.
@@ -175,7 +175,7 @@ func catSuggestForm(p catSuggestFormProps) ui.Node {
 		),
 		If(p.AINote != "", P(css.Class("csug-ainote", tw.Text12, tw.TextDim), Attr("data-testid", "catsuggest-ainote"), p.AINote)),
 		ui.CreateElement(catSuggestBatch, catSuggestBatchProps{Others: p.Others, Checked: p.Batch, OnChange: p.OnBatch}),
-		If(p.Error != "", P(css.Class("err"), Attr("role", "alert"), p.Error)),
+		If(p.Error != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(p.Error)})),
 	), picker)
 }
 
@@ -223,8 +223,7 @@ type catSuggestBatchProps struct {
 func catSuggestBatch(p catSuggestBatchProps) ui.Node {
 	change := ui.UseEvent(p.OnChange)
 	option := OnChange(change)
-	return If(p.Others > 0, Label(css.Class("csug-batch", tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Style(map[string]string{"cursor": "pointer"}),
+	return If(p.Others > 0, Label(css.Class("csug-batch", tw.Flex, tw.ItemsCenter, tw.Gap2, "txn-check-row"),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "catsuggest-batch"), option}, checkedAttr(p.Checked)...)...),
 		Span(css.Class(tw.Text13), uistate.T("catSuggest.batchLabel", p.Others))))
 }

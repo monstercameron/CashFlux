@@ -5,58 +5,24 @@
 package screens
 
 import (
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
-	"log/slog"
-	"net/http"
 	"strings"
 
-	"github.com/monstercameron/CashFlux/internal/backendauth"
+	"github.com/monstercameron/CashFlux/internal/adminclient"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// ---------------------------------------------------------------------------
-// Client-side mirrors of server/admin.go response types
-// ---------------------------------------------------------------------------
-
-// adminOverview mirrors server.AdminOverviewResponse (internal/server/admin.go).
-// Field names match the JSON tags on the server struct exactly.
-type adminOverview struct {
-	TotalUsers        int64  `json:"totalUsers"`
-	SubsActive        int64  `json:"subsActive"`
-	SubsTrialing      int64  `json:"subsTrialing"`
-	SubsPastDue       int64  `json:"subsPastDue"`
-	SubsCanceled      int64  `json:"subsCanceled"`
-	EstimatedMRRCents int64  `json:"estimatedMrrCents"`
-	TotalBlobBytes    int64  `json:"totalBlobBytes"`
-	TodayRequests     int64  `json:"todayRequests"`
-	TodayTokens       int64  `json:"todayTokens"`
-	Day               string `json:"day"`
-}
-
-// adminUserRow mirrors server.AdminUserRow (internal/server/repository.go).
-type adminUserRow struct {
-	ID                 string `json:"id"`
-	Provider           string `json:"provider"`
-	Email              string `json:"email"`
-	CreatedAt          string `json:"createdAt"`
-	SubscriptionPlan   string `json:"subscriptionPlan,omitempty"`
-	SubscriptionStatus string `json:"subscriptionStatus,omitempty"`
-}
-
-// adminUsersResponse mirrors server.AdminUsersResponse.
-type adminUsersResponse struct {
-	Users  []adminUserRow `json:"users"`
-	Limit  int            `json:"limit"`
-	Offset int            `json:"offset"`
-}
+type adminOverview = adminclient.Overview
+type adminUserRow = adminclient.User
 
 // ---------------------------------------------------------------------------
 // Fetch helpers
@@ -64,91 +30,43 @@ type adminUsersResponse struct {
 
 // fetchAdminOverview GETs /v1/admin/overview, invoking onDone on success,
 // onForbidden on 401/403, or onError on any other failure.
-func fetchAdminOverview(endpoint, token string, onDone func(adminOverview), onForbidden func(), onError func(string)) {
-	endpoint = normalizedAdminEndpoint(endpoint)
-	if endpoint == "" || strings.TrimSpace(token) == "" {
-		return
-	}
-	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
-		onError(err.Error())
-		return
-	}
+func fetchAdminOverview(endpoint, token string, onDone func(adminclient.OverviewResult), onForbidden func(), onError func(string)) {
 	go func() {
-		req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/admin/overview", nil)
+		result, err := adminclient.Default.Overview(context.Background(), endpoint, token)
 		if err != nil {
+			var requestErr *adminclient.RequestError
+			if errors.As(err, &requestErr) && (requestErr.Status == 401 || requestErr.Status == 403) {
+				onForbidden()
+				return
+			}
+			if errors.As(err, &requestErr) && requestErr.Status != 0 {
+				onError(fmt.Sprintf("%s (HTTP %d)", uistate.T("admin.errorOverview"), requestErr.Status))
+				return
+			}
 			onError(uistate.T("admin.errorOverview"))
 			return
 		}
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			slog.Warn("admin overview fetch error", "err", err)
-			onError(uistate.T("admin.errorOverview"))
-			return
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			onForbidden()
-			return
-		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			onError(fmt.Sprintf("%s (HTTP %d)", uistate.T("admin.errorOverview"), resp.StatusCode))
-			return
-		}
-		var ov adminOverview
-		if err := json.NewDecoder(resp.Body).Decode(&ov); err != nil {
-			onError(uistate.T("admin.errorOverview"))
-			return
-		}
-		onDone(ov)
+		onDone(result)
 	}()
 }
 
 // fetchAdminUsers GETs /v1/admin/users, invoking onDone on success or onError
-// on failure. Forbidden responses are surfaced through onError with the access-
-// denied key (the overview fetch already gated access — this is a belt-and-
-// suspenders guard).
-func fetchAdminUsers(endpoint, token string, onDone func([]adminUserRow), onError func(string)) {
-	endpoint = normalizedAdminEndpoint(endpoint)
-	if endpoint == "" || strings.TrimSpace(token) == "" {
-		return
-	}
-	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
-		onError(err.Error())
-		return
-	}
+// on failure. Forbidden responses remain an explicit HTTP error after the
+// overview has gated access.
+func fetchAdminUsers(endpoint, token string, onDone func(adminclient.UsersResult), onError func(string)) {
 	go func() {
-		req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/admin/users?limit=50&offset=0", nil)
+		result, err := adminclient.Default.Users(context.Background(), endpoint, token, 50, 0)
 		if err != nil {
+			var requestErr *adminclient.RequestError
+			if errors.As(err, &requestErr) && requestErr.Status != 0 {
+				onError(fmt.Sprintf("%s (HTTP %d)", uistate.T("admin.errorUsers"), requestErr.Status))
+				return
+			}
 			onError(uistate.T("admin.errorUsers"))
 			return
 		}
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			slog.Warn("admin users fetch error", "err", err)
-			onError(uistate.T("admin.errorUsers"))
-			return
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			onError(fmt.Sprintf("%s (HTTP %d)", uistate.T("admin.errorUsers"), resp.StatusCode))
-			return
-		}
-		var ur adminUsersResponse
-		if err := json.NewDecoder(resp.Body).Decode(&ur); err != nil {
-			onError(uistate.T("admin.errorUsers"))
-			return
-		}
-		onDone(ur.Users)
+		onDone(result)
 	}()
-}
-
-// normalizedAdminEndpoint strips trailing slashes from the endpoint, falling
-// back to the localhost default when blank. Reuses the same trimming logic as
-// internal/app/backend.go's normalizedBackendEndpoint.
-func normalizedAdminEndpoint(endpoint string) string {
-	return strings.TrimRight(strings.TrimSpace(endpoint), "/")
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +138,9 @@ func AdminConsole() ui.Node {
 	screenState := ui.UseState(adminStateLoading)
 	errMsg := ui.UseState("")
 	overview := ui.UseState(adminOverview{})
+	overviewFetch := ui.UseState(adminclient.FetchMeta{})
 	users := ui.UseState([]adminUserRow(nil))
+	usersFetch := ui.UseState(adminclient.FetchMeta{})
 	loadRev := ui.UseState(0) // bumped by Retry to re-fire the effect
 
 	// On mount (and Retry): fetch overview first, then users.
@@ -231,12 +151,14 @@ func AdminConsole() ui.Node {
 		}
 		screenState.Set(adminStateLoading)
 		fetchAdminOverview(endpoint, token,
-			func(ov adminOverview) {
-				overview.Set(ov)
+			func(result adminclient.OverviewResult) {
+				overview.Set(result.Overview)
+				overviewFetch.Set(result.FetchMeta)
 				// Overview succeeded — now fetch users.
 				fetchAdminUsers(endpoint, token,
-					func(rows []adminUserRow) {
-						users.Set(rows)
+					func(result adminclient.UsersResult) {
+						users.Set(result.Users)
+						usersFetch.Set(result.FetchMeta)
 						screenState.Set(adminStateReady)
 					},
 					func(msg string) {
@@ -321,12 +243,14 @@ func AdminConsole() ui.Node {
 	if ov.Day != "" {
 		dayLabel = P(css.Class("muted", tw.Text12), uistate.T("admin.dayLabel")+" "+ov.Day)
 	}
+	overviewFetched := adminFetchLabel(overviewFetch.Get(), "overview", "admin.overviewTitle")
 
 	overviewCard := uiw.Card(uiw.CardProps{
 		Title: uistate.T("admin.overviewTitle"),
 		Body: Fragment(
 			uiw.StatGrid(stats),
 			dayLabel,
+			overviewFetched,
 		),
 	})
 
@@ -373,14 +297,28 @@ func AdminConsole() ui.Node {
 
 	usersCard := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("admin.usersTitle"),
-		Body: uiw.DataTable(uiw.DataTableProps{
-			Class:   "admin-users-table",
-			Columns: cols,
-			Body:    tableBody,
-		}),
+		Body: Div(
+			adminFetchLabel(usersFetch.Get(), "users", "admin.usersTitle"),
+			uiw.DataTable(uiw.DataTableProps{
+				Class:   "admin-users-table",
+				Columns: cols,
+				Body:    tableBody,
+			}),
+		),
 	})
 
 	return Div(overviewCard, usersCard)
+}
+
+func adminFetchLabel(meta adminclient.FetchMeta, section, sectionLabelKey string) ui.Node {
+	if meta.FetchedAt.IsZero() {
+		return Fragment()
+	}
+	label := uistate.T("admin.fetchedAt", uistate.T(sectionLabelKey), meta.FetchedAt.Local().Format("Jan 2, 2006 3:04 PM"))
+	if meta.FromCache {
+		label += " · " + uistate.T("admin.cached")
+	}
+	return P(css.Class("muted", tw.Text12), Attr("data-testid", "admin-fetch-meta-"+section), label)
 }
 
 // itoa64 converts an int to its decimal string representation.

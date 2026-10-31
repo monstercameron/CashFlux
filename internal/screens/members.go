@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/householdview"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -19,11 +20,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Members is the standalone /members route: the person roster plus the
@@ -35,10 +35,19 @@ func Members() ui.Node {
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	roster := rptSection("sec-people", uistate.T("members.listTitle"), nil, membersBody())
-	f := hhFiguresNow(app, app.Members())
+	return ui.CreateElement(membersPreparedBody, membersPreparedBodyProps{App: app})
+}
+
+type membersPreparedBodyProps struct{ App *appstate.App }
+
+func membersPreparedBody(props membersPreparedBodyProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	start, end := uistate.UsePeriod().Get().Range()
+	prepared := householdPreparedAt(props.App, start, end)
+	roster := rptSection("sec-people", uistate.T("members.listTitle"), nil, membersBody(prepared))
+	f := &prepared.Model
 	args := []any{roster}
-	if len(app.Members()) > 0 {
+	if len(f.Members) > 0 || f.RosterErr != nil {
 		args = append(args, byPersonSections(f)...)
 	}
 	return Div(args...)
@@ -48,8 +57,11 @@ func Members() ui.Node {
 // reassign-before-delete panel, and one hh-person ledger row per member (with
 // inline edit, PIN management, and the overflow menu). It registers hooks, so
 // callers must invoke it at a stable render position.
-func membersBody() ui.Node {
-	app := appstate.Default
+func membersBody(prepared *householdPrepared) ui.Node {
+	if prepared == nil {
+		return P(css.Class("empty"), uistate.T("common.notReady"))
+	}
+	app := prepared.App
 	if app == nil {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
@@ -61,8 +73,9 @@ func membersBody() ui.Node {
 	// and rules.go.
 	_ = uistate.UseDataRevision().Get()
 
-	rev := state.UseAtom("rev:members", 0)
-	bump := func() { rev.Set(rev.Get() + 1) }
+	// One shared notification refreshes both the controller-owned preparation
+	// and this roster. A separate local atom would notify the same tree twice.
+	bump := uistate.BumpDataRevision
 
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // member awaiting reassignment before delete
@@ -153,36 +166,16 @@ func membersBody() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
-	members := app.Members()
-	f := hhFiguresNow(app, members)
-
-	// The share denominator: the largest absolute per-owner worth, so the bars
-	// rank people against the household's biggest holder.
-	var maxAbs int64
-	for _, m := range members {
-		if a := f.ownerWorth(m.ID).Amount; a > maxAbs {
-			maxAbs = a
-		} else if -a > maxAbs {
-			maxAbs = -a
-		}
-	}
+	members := prepared.Members
 
 	renderRow := func(m domain.Member) ui.Node {
 		mID := m.ID // capture for closures
-		worth := f.ownerWorth(mID)
-		abs := worth.Amount
-		if abs < 0 {
-			abs = -abs
-		}
-		pct := 0
-		if maxAbs > 0 {
-			pct = int(abs * 100 / maxAbs)
-		}
+		facts := prepared.MemberRows[mID]
 		return ui.CreateElement(MemberRow, memberRowProps{
 			Member:       m,
-			Worth:        worth,
-			Spent:        money.New(f.SpendByID[mID], f.Base),
-			SharePct:     pct,
+			Worth:        facts.Worth,
+			Spent:        facts.Spent,
+			Share:        facts.WorthPercent,
 			CustomLine:   customSummary(memberDefs, m.Custom),
 			OnDelete:     deleteMember,
 			OnSetDefault: setDefault,
@@ -235,10 +228,12 @@ func membersBody() ui.Node {
 		P(css.Class("muted"), uistate.T("members.desc")),
 		// #66: plain-English roles + ownership explainer (collapsed by default).
 		ui.CreateElement(membersRolesExplainer, struct{}{}),
-		IfElse(len(members) == 0,
-			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
-			hhRowsList(MapKeyed(members, keyOf, renderRow)),
-		),
+		IfElse(prepared.Model.RosterErr != nil,
+			householdUnavailable("members-roster-unavailable", prepared.Model.RosterErr),
+			IfElse(len(members) == 0,
+				ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
+				hhRowsList(MapKeyed(members, keyOf, renderRow)),
+			)),
 		Div(css.Class(tw.Mt2),
 			Button(css.Class("btn"), Type("button"), OnClick(onAddMember), uistate.T("members.add")),
 		),
@@ -345,11 +340,11 @@ func memberDefaultAccountOptions() []uiw.SelectOption {
 
 type memberRowProps struct {
 	Member domain.Member
-	// Worth/Spent/SharePct are the person's ledger figures: net worth, spending
+	// Worth/Spent/Share are the person's prepared ledger facts: net worth, spending
 	// this period, and their share of the household's largest holding (0–100).
-	Worth    money.Money
-	Spent    money.Money
-	SharePct int
+	Worth householdview.AmountFact
+	Spent householdview.AmountFact
+	Share householdview.PercentFact
 	// CustomLine is the pre-built "Label: value · …" summary of the member's
 	// custom-field values.
 	CustomLine   string
@@ -397,13 +392,7 @@ func MemberRow(props memberRowProps) ui.Node {
 
 	// The ⋯ overflow menu: transactions, make-default, PIN management, delete.
 	menuItem := func(testID, label string, on ui.Handler, extra ...any) ui.Node {
-		args := []any{css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(on)}
-		if testID != "" {
-			args = append(args, Attr("data-testid", testID))
-		}
-		args = append(args, extra...)
-		args = append(args, label)
-		return Button(args...)
+		return WithKey(ui.CreateElement(memberMenuAction, memberMenuActionProps{TestID: testID, Label: label, OnClick: on, Extra: extra}), testID)
 	}
 	items := []ui.Node{
 		menuItem("member-view-"+m.ID, uistate.T("nav.transactions"), view, Title(uistate.T("members.viewTitle"))),
@@ -435,18 +424,23 @@ func MemberRow(props memberRowProps) ui.Node {
 	// A negative worth reads as a drag on the household, not a share of it: the
 	// bar takes the down tone and the label leads with a minus (L7 gate note).
 	shareTitle := uistate.T("members.shareOfWorth")
-	sharePctLabel := fmt.Sprintf("%d%%", props.SharePct)
-	if props.Worth.IsNegative() {
+	sharePctLabel := fmt.Sprintf("%d%%", props.Share.Value)
+	if props.Share.Err != nil {
+		sharePctLabel = uistate.T("calculation.unavailable")
+	}
+	if props.Worth.Err == nil && props.Worth.Value.IsNegative() {
 		shareTitle = uistate.T("members.shareOfWorthNeg")
-		sharePctLabel = fmt.Sprintf("−%d%%", props.SharePct)
+		if props.Share.Err == nil {
+			sharePctLabel = fmt.Sprintf("−%d%%", props.Share.Value)
+		}
 	}
 	shareBar := Div(css.Class("hh-person-share"),
 		Div(css.Class("share-bar", "share-bar-thin"), Attr("title", shareTitle),
-			Div(ClassStr(shareFillCls(props.Worth)), Style(map[string]string{"width": fmt.Sprintf("%d%%", props.SharePct)}))),
-		Span(css.Class("hh-person-share-pct"), Attr("title", shareTitle), sharePctLabel),
+			If(props.Share.Err == nil, Div(ClassStr(shareFillCls(props.Worth.Value)), Style(map[string]string{"width": fmt.Sprintf("%d%%", props.Share.Value)})))),
+		Span(css.Class("hh-person-share-pct"), Attr("data-testid", "member-share-"+m.ID), Attr("title", shareTitle), sharePctLabel),
 	)
 
-	return Div(css.Class("row hh-person"),
+	return Div(css.Class("row hh-person"), Attr("data-testid", "member-row-"+m.ID),
 		Div(css.Class("hh-person-main"),
 			Div(css.Class("hh-person-id"),
 				memberAvatar(m.Name, color),
@@ -456,8 +450,8 @@ func MemberRow(props memberRowProps) ui.Node {
 				),
 			),
 			Div(css.Class("hh-person-figures"),
-				Span(ClassStr("hh-person-worth amount "+accentFor(props.Worth)), fmtMoney(props.Worth)),
-				Span(css.Class("hh-person-sub"), uistate.T("members.spentSub", fmtMoney(props.Spent))),
+				Span(ClassStr("hh-person-worth amount "+householdAmountTone(props.Worth)), Attr("data-testid", "member-worth-"+m.ID), householdAmountText(props.Worth)),
+				Span(css.Class("hh-person-sub"), Attr("data-testid", "member-spent-"+m.ID), uistate.T("members.spentSub", householdAmountText(props.Spent))),
 			),
 			Div(css.Class("hh-person-actions"),
 				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
@@ -472,6 +466,21 @@ func MemberRow(props memberRowProps) ui.Node {
 		shareBar,
 		If(props.CustomLine != "", Div(css.Class("hh-person-custom"), props.CustomLine)),
 	)
+}
+
+// Each optional action owns its handler hook and stable key, so changing the
+// default member or PIN state cannot shift another menu action's hook identity.
+type memberMenuActionProps struct {
+	TestID, Label string
+	OnClick       ui.Handler
+	Extra         []any
+}
+
+func memberMenuAction(props memberMenuActionProps) ui.Node {
+	args := []any{css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", props.TestID), OnClick(props.OnClick)}
+	args = append(args, props.Extra...)
+	args = append(args, props.Label)
+	return Button(args...)
 }
 
 // shareFillCls tones the person's worth share bar: accent for positive,

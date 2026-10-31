@@ -6,7 +6,7 @@ package uistate
 
 import (
 	"github.com/monstercameron/CashFlux/internal/reviewscope"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 // capturedReviewInbox lets the transactions toolbar's "Review" button open the

@@ -64,6 +64,13 @@ test.describe("reports: snapshots", () => {
 test.describe("reports: saved views", () => {
   test("save, apply after changing the period, and delete", async ({ app }) => {
     await nav(app, "/reports");
+    // Saved views belong to the long-form report toolbar; Summary hides it.
+    const summaryMode = app.getByTestId("rpta-mode-summary");
+    const fullMode = app.getByTestId("rpta-mode-full");
+    await expect(summaryMode).toHaveAttribute("aria-pressed", "true");
+    await expect(fullMode).toHaveAttribute("aria-pressed", "false");
+    await fullMode.click();
+    await expect(fullMode).toHaveAttribute("aria-pressed", "true");
     const saved = app.getByTestId("reports-saved");
     await expect(saved).toBeVisible();
     // No saved views yet: only the Save affordance shows.

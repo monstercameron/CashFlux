@@ -14,7 +14,7 @@
 // Conventions match the rest of the app exactly so no surface can disagree with
 // another: a balance "as of" a cutoff counts transactions STRICTLY BEFORE it
 // (ledger.NetWorthSeries), liabilities contribute the magnitude of their balance
-// (ledger.NetWorth), archived accounts are excluded, and every figure is in
+// (ledger.NetWorth), archived and chosen-excluded accounts are omitted, and every figure is in
 // base-currency minor units.
 //
 // Pure Go, no syscall/js; unit-tested on native Go.
@@ -117,7 +117,7 @@ func Series(accounts []domain.Account, txns []domain.Transaction, cutoffs []time
 			p.Liabilities[b] = 0
 		}
 		for _, a := range accounts {
-			if a.Archived {
+			if !a.CountsInNetWorth() {
 				continue
 			}
 			bal := a.OpeningBalance.Amount

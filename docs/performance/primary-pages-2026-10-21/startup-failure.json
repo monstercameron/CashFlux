@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "label": "smart-shared-after-22dca667",
+  "capturedAt": "2026-10-21T11:53:45.786Z",
+  "baseUrl": "http://127.0.0.1:8080",
+  "failures": [
+    {
+      "phase": "startup",
+      "message": "TimeoutError: page.waitForFunction: Timeout 60000ms exceeded."
+    }
+  ],
+  "conditions": {
+    "wasmDelivery": {
+      "mode": "injected-gzip-fallback",
+      "artifactPath": "C:\\Users\\mreca\\Documents\\Codex\\2026-10-19\\fin\\work\\component-smart-shared-main.wasm",
+      "artifactSha256": "2965dc389a2b18b20774ca4f9b84598fb10f969bae1272d2fcbf55cc7fa51091",
+      "artifactByteLength": 113978229,
+      "artifactGzipByteLength": 21241251,
+      "rawInterceptionCount": 0,
+      "gzipFallbackInterceptionCount": 0,
+      "unexpectedFallbackAttempts": [],
+      "responseContentType": "application/gzip",
+      "responseContentEncoding": "none; decompressed by page loader"
+    }
+  },
+  "cpuProfiling": {
+    "enabled": false,
+    "profiler": "Chromium CDP Profiler",
+    "route": "/",
+    "outputDirectory": null,
+    "expectedProfiles": 0,
+    "warmupsProfiled": 0,
+    "timingsExcludedFromPerformanceMedians": true,
+    "profiles": []
+  },
+  "pages": [],
+  "note": "Benchmark did not complete startup; see failures for the recorded error."
+}

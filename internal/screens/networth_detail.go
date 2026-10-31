@@ -13,9 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The DETAIL view: the full balance sheet as a numbered document, following the
@@ -303,6 +303,13 @@ func nwsSignedCell(minor int64, base string) ui.Node {
 	return Td(ClassStr(cls), sign+fmtMoney(money.New(absMinor(minor), base)))
 }
 
+func nwsWindowMoveCell(row nwsAcctRow, base string) ui.Node {
+	if !row.WindowKnown {
+		return Td(css.Class("nws-num", tw.TextDim), "—")
+	}
+	return nwsSignedCell(row.MoveMinor, base)
+}
+
 // nwsStandSection (00) states the balance sheet as three figures and nothing else.
 func nwsStandSection(v nwsView) ui.Node {
 	p := v.Latest()
@@ -325,6 +332,11 @@ func nwsStandSection(v nwsView) ui.Node {
 // nwsChangedSection (01) carries the full bridge — every leg with what it
 // contains and the residual stated outright — plus every account that moved.
 func nwsChangedSection(v nwsView) ui.Node {
+	if v.BridgeErr != nil {
+		return nwsDetailSection("nws-01", "01", uistate.T("nws.secChanged"),
+			uistate.T("nws.secChangedNote", nwsWindowSpan(v.Months)), nil,
+			P(css.Class("nws-drill-note"), Attr("data-testid", "nws-bridge-unavailable"), uistate.T("nws.windowUnavailable")))
+	}
 	b := v.Bridge
 	rows := []any{}
 	for _, k := range attribution.BridgeLegOrder {
@@ -370,7 +382,7 @@ func nwsChangedSection(v nwsView) ui.Node {
 				Cells: []ui.Node{
 					Text(row.Acct.Name),
 					Td(selectorTypeLabel(row.Acct.Type)),
-					nwsSignedCell(row.MoveMinor, v.Base),
+					nwsWindowMoveCell(row, v.Base),
 				},
 				Panel: nwsAccountPanel(row, v),
 			}))
@@ -461,7 +473,7 @@ func nwsSideSection(v nwsView, asset bool) ui.Node {
 				Td(selectorTypeLabel(row.Acct.Type)),
 				Td(nwsShareBar(share, asset)),
 				nwsMoneyCell(row.SideMinor, v.Base),
-				nwsSignedCell(row.MoveMinor, v.Base),
+				nwsWindowMoveCell(row, v.Base),
 			},
 			Panel: nwsAccountPanel(row, v),
 		}))
@@ -522,6 +534,11 @@ func nwsShareBar(share int64, asset bool) ui.Node {
 // nwsHistorySection (04) is the window month by month: the mirrored chart
 // again, then the figures behind it.
 func nwsHistorySection(v nwsView) ui.Node {
+	if v.SeriesErr != nil {
+		return nwsDetailSection("nws-04", "04", uistate.T("nws.secHistory"),
+			uistate.T("nws.secHistoryNote"), nil,
+			P(css.Class("nws-drill-note"), Attr("data-testid", "nws-history-unavailable"), uistate.T("networth.unavailable")))
+	}
 	body := Fragment(
 		nwsSides(v),
 		nwsMilestones(v),

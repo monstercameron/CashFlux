@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -17,22 +16,22 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type taskRowProps struct {
-	Task         domain.Task
-	Depth        int // nesting depth (0 = top level) → indentation (C72)
-	OnToggle     func(string)
-	OnDelete     func(string)
-	OnAddSub     func(parentID string)
-	Accounts     []domain.Account
-	Budgets      []domain.Budget
-	Goals        []domain.Goal
-	Transactions []domain.Transaction
+	Task        domain.Task
+	Depth       int // nesting depth (0 = top level) → indentation (C72)
+	OnToggle    func(string)
+	OnDelete    func(string)
+	OnAddSub    func(parentID string)
+	LinkName    string
+	LinkFound   bool
+	MemberName  string
+	MemberFound bool
 	// Sub-task summary + collapse (parents only; ChildTotal 0 = leaf). Counts are over
 	// ALL children regardless of the current view filter.
 	ChildTotal       int
@@ -121,9 +120,7 @@ func TaskRow(props taskRowProps) ui.Node {
 	var linkNode ui.Node = Fragment()
 	linkPresent := false
 	if linkRoute != "" {
-		name, ok := tasklink.EntityName(t.RelatedType, t.RelatedID,
-			props.Accounts, props.Budgets, props.Goals, props.Transactions)
-		if ok {
+		if name := props.LinkName; props.LinkFound {
 			ariaLabel := uistate.T("todo.linkAriaLabel", name)
 			linkNode = Button(css.Class("todo-link "+linkChipClass(t.RelatedType)), Type("button"),
 				Attr("data-testid", "task-link-"+t.ID), Attr("aria-label", ariaLabel), Title(ariaLabel), OnClick(goLink),
@@ -182,16 +179,9 @@ func TaskRow(props taskRowProps) ui.Node {
 			uiw.Icon(icon.Bell, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(taskReminderLabel(t.ReminderLeadDays))))
 	}
 	// Assignee chip — a task claimed by one member says whose it is.
-	if t.MemberID != "" {
-		if app := appstate.Default; app != nil {
-			for _, m := range app.Members() {
-				if m.ID == t.MemberID {
-					metaParts = append(metaParts, Span(css.Class("todo-meta-item"), Attr("data-testid", "assignee-badge-"+t.ID),
-						uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(m.Name)))
-					break
-				}
-			}
-		}
+	if t.MemberID != "" && props.MemberFound {
+		metaParts = append(metaParts, Span(css.Class("todo-meta-item"), Attr("data-testid", "assignee-badge-"+t.ID),
+			uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(props.MemberName)))
 	}
 	if linkPresent {
 		metaParts = append(metaParts, linkNode)

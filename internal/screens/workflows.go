@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,9 +22,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Workflows is the automation manager, rebuilt as a from-scratch "automations
@@ -109,8 +110,6 @@ type pyfFormProps struct{ Refresh func() }
 // panel's "Already set up" block.
 type pyfEntry struct {
 	From, To, Amount, Cadence string
-	FromID, ToID              string
-	Cad                       domain.RecurringCadence
 	Enabled                   bool
 }
 
@@ -133,13 +132,10 @@ func pyfActive(app *appstate.App, dec int) []pyfEntry {
 	}
 	var out []pyfEntry
 	for _, w := range app.Workflows() {
-		if len(w.Actions) != 1 {
+		if !workflow.IsPayYourselfFirst(w) {
 			continue
 		}
 		a := w.Actions[0]
-		if a.Kind != workflow.ActionTransfer || !strings.HasPrefix(a.DedupeKey, "pyf:") {
-			continue
-		}
 		cadLabel := uistate.T("workflows.pyfCadenceMonthly")
 		if w.Trigger.Cadence == domain.CadenceWeekly {
 			cadLabel = uistate.T("workflows.pyfCadenceWeekly")
@@ -148,7 +144,6 @@ func pyfActive(app *appstate.App, dec int) []pyfEntry {
 			From: nameOf(a.TransferFromAccountID), To: nameOf(a.TransferToAccountID),
 			Amount:  money.FormatMinor(a.TransferAmount, dec),
 			Cadence: cadLabel,
-			FromID:  a.TransferFromAccountID, ToID: a.TransferToAccountID, Cad: w.Trigger.Cadence,
 			Enabled: w.Enabled,
 		})
 	}
@@ -215,21 +210,17 @@ func pyfForm(props pyfFormProps) ui.Node {
 			return
 		}
 		cad := domain.RecurringCadence(cadence.Get())
-		// Refuse a duplicate on the same route + schedule: a second scheduled
-		// workflow would silently double the money moved — and a duplicate of a
-		// merely-OFF transfer would do the same the day it's re-enabled.
-		for _, e := range pyfActive(app, dec) {
-			if e.FromID == from && e.ToID == to && e.Cad == cad {
-				if e.Enabled {
+		if _, err := app.CreatePayYourselfFirstWorkflow(from, to, amt, cad); err != nil {
+			var duplicate *appstate.DuplicatePayYourselfFirstError
+			if errors.As(err, &duplicate) {
+				if duplicate.ExistingEnabled {
 					msg.Set(uistate.T("wfs.pyfDuplicate"))
 				} else {
 					msg.Set(uistate.T("wfs.pyfDuplicateOff"))
 				}
-				return
+			} else {
+				msg.Set(err.Error())
 			}
-		}
-		if _, err := app.CreatePayYourselfFirstWorkflow(from, to, amt, cad); err != nil {
-			msg.Set(err.Error())
 			return
 		}
 		// Reset form on success and fold back to the summary.
@@ -708,8 +699,10 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				return a, false
 			}
 			a.TransferAmount = amt
-			return a, a.TransferFromAccountID != "" && a.TransferToAccountID != "" &&
-				a.TransferFromAccountID != a.TransferToAccountID
+			if a.TransferFromAccountID == "" || a.TransferToAccountID == "" {
+				return a, false
+			}
+			return a, workflow.ValidateTransferAction(a, workflow.TriggerKind(trigger.Get())) == nil
 		case workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
 			return a, true
 		default: // applyRules / flagReview need no parameter
@@ -752,24 +745,14 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		trig := workflow.Trigger{Kind: workflow.TriggerKind(trigger.Get())}
 		if trig.Kind == workflow.TriggerScheduled {
 			trig.Cadence = domain.RecurringCadence(cadence.Get())
-			trig.NextRun = trig.Cadence.Next(time.Now())
 		}
 		w := workflow.Workflow{
 			ID: id.New(), Name: name.Get(), Enabled: true,
 			Trigger:   trig,
 			Condition: condition.Get(), Actions: acts,
 		}
-		// Scheduled transfers get a per-period dedupe scope ({period} resolves
-		// at each run) so a double-fire within one period moves money once;
-		// manual transfers stay unscoped — each deliberate click transfers.
-		if trig.Kind == workflow.TriggerScheduled {
-			for i := range w.Actions {
-				if w.Actions[i].Kind == workflow.ActionTransfer {
-					w.Actions[i].DedupeKey = "wf:" + w.ID + ":{period}"
-				}
-			}
-		}
-		if errs := workflow.Validate(w); len(errs) > 0 {
+		w, errs := workflow.PrepareDraft(w, time.Now())
+		if len(errs) > 0 {
 			msg.Set(errs[0])
 			return
 		}
@@ -819,13 +802,13 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		paramControl = Fragment(
 			Label(css.Class("fld-field"),
 				Span(css.Class("fld-lbl"), uistate.T("wfs.transferFrom")),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.transferFrom")), OnChange(onDraftFrom), fromOpts)),
+				Select(css.Class("field"), Attr("data-testid", "wf-draft-transfer-from"), Attr("aria-label", uistate.T("wfs.transferFrom")), OnChange(onDraftFrom), fromOpts)),
 			Label(css.Class("fld-field"),
 				Span(css.Class("fld-lbl"), uistate.T("wfs.transferTo")),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.transferTo")), OnChange(onDraftTo), toOpts)),
+				Select(css.Class("field"), Attr("data-testid", "wf-draft-transfer-to"), Attr("aria-label", uistate.T("wfs.transferTo")), OnChange(onDraftTo), toOpts)),
 			Label(css.Class("fld-field"),
 				Span(css.Class("fld-lbl"), amtLabel),
-				Input(css.Class("field"), Attr("placeholder", amtLabel), Attr("aria-label", amtLabel),
+				Input(css.Class("field"), Attr("data-testid", "wf-draft-transfer-amount"), Attr("placeholder", amtLabel), Attr("aria-label", amtLabel),
 					Attr("inputmode", "decimal"), OnInput(onDraftAmt), uiw.FieldValue(draftAmt.Get()))),
 		)
 	case workflow.ActionApplyRules, workflow.ActionFlagReview, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
@@ -961,9 +944,9 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		H3(css.Class("wf-comp-title"), uistate.T("workflows.create")),
 		P(css.Class("wf-comp-lede"), uistate.T("wfs.compLede")),
 		fld(uistate.T("workflows.name"),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), OnInput(onName), uiw.FieldValue(name.Get()))),
+			Input(css.Class("field"), Attr("data-testid", "wf-draft-name"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), OnInput(onName), uiw.FieldValue(name.Get()))),
 		fld(uistate.T("workflows.triggerLabel"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.triggerLabel")), OnChange(onTrigger),
+			Select(css.Class("field"), Attr("data-testid", "wf-draft-trigger"), Attr("aria-label", uistate.T("workflows.triggerLabel")), OnChange(onTrigger),
 				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
 				Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
 				Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
@@ -973,7 +956,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			)),
 		If(trigger.Get() == string(workflow.TriggerScheduled),
 			fld(uistate.T("wfs.cadence"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.cadence")), OnChange(onCadence),
+				Select(css.Class("field"), Attr("data-testid", "wf-draft-cadence"), Attr("aria-label", uistate.T("wfs.cadence")), OnChange(onCadence),
 					Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.cadenceWeekly")),
 					Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.cadenceMonthly")),
 					Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadence.Get() == string(domain.CadenceQuarterly)), uistate.T("workflows.cadenceQuarterly")),
@@ -1005,7 +988,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			// mutate the TRIGGERING transaction and only exist on txn-added;
 			// transfer is forbidden on txn-added (loop guard) — offering an
 			// illegal combination just to reject it at save is worse.
-			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.actionTypeLabel")), OnChange(onDraftKind),
+			Select(css.Class("field"), Attr("data-testid", "wf-draft-action"), Attr("aria-label", uistate.T("workflows.actionTypeLabel")), OnChange(onDraftKind),
 				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
 				If(trigger.Get() == string(workflow.TriggerTxnAdded), Fragment(
 					Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),

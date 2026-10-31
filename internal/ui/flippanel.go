@@ -6,98 +6,102 @@ package ui
 
 import (
 	"strings"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/interop"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// Standard flip-modal sizes. Every config/edit modal should pick ONE of these three
-// (width, height) pairs instead of hand-tuning its own numbers, so the app's modals
-// feel consistent. Tall content still fits — the body scrolls and the footer stays
-// pinned (see FlushBody), so the size is a target, not a hard clamp.
+// Standard flip-modal sizes. Every config or edit modal should pick one of these (width,
+// height) pairs instead of hand-tuning its own numbers, so the app's modals feel consistent.
+// The height is a maximum: tall content scrolls inside the panel and the footer stays in view.
 const (
-	// FlipSmall — compact, single-purpose panels: a top-up amount, a contribution, a
-	// short confirm (roughly 1–3 fields).
+	// FlipSmall is for compact, single-purpose panels such as a top-up amount, a contribution
+	// or a short confirm (one to three fields).
 	FlipSmallW, FlipSmallH = "440px", "440px"
-	// FlipMedium — standard entity add/edit forms: budget, goal, tracked categories,
-	// auto-budget, income basis.
+	// FlipMedium is for standard add and edit forms: budgets, goals, tracked categories,
+	// auto-budget and income basis.
 	FlipMediumW, FlipMediumH = "560px", "680px"
-	// FlipLarge — dense, multi-section or wide panels: global settings, add-account.
+	// FlipLarge is for dense, multi-section panels such as global settings and the
+	// month-close and track-untracked reviews.
 	FlipLargeW, FlipLargeH = "760px", "720px"
 
-	// FlipFullW/H is the near-full-viewport tier for a panel that hosts a WORKING
-	// SURFACE rather than a form — the review inbox's bulk list (C500). Cam,
-	// 2026-08-15: bulk triage stays a modal, sized to 90% of the viewport, rather
-	// than being promoted to a route.
+	// FlipFullW and FlipFullH give the near-full-viewport size for a panel that hosts a
+	// working surface rather than a form, such as the review inbox's bulk list. The panel
+	// stays a modal at 90% of the viewport instead of becoming a route.
 	FlipFullW, FlipFullH = "90vw", "90vh"
 )
 
 // FlipPanelProps configures a FlipPanel overlay.
 type FlipPanelProps struct {
-	Title  string   // settings title (centered in the header)
-	Back   uic.Node // settings body content (scrolls inside the back face)
-	Width  string   // panel width, default "384px" (prefer a Flip*W standard size)
-	Height string   // panel height, default "470px" (prefer a Flip*H standard size)
-	// FlushBody makes the scrollable body a full-height flex column with no padding, so
-	// a NoFooter form can split itself into a `.modal-scroll` field region and a pinned
-	// `.modal-foot` action bar — the action bar then stays put instead of scrolling off
-	// the bottom when the form is taller than the panel. Only meaningful with NoFooter
-	// (a form that supplies its own footer); ignored by the standard Save/Cancel footer.
+	Title  string   // title shown in the header
+	Back   uic.Node // body content, shown in the scrolling area of the back face
+	Width  string   // panel width; defaults to "384px" (prefer a Flip*W standard size)
+	Height string   // maximum panel height; defaults to "470px" (prefer a Flip*H standard size)
+	// FlushBody removes the body's padding and makes it a full-height flex column, so a
+	// NoFooter form can split itself into a `.modal-scroll` field region and a pinned
+	// `.modal-foot` action bar that stays put when the form is taller than the panel.
+	// It is meant for a NoFooter form. It still changes the body's layout with the
+	// standard footer, so do not combine the two.
 	FlushBody bool
-	// FormID pins a STANDARD Save/Cancel footer (identical across the app) whose Save is
-	// a native submit for the form with this id (rendered in the scrollable body). Save
-	// submits the form — the form's OnSubmit does the work and its OnDone closes the
-	// panel on success, leaving it open on a validation error — so the form needs no
-	// action bar of its own. Cancel dismisses via OnClose. Preferred for simple
-	// Cancel+Save forms; use FlushBody + a `.modal-foot` bar only when the footer needs an
-	// extra action (e.g. Delete).
+	// FormID pins the standard Save/Cancel footer. Its Save button submits the form with
+	// this id, which sits in the scrolling body. The form's OnSubmit does the work, and its
+	// OnDone closes the panel on success and leaves it open on a validation error, so the
+	// form needs no action bar of its own. Cancel dismisses via OnClose. Use it for simple
+	// Cancel and Save forms. For a footer with an extra action such as Delete, use FlushBody
+	// with a `.modal-foot` bar instead.
 	FormID string
-	// LeftFooter is an optional action aligned before Cancel in the pinned footer.
+	// LeftFooter is an optional action placed before Cancel. It is shown only with FormID.
 	LeftFooter uic.Node
-	// SaveLabel overrides the primary button text ("Save" by default) — e.g. "Add goal",
-	// "Apply". Applies to the FormID and the OnSave footers.
+	// SaveLabel overrides the primary button text ("Save" by default), for example "Add goal"
+	// or "Apply". It applies to the FormID footer and the OnSave footer.
 	SaveLabel string
-	// SaveTestID / CancelTestID override the footer buttons' data-testid, so a form that
-	// moved its own submit/cancel into the standard footer keeps the ids its e2e tests
-	// target (e.g. "rec-save"/"rec-cancel"). Save defaults to "flip-save"; Cancel has none.
+	// SaveTestID and CancelTestID override the footer buttons' data-testid. A form that moved
+	// its own submit and cancel into the standard footer uses them to keep the ids its
+	// end-to-end tests look for, such as "rec-save" and "rec-cancel". Save defaults to
+	// "flip-save", and Cancel has no default id.
 	SaveTestID   string
 	CancelTestID string
-	OnSave       func() // invoked on Save (then the panel closes)
-	OnClose      func() // invoked on Cancel/close (and after Save)
-	// CloseOnly replaces the Cancel/Save footer with a single Close button — for
-	// panels that have nothing to save (e.g. a widget with no settings), so the UI
-	// doesn't imply there's something to commit.
+	// OnSave is called when Save is pressed, and then the panel closes. A FormID footer
+	// does not call it.
+	OnSave func()
+	// OnClose is called on Cancel, on the header close button, on Escape and on a backdrop
+	// click. With the OnSave footer it is also called after Save.
+	OnClose func()
+	// CloseOnly replaces the Cancel and Save footer with a single Close button. Use it for
+	// panels that have nothing to save, such as a widget with no settings, so the UI does
+	// not suggest there is something to commit.
 	CloseOnly bool
-	// SaveDisabled greys out and blocks the Save button while the form is invalid
-	// (e.g. a required field is empty), so an invalid submit can't close the panel
-	// or discard input (L78-T1). OnSave is not invoked while it is true.
+	// SaveDisabled greys out and blocks the Save button while the form is invalid, such as
+	// when a required field is empty, so an invalid submit cannot close the panel or discard
+	// input. While it is true, neither the Save button nor Enter runs OnSave, and with a FormID
+	// footer Enter does not ask the form to submit either.
 	SaveDisabled bool
-	// NoFooter renders no Save/Cancel/Close footer at all — for panels whose Back body
-	// supplies its own action buttons (so the modal isn't double-chromed). The header
-	// ✕, Escape, and backdrop-click still dismiss via OnClose.
+	// NoFooter renders no footer at all. Use it when the Back body supplies its own action
+	// buttons, so the panel does not show two sets of buttons. The header close button,
+	// Escape and a backdrop click still dismiss via OnClose.
 	NoFooter bool
 }
 
-// FlipPanel is the candidate-C settings overlay shared by both per-widget and
-// global settings: a dimmed/blurred backdrop centering a card that lifts and
-// flips (3D rotateY) from a neutral front to a settings back face with a
-// centered title, a close button, a scrollable body, and a dark Save/Cancel
-// footer. Generic and props-driven — callers supply the title, the body, and the
-// size. The open animation runs once on mount.
+// FlipPanel is the settings overlay shared by per-widget and global settings and by the
+// account, budget and transaction editors. A dimmed, blurred backdrop holds a card that lifts
+// and flips (3D rotateY) from a neutral front face to a back face. The back face has a title,
+// a close button, a scrollable body, and a Save and Cancel footer unless NoFooter or CloseOnly
+// says otherwise. Callers supply the title, the body and the size. The open animation runs
+// once, on mount.
+//
+// The card is a GWC modal overlay. The overlay traps Tab inside the panel, makes the page
+// behind it inert, and dismisses on Escape or a backdrop click. Escape goes only to the topmost
+// overlay, so a popover or a nested panel opened from this one closes first. FlipPanel picks
+// the initial focus itself (see useFlipPanelInitialFocus) and restores focus on unmount (see
+// restoreFlipPanelFocus).
 func FlipPanel(props FlipPanelProps) uic.Node {
 	return uic.CreateElement(flipPanel, props)
 }
-
-// focusRetryFrames bounds how many animation frames the open-focus pass waits
-// for a panel body that renders after the panel itself (C615). Four frames is
-// well past a child component's first render and short enough that a dialog with
-// genuinely no focusable content stops trying almost immediately.
-const focusRetryFrames = 4
 
 func flipPanel(props FlipPanelProps) uic.Node {
 	// shown drives both the backdrop fade-in and the card flip; it flips to true
@@ -110,249 +114,28 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		return nil
 	}, true)
 
-	// Modal keyboard behavior: Esc closes; Tab is trapped inside the dialog;
-	// focus moves into the dialog on open and is restored to the trigger on close.
-	// The listener is added on mount and removed on unmount, which (since the panel
-	// mounts fresh each open and unmounts on close) matches the dialog's lifetime.
-	onCloseRef := props.OnClose
-	onSaveRef := props.OnSave
-	closeOnly := props.CloseOnly
-	formID := props.FormID
+	// Generated ids contain colons, which a CSS selector cannot use unescaped. The id is
+	// used in the initial-focus selector, so the colons are replaced here.
+	surfaceID := "flip-" + strings.ReplaceAll(uic.UseId(), ":", "-")
+
+	// The opener is the element that had focus before the panel mounted. The first render
+	// records it, because effects run after the render and focus may have moved by then.
+	opener := uic.UseRef(interop.Value{})
+	openerRecorded := uic.UseRef(false)
+	if !openerRecorded.Get() {
+		openerRecorded.Set(true)
+		opener.Set(domDocument().Get("activeElement"))
+	}
+	useFlipPanelInitialFocus(surfaceID)
+	// Return focus to the opener when the panel unmounts.
 	uic.UseEffect(func() func() {
-		doc := js.Global().Get("document")
-		if doc.IsNull() || doc.IsUndefined() {
-			return nil
-		}
-		// Remember what had focus so we can restore it when the dialog closes.
-		prevFocus := doc.Get("activeElement")
-
-		// focusables lists the dialog's tabbable elements in DOM order.
-		//
-		// The LAST .flip-wrap, not the first (C615): panels can stack (a confirm
-		// raised from inside an edit form), and focus belongs to the one that just
-		// opened. querySelector returns the oldest, which is the panel the user is
-		// no longer looking at.
-		focusables := func() []js.Value {
-			wraps := doc.Call("querySelectorAll", ".flip-wrap")
-			n := wraps.Get("length").Int()
-			if n == 0 {
-				return nil
-			}
-			wrap := wraps.Index(n - 1)
-			if wrap.IsNull() || wrap.IsUndefined() {
-				return nil
-			}
-			list := wrap.Call("querySelectorAll", "a[href], button, input, select, textarea, [tabindex]")
-			out := make([]js.Value, 0, list.Get("length").Int())
-			for i := 0; i < list.Get("length").Int(); i++ {
-				el := list.Index(i)
-				if el.Call("getAttribute", "tabindex").String() == "-1" {
-					continue
-				}
-				if d := el.Get("disabled"); !d.IsUndefined() && d.Bool() {
-					continue
-				}
-				out = append(out, el)
-			}
-			return out
-		}
-
-		// Move focus into the dialog so keyboard/SR users start inside the modal
-		// rather than behind it. C43: prefer an element explicitly marked [autofocus]
-		// (e.g. quick-add's Amount field) over the first focusable, so a form can land
-		// the cursor on the field the user actually fills first; fall back to fs[0].
-		//
-		// C615: this ran once, synchronously, on the panel's own mount — before a
-		// body passed as a component prop had rendered. So it found nothing and
-		// focus stayed on BODY, which is why every `autofocus` attribute in the app
-		// appeared to do nothing: the attribute is honoured at PARSE time and these
-		// fields are inserted long after load, so the panel's focus pass is the only
-		// thing that ever reads it, and it was looking at an empty dialog.
-		//
-		// The fix is to retry across a few animation frames. Bounded, because an
-		// unbounded retry against a dialog that legitimately has no focusable
-		// content would spin for the panel's whole life; and it stops as soon as
-		// focus is inside the wrap, so it never steals focus back from a user who
-		// clicked somewhere else first.
-		focusAttempts := 0
-		var focusCB js.Func
-		var raf js.Value
-		tryFocus := func() bool {
-			fs := focusables()
-			if len(fs) == 0 {
-				return false
-			}
-			// Already inside the dialog — the user got there first (or a previous
-			// attempt landed). Do not move them.
-			if active := doc.Get("activeElement"); !active.IsNull() && !active.IsUndefined() {
-				for _, el := range fs {
-					if el.Equal(active) {
-						return true
-					}
-				}
-			}
-			target := flipPanelInitialFocusTarget(fs)
-			target.Call("focus", map[string]any{"preventScroll": true})
-			return true
-		}
-		if !tryFocus() {
-			focusCB = js.FuncOf(func(js.Value, []js.Value) any {
-				focusAttempts++
-				if tryFocus() || focusAttempts >= focusRetryFrames {
-					return nil
-				}
-				raf = js.Global().Call("requestAnimationFrame", focusCB)
-				return nil
-			})
-			raf = js.Global().Call("requestAnimationFrame", focusCB)
-		}
-
-		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
-			}
-			e := args[0]
-			switch e.Get("key").String() {
-			case "Escape":
-				// A picker or other portalled popover can be opened from inside this
-				// panel. Its surface lives under <body>, so the key event's target may
-				// not be inside .flip-wrap; do not let this document listener dismiss
-				// the parent while that higher overlay is still open. The overlay owns
-				// the first Escape, and the panel owns the next one.
-				if e.Get("defaultPrevented").Bool() || flipPanelHasOpenPopover(doc) {
-					return nil
-				}
-				if onCloseRef != nil {
-					onCloseRef()
-				}
-			case "Enter":
-				// Enter submits (Save) like a native form. Skip when focus is on a
-				// button (let it click), in a textarea (multi-line) or a select, and
-				// when the panel has nothing to save (CloseOnly).
-				if closeOnly {
-					return nil
-				}
-				if active := doc.Get("activeElement"); !active.IsNull() && !active.IsUndefined() {
-					switch active.Get("tagName").String() {
-					case "TEXTAREA", "BUTTON", "SELECT":
-						return nil
-					}
-					// Let the innermost form own Enter. In the import review, for
-					// example, a draft-row editor can sit inside the modal's
-					// FormID flow. Submitting the modal here would commit the draft
-					// before the row editor gets to save its own value.
-					if !flipPanelHandlesEnterInForm(active, formID) {
-						return nil
-					}
-				}
-				e.Call("preventDefault")
-				// A FormID footer submits its form (native submit → OnSubmit); the form's
-				// OnDone closes on success and it stays open on a validation error.
-				if formID != "" {
-					if f := doc.Call("getElementById", formID); !f.IsNull() && !f.IsUndefined() {
-						f.Call("requestSubmit")
-					}
-					return nil
-				}
-				if onSaveRef != nil {
-					onSaveRef()
-				}
-				if onCloseRef != nil {
-					onCloseRef()
-				}
-			case "Tab":
-				fs := focusables()
-				if len(fs) == 0 {
-					return nil
-				}
-				first, last := fs[0], fs[len(fs)-1]
-				active := doc.Get("activeElement")
-				if e.Get("shiftKey").Bool() {
-					if active.Equal(first) {
-						e.Call("preventDefault")
-						last.Call("focus")
-					}
-				} else if active.Equal(last) {
-					e.Call("preventDefault")
-					first.Call("focus")
-				}
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", cb)
-
-		// GM4-19: clicking the blurred backdrop (outside the panel card) closes the
-		// panel. Implemented here (rather than as an OnClick prop) so we can check
-		// event.target against the backdrop element and ignore clicks on the card.
-		backdropCb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
-			}
-			t := args[0].Get("target")
-			bd := doc.Call("querySelector", ".flip-backdrop")
-			if !bd.IsNull() && !bd.IsUndefined() && t.Equal(bd) {
-				if onCloseRef != nil {
-					onCloseRef()
-				}
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "click", backdropCb)
-
-		return func() {
-			// C615: a pending focus retry must not outlive the panel — it would fire
-			// against a dialog that has closed and, worse, leak the js.Func.
-			if !focusCB.IsUndefined() {
-				if !raf.IsUndefined() && !raf.IsNull() {
-					js.Global().Call("cancelAnimationFrame", raf)
-				}
-				focusCB.Release()
-			}
-			doc.Call("removeEventListener", "keydown", cb)
-			cb.Release()
-			doc.Call("removeEventListener", "click", backdropCb)
-			backdropCb.Release()
-			if !prevFocus.IsNull() && !prevFocus.IsUndefined() {
-				target := focusRestoreTarget(doc, prevFocus)
-				target.Call("focus")
-				// #67: the trigger may have vanished by close time (e.g. an add-menu
-				// item inside a since-closed popover) — focus() then silently no-ops
-				// and keyboard users land on <body>. Fall back to the main content
-				// landmark so focus resumes at the page, not nowhere.
-				if !doc.Get("activeElement").Equal(target) {
-					if m := doc.Call("getElementById", "main"); !m.IsNull() && !m.IsUndefined() {
-						m.Call("setAttribute", "tabindex", "-1")
-						m.Call("focus")
-					}
-				}
-			}
-		}
+		return func() { restoreFlipPanelFocus(opener.Get()) }
 	}, true)
 
-	width, height := props.Width, props.Height
-	if width == "" {
-		width = "384px"
-	}
-	if height == "" {
-		height = "470px"
-	}
-
-	backdropCls, innerCls := "flip-backdrop", "flip-inner"
-	if shown.Get() {
-		backdropCls += " show"
-		innerCls += " flipped"
-	}
-
-	bodyCls := "set-body"
-	if props.FlushBody {
-		bodyCls += " set-body-flush"
-	}
-
 	onClose, onSave := props.OnClose, props.OnSave
-
 	save := func() {
-		// Block save while the form is invalid: don't run OnSave and, crucially,
-		// don't close — so no entered input is lost (L78-T1).
+		// A disabled Save does nothing. OnSave is not called and the panel stays open, so no
+		// entered input is lost.
 		if props.SaveDisabled {
 			return
 		}
@@ -368,6 +151,46 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			onClose()
 		}
 	}
+
+	// Enter confirms, as in a native form, unless the active control keeps its own Enter (see
+	// flipPanelEnterBelongsToPanel). With a FormID footer, Enter asks that form to submit, and
+	// the form closes the panel when it saves. Otherwise Enter runs save. CloseOnly ignores Enter.
+	onEnter := uic.UseEvent(func(e uic.KeyboardEvent) {
+		if e.GetKey() != "Enter" || props.CloseOnly {
+			return
+		}
+		if !flipPanelEnterBelongsToPanel(domDocument().Get("activeElement"), props.FormID) {
+			return
+		}
+		e.PreventDefault()
+		if props.FormID != "" {
+			if props.SaveDisabled {
+				return
+			}
+			domValue(domNode(props.FormID), "requestSubmit")
+			return
+		}
+		save()
+	})
+
+	backdropCls, innerCls := flipBackdropClass(shown.Get()), "flip-inner"
+	if shown.Get() {
+		innerCls += " flipped"
+	}
+
+	bodyCls := "set-body"
+	if props.FlushBody {
+		bodyCls += " set-body-flush"
+	}
+
+	width, height := props.Width, props.Height
+	if width == "" {
+		width = "384px"
+	}
+	if height == "" {
+		height = "470px"
+	}
+
 	saveLabel := props.SaveLabel
 	if saveLabel == "" {
 		saveLabel = uistate.T("action.save")
@@ -387,14 +210,15 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		// The Back body owns its own actions; render no footer at all.
 		foot = Fragment()
 	case props.CloseOnly:
-		// CloseOnly wins while an import stage has nothing visible to save,
-		// even if the caller keeps FormID configured for later stages.
+		// CloseOnly takes precedence over FormID, so a caller can keep FormID set for a later
+		// stage and still show only Close here. Close runs the same path as Save, so OnSave is
+		// called if it is set, and SaveDisabled also blocks Close.
 		foot = Div(css.Class("set-foot"),
 			Button(css.Class("set-btn close"), Type("button"), saveClick, uistate.T("action.close")),
 		)
 	case props.FormID != "":
-		// Standard pinned footer whose Save is a native submit for the body form — the
-		// form does the work in OnSubmit and closes via OnDone, so no auto-close here.
+		// Save is a native submit for the body form. The form does the work in OnSubmit and
+		// closes the panel through OnDone, so the panel does not close here.
 		saveArgs := []any{css.Class("set-btn save"), Type("submit"), Attr("form", props.FormID), Attr("data-testid", saveTestID), saveLabel}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
@@ -415,139 +239,181 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		)
 	}
 
-	// UX-08: the dialog is labelled BY its one visible back-face H3
-	// (aria-labelledby) instead of a parallel aria-label, so the accessible name
-	// and the visible title can never drift apart. The id is derived from the
-	// title (only one flip modal is ever open at a time).
+	// The dialog is labelled by the back face's H3, so its accessible name is the visible
+	// title. The id comes from the title, so two open panels with the same title share an id.
 	titleID := "flip-title-" + slugifyTitle(props.Title)
-	// Height is a MAXIMUM, not a fixed size (UI/UX task #31): the wrap sizes to
-	// its content and stops at min(Height, 86vh), so a sparse panel (Compare
-	// goals, Cover overages) hugs its content instead of floating in a tall
-	// empty shell, while dense panels clamp and scroll exactly as before. The
-	// back face is the in-flow face (rules: .flip-back position:relative) so
-	// auto height has real content to size against.
-	return Div(ClassStr(backdropCls),
-		Div(css.Class("flip-wrap"), Style(map[string]string{
-			"width":      width,
-			"height":     "auto",
-			"min-height": "280px",
-			"max-height": "min(" + height + ", 86vh)",
-		}),
-			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-labelledby", titleID),
-			Div(ClassStr(innerCls),
-				// Front face — a neutral card briefly seen during the flip. It is
-				// DECORATIVE: without aria-hidden its H3 title sat in the
-				// accessibility tree beside the back face's real title, so every
-				// flip modal announced its heading twice (QA L3/CF-29).
-				Div(css.Class("flip-face"), Attr("aria-hidden", "true"),
-					Div(css.Class("wh"), Span(css.Class("grip"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))), H3(props.Title)),
-				),
-				// Back face — the settings panel.
-				Div(css.Class("flip-face flip-back"),
-					Div(css.Class("set-h"),
-						Span(css.Class("flip-title-balance"), Style(map[string]string{"width": "1.5rem"})),
-						H3(Attr("id", titleID), props.Title),
-						Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")), Attr("aria-label", uistate.T("action.close")),
-							OnClick(func() {
-								if onClose != nil {
-									onClose()
-								}
-							}),
-							Icon(icon.Close, css.Class(tw.W4, tw.H4)),
-						),
+
+	// Height is a maximum, not a fixed size. The wrap sizes to its content, never shorter than
+	// 280px and never taller than min(Height, 86vh). A sparse panel hugs its content, and a dense
+	// panel stops at the maximum and scrolls. The back face is the in-flow face, so an auto
+	// height follows its content.
+	panel := Div(css.Class("flip-wrap"), Style(map[string]string{
+		"width":      width,
+		"height":     "auto",
+		"min-height": "280px",
+		"max-height": "min(" + height + ", 86vh)",
+	}),
+		OnKeyDown(onEnter),
+		Div(ClassStr(innerCls),
+			// Front face: a neutral card seen during the flip. It is decorative, so assistive
+			// technology skips it. Otherwise its title would be read twice.
+			Div(css.Class("flip-face"), Attr("aria-hidden", "true"),
+				Div(css.Class("wh"), Span(css.Class("grip"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))), H3(props.Title)),
+			),
+			// Back face — the settings panel.
+			Div(css.Class("flip-face flip-back"),
+				Div(css.Class("set-h"),
+					// An empty spacer. The stylesheet hides it on the back face, and a test
+					// checks that it is rendered.
+					Span(css.Class("flip-title-balance"), Style(map[string]string{"width": "1.5rem"})),
+					H3(Attr("id", titleID), props.Title),
+					Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")), Attr("aria-label", uistate.T("action.close")),
+						OnClick(cancel),
+						Icon(icon.Close, css.Class(tw.W4, tw.H4)),
 					),
-					Div(ClassStr(bodyCls), props.Back),
-					foot,
 				),
+				Div(ClassStr(bodyCls), props.Back),
+				foot,
 			),
 		),
 	)
+
+	return uic.Overlay(uic.OverlayProps{
+		Open:                true,
+		Kind:                uic.OverlayKindDialog,
+		Modal:               true,
+		SurfaceID:           surfaceID,
+		LabelledBy:          titleID,
+		BackdropClass:       backdropCls,
+		CloseOnOutsideClick: true,
+		OnDismiss:           cancel,
+		Child:               panel,
+	})
 }
 
-func flipPanelInitialFocusTarget(focusables []js.Value) js.Value {
-	if len(focusables) == 0 {
-		return js.Null()
+// flipBackdropClass returns the class for the dimmed backdrop behind every FlipPanel. The look
+// lives in the one .flip-backdrop rule set in the styles package. show fades it in and blurs the
+// page behind. The stacking order is not set here: GWC's overlay stack sets the backdrop's z-index
+// inline, and a deeper overlay (a confirm opened from a modal) always sits above the one below it.
+func flipBackdropClass(shown bool) string {
+	if shown {
+		return "flip-backdrop show"
 	}
-	for _, el := range focusables {
-		if el.Call("hasAttribute", "autofocus").Bool() {
-			return el
-		}
-	}
-	for _, el := range focusables {
-		switch strings.ToUpper(el.Get("tagName").String()) {
-		case "INPUT", "SELECT", "TEXTAREA":
-			return el
-		}
-	}
-	// The header Close control is first in DOM order. Skip it when choosing a
-	// default so a choice screen opens on its first choice, not on the exit.
-	for _, el := range focusables {
-		if !strings.Contains(" "+strings.TrimSpace(el.Get("className").String())+" ", " set-close ") {
-			return el
-		}
-	}
-	return focusables[0]
+	return "flip-backdrop"
 }
 
-// flipPanelHandlesEnterInForm reports whether FlipPanel should intercept Enter
-// for the active control. A form other than the configured footer form keeps
-// its native submit behavior; a panel without FormID never intercepts form
-// submissions.
-func flipPanelHandlesEnterInForm(active js.Value, formID string) bool {
+// flipPanelInitialFocusSelector returns the selector for the control that takes focus when a
+// panel opens: an [autofocus] field if there is one, otherwise the first field, choice or
+// button in the body. The header and footer buttons sit outside the body, so they are never
+// the default. querySelector returns the first match in document order, so an [autofocus]
+// field that comes after an earlier body field does not win.
+func flipPanelInitialFocusSelector(surfaceID string) string {
+	scope := "#" + surfaceID + " "
+	return scope + "[autofocus], " +
+		scope + ".set-body input:not([disabled]), " +
+		scope + ".set-body select, " +
+		scope + ".set-body textarea, " +
+		scope + ".set-body button"
+}
+
+// focusRetryFrames is how many animation frames the initial-focus pass tries before it gives
+// up. A body that renders after the panel gets those frames to appear, and a panel with
+// nothing focusable stops after the last one.
+const focusRetryFrames = 4
+
+// useFlipPanelInitialFocus moves focus to the panel's first body control once that control is
+// in the DOM. The panel mounts before its body child renders, so the first attempt can find
+// nothing. The attempt is retried over a few frames and stops at once when it succeeds. If the
+// panel unmounts first, the pending frame is cancelled.
+func useFlipPanelInitialFocus(surfaceID string) {
+	uic.UseEffect(func() func() {
+		selector := flipPanelInitialFocusSelector(surfaceID)
+		attempts := 0
+		var cancelFrame func()
+		var attempt func(float64)
+		attempt = func(float64) {
+			attempts++
+			if target := domValue(domDocument(), "querySelector", selector); target.Truthy() {
+				domValue(target, "focus", map[string]any{"preventScroll": true})
+				return
+			}
+			if attempts < focusRetryFrames {
+				cancelFrame = interop.RequestAnimationFrame(attempt)
+			}
+		}
+		cancelFrame = interop.RequestAnimationFrame(attempt)
+		return func() {
+			if cancelFrame != nil {
+				cancelFrame()
+			}
+		}
+	}, surfaceID)
+}
+
+// restoreFlipPanelFocus returns focus to the opener when the panel unmounts. If the opener was
+// replaced while the panel was open, focus goes to the control that now stands in for it. If
+// focus still does not land, it goes to the page's <main> (the element with id "main"), so
+// keyboard users resume on the page and not on the document body.
+func restoreFlipPanelFocus(opener interop.Value) {
+	target := flipPanelRestoreTarget(opener)
+	domValue(target, "focus")
+	if active := domDocument().Get("activeElement"); active.Truthy() && domValue(active, "isSameNode", target).Bool() {
+		return
+	}
+	if landmark := domNode("main"); landmark.Truthy() {
+		domValue(landmark, "setAttribute", "tabindex", "-1")
+		domValue(landmark, "focus")
+	}
+}
+
+// flipPanelRestoreTarget returns the opener while it is still in the page. Otherwise it returns
+// the current element with the same id or data-testid, or the opener itself if there is none.
+func flipPanelRestoreTarget(opener interop.Value) interop.Value {
+	if !opener.Truthy() {
+		return opener
+	}
+	connected := opener.Get("isConnected")
+	if !connected.Present() || connected.Bool() {
+		return opener
+	}
+	if id := opener.Get("id").String(); id != "" {
+		if match := domNode(id); match.Truthy() {
+			return match
+		}
+	}
+	if testID := domValue(opener, "getAttribute", "data-testid").String(); testID != "" {
+		matches := domValue(domDocument(), "querySelectorAll", "[data-testid]")
+		for i := range matches.Get("length").Int() {
+			match := domValue(matches, "item", i)
+			if domValue(match, "getAttribute", "data-testid").String() == testID {
+				return match
+			}
+		}
+	}
+	return opener
+}
+
+// flipPanelEnterBelongsToPanel reports whether the panel should handle Enter for the active
+// control. With no active control the panel handles it. Buttons, text areas and selects keep
+// their own Enter. A control inside a form keeps that form's native submit, unless the form is
+// the panel's FormID footer form.
+func flipPanelEnterBelongsToPanel(active interop.Value, formID string) bool {
+	if !active.Truthy() {
+		return true
+	}
+	switch strings.ToUpper(active.Get("tagName").String()) {
+	case "TEXTAREA", "BUTTON", "SELECT":
+		return false
+	}
 	form := active.Get("form")
-	if form.IsNull() || form.IsUndefined() {
+	if !form.Truthy() {
 		return true
 	}
 	return formID != "" && form.Get("id").String() == formID
 }
 
-// flipPanelHasOpenPopover reports whether a portalled popover is currently
-// mounted above a FlipPanel. Popovers are rendered only while open, so their
-// presence means Escape belongs to that nested surface first.
-func flipPanelHasOpenPopover(doc js.Value) bool {
-	if doc.IsNull() || doc.IsUndefined() || doc.Get("querySelector").Type() != js.TypeFunction {
-		return false
-	}
-	return doc.Call("querySelector", `[data-overlay-kind="popover"]`).Truthy()
-}
-
-// focusRestoreTarget returns the original opener when it remains in the page.
-// If a render replaced that node while the panel was open, it finds the current
-// control with the same stable id or test id before the caller falls back to main.
-func focusRestoreTarget(doc, previous js.Value) js.Value {
-	if previous.IsNull() || previous.IsUndefined() {
-		return previous
-	}
-	connected := previous.Get("isConnected")
-	if connected.IsUndefined() || connected.Bool() {
-		return previous
-	}
-	attribute := func(name string) string {
-		value := previous.Call("getAttribute", name)
-		if value.IsNull() || value.IsUndefined() {
-			return ""
-		}
-		return value.String()
-	}
-	if id := attribute("id"); id != "" {
-		if match := doc.Call("getElementById", id); !match.IsNull() && !match.IsUndefined() {
-			return match
-		}
-	}
-	if testID := attribute("data-testid"); testID != "" {
-		matches := doc.Call("querySelectorAll", "[data-testid]")
-		for i := 0; i < matches.Get("length").Int(); i++ {
-			match := matches.Index(i)
-			if match.Call("getAttribute", "data-testid").String() == testID {
-				return match
-			}
-		}
-	}
-	return previous
-}
-
-// slugifyTitle lower-cases a dialog title and keeps [a-z0-9-] so it can serve
-// as the back-face H3's element id for aria-labelledby.
+// slugifyTitle lower-cases a dialog title, turns spaces and hyphens into hyphens and drops every
+// other character. The result works as the back-face H3's element id for aria-labelledby.
 func slugifyTitle(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {

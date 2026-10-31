@@ -78,12 +78,8 @@ func RecordLearnTally(payee, categoryID string) {
 // LoadLearnThreshold returns the user's persisted suggestion threshold.
 // Falls back to learntally.DefaultMinCount when no override is stored.
 func LoadLearnThreshold() int {
-	raw := SettingKVGet(learnThresholdKey)
-	if raw == "" {
-		return learntally.DefaultMinCount
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n < 1 {
+	n, err := ParseLearnThreshold(SettingKVGet(learnThresholdKey))
+	if err != nil {
 		return learntally.DefaultMinCount
 	}
 	return n

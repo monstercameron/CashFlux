@@ -6,190 +6,148 @@ package ui
 
 import (
 	"fmt"
-	"strings"
-	"syscall/js"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/interop"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // ---------------------------------------------------------------------------
 // OverflowMenu
 // ---------------------------------------------------------------------------
 
-// OverflowMenuItem describes a single entry in an OverflowMenu popover.
+// OverflowMenuItem describes one entry in an OverflowMenu popover.
 type OverflowMenuItem struct {
-	// Label is the human-readable text for the menu item.
+	// Label is the visible text of the entry. It is also the entry's accessible name.
 	Label string
-	// Icon is an optional leading glyph. Pass icon.Name("") to omit.
+	// Icon is an optional leading glyph. Leave it empty to omit the icon.
 	Icon icon.Name
-	// OnSelect is called when the user activates this item (click or Enter/Space).
-	// May be nil (item renders but does nothing). The menu closes automatically
-	// after any non-nil OnSelect fires.
+	// OnSelect runs when the reader chooses the entry, by click, Enter or Space. It may be nil.
+	// The menu closes when an entry is chosen, whether or not OnSelect is set. An entry with a
+	// Submenu opens that submenu instead and does not run OnSelect.
 	OnSelect func()
-	// TestID is an optional data-testid attribute for e2e selectors.
+	// Href makes the entry a link to a route instead of a button. It keeps the menu item role, so
+	// the entry still reads as a menu action. An entry with a Submenu ignores Href.
+	Href string
+	// TestID is the data-testid of the entry, for tests. Empty adds none.
 	TestID string
-	// Hidden suppresses this item from the rendered list when true.
-	// Preferred over conditional slice-building at the call site so the
-	// item order in the slice always matches intent.
+	// Title is the hover tooltip of the entry, rendered as its title attribute. Empty adds none.
+	Title string
+	// Hidden leaves the entry out of the menu. Prefer it to building the slice conditionally, so
+	// the slice keeps one fixed order.
 	Hidden bool
-	// Section, when set, opens a new labelled group starting at this item. A long
-	// menu that mixes routine organization with reporting changes and deletions
-	// reads as one flat list where every entry looks equally safe (C572); a section
-	// heading plus the separator it draws tells the user what KIND of action they
-	// are about to take before they take it. Repeat the same string on consecutive
-	// items to keep them in one group; the heading renders once, at the first.
+	// Section starts a labelled group at this entry. Repeat the same name on the entries that
+	// follow to keep them in the group. The heading is drawn once, above the first entry of the
+	// group. It is aria-hidden, so it is a visual grouping and not part of any entry's name.
 	Section string
-	// Danger paints the item as destructive or reporting-altering, so Delete and
-	// Exclude never look like Rename. It is a visual tier, not a behaviour — the
-	// item's own handler still owns any confirmation.
+	// Danger paints the entry as destructive, or as one that changes reported figures, so Delete
+	// and Exclude do not look like Rename. It only sets the look. The entry's own handler still
+	// decides whether to ask for confirmation.
 	Danger bool
-	// Submenu contains actions nested under this item. The parent remains a
-	// menuitem; Enter/Right opens its child menu and Left/Escape closes it.
+	// Submenu lists actions nested under this entry. The entry stays a menuitem. Enter or the
+	// Right arrow opens the child menu, and the Left arrow or Escape closes it.
 	Submenu []OverflowMenuItem
 }
 
-// OverflowMenuProps configures an OverflowMenu trigger + popover.
+// OverflowMenuProps configures an OverflowMenu trigger and popover.
 type OverflowMenuProps struct {
-	// Items is the list of menu actions shown in the popover.
+	// Items are the entries shown in the popover.
 	Items []OverflowMenuItem
-	// TriggerLabel is the accessible name of the ⋯ trigger button
-	// (aria-label + title). Defaults to "More actions" when empty.
+	// TriggerLabel is the accessible name of the ⋯ trigger, used for its aria-label and title.
+	// It defaults to "More actions" when empty.
 	TriggerLabel string
-	// TriggerTestID is an optional data-testid on the trigger button.
+	// TriggerTestID is the data-testid of the trigger. Empty adds none.
 	TriggerTestID string
-	// TriggerText, when non-empty, renders the trigger as a LABELED button (the ⋯
-	// glyph followed by this text) instead of the default icon-only ⋯. Use it in a
-	// labeled toolbar where a bare glyph would be ambiguous.
+	// TriggerText, when set, labels the trigger: the ⋯ glyph followed by this text. Use it in a
+	// toolbar where a bare glyph would be unclear.
 	TriggerText string
-	// TriggerClass overrides the trigger button's class (default "btn"). Pass e.g.
-	// "btn btn-tool" so the overflow trigger matches a labeled toolbar's buttons.
+	// TriggerClass adds classes to the trigger. The trigger is always the shared tool button, so
+	// these add to its look rather than replace it.
 	TriggerClass string
-	// TriggerIcon overrides the ⋯ glyph. The default says "more actions", which is
-	// wrong for a menu that is not a grab-bag: a split button's second half means
-	// "choose a variant of the action next to me" and has to look like a chevron, or
-	// it reads as one more generic kebab and nobody finds the variants (C573).
+	// TriggerVariant tints the trigger as ToolButton does: "primary" for the page's main action.
+	TriggerVariant string
+	// TriggerIcon replaces the ⋯ glyph. Use a chevron when the trigger picks a variant of the
+	// action beside it, as the second half of a split button does. A ⋯ there reads as one more
+	// generic menu, and readers would miss the variants.
 	TriggerIcon icon.Name
-	// ExtraContent appends an optional group after the menu actions. It is intended
-	// for an existing screen component that needs to live inside this menu; nil keeps
-	// the historical menu DOM unchanged.
+	// ExtraContent is rendered after the menu entries. Use it for an existing component that has
+	// to live inside this menu. Setting it keeps the panel mounted while the menu is closed, and
+	// the hidden-menu class keeps the panel off screen.
 	ExtraContent uic.Node
 }
 
-// OverflowMenu renders the standard CashFlux "⋯" overflow pattern: a trigger
-// button that opens a `.add-menu` popover (role=menu) with one `.add-item` per
-// entry. It unifies the hand-rolled `add-wrap`/`add-menu`/`add-backdrop` pattern
-// duplicated across accounts, artifacts, and other screens.
-//
-// OverflowMenu is its own component so its open-state hooks and per-item click
-// hooks remain at stable render positions — safe to embed inside any row.
+// OverflowMenu renders the standard "⋯" overflow pattern: a trigger button that opens a
+// `.add-menu` popover (role=menu) with one `.add-item` per entry. Screens use it instead of
+// writing the add-wrap and add-menu markup by hand. Each instance is its own component, so its
+// hooks sit at stable render positions and it is safe to embed in any row.
 func OverflowMenu(props OverflowMenuProps) uic.Node {
 	return uic.CreateElement(overflowMenu, props)
 }
 
 func overflowMenu(props OverflowMenuProps) uic.Node {
-	open := uic.UseState(false)
-	// Stable per-instance id on the wrapper so the document-level dismissal
-	// listeners can tell clicks inside THIS menu from clicks in another instance
-	// (many overflow menus can be on a page at once).
+	// The wrapper's id is unique to this instance. The document listeners use it to tell a press
+	// inside this menu from a press inside another, since several menus can be on the page at once.
 	id := uic.UseId()
+	menu := UseMenu(id)
 
 	triggerLabel := props.TriggerLabel
 	if triggerLabel == "" {
 		triggerLabel = "More actions"
 	}
-	toggleOpen := uic.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	toggleOpen := uic.UseEvent(Prevent(func() { menu.Toggle() }))
+	// Enter and Space open the menu from the keyboard.
 	openFromKeyboard := uic.UseEvent(func(e uic.KeyboardEvent) {
 		if e.GetKey() != "Enter" && e.GetKey() != " " {
 			return
 		}
 		e.PreventDefault()
-		open.Set(true)
+		menu.Set(true)
 	})
 
-	// Keyboard + outside-click dismissal (WAI-ARIA menu button). Registered only
-	// while open, torn down on close/unmount (mirrors addmenu.go):
-	//   • Escape closes and returns focus to the ⋯ trigger;
-	//   • pointerdown outside this instance's wrapper closes it — robust regardless
-	//     of the `.add-backdrop` stacking (the fixed backdrop doesn't paint over
-	//     page content, so it can't be relied on for outside-clicks).
-	dismissOverflowMenu(open.Get(), id, func() { open.Set(false) })
-	// Keep the popover inside the viewport (the ⋯ trigger usually sits near a row's
-	// right edge): flip it left/up when its natural below-right position would overflow.
-	anchorOverflowMenu(open.Get(), id)
-
-	// Use the `hidden-menu` class: it's the one the stylesheet actually hides
-	// (display:none on `.add-menu`). The bare `hidden` class is unstyled.
-	// aria-expanded reflects the popover state for assistive tech.
-	expanded := "false"
-	if open.Get() {
-		expanded = "true"
-	}
-
-	trigClass := props.TriggerClass
-	if trigClass == "" {
-		trigClass = "btn"
-	}
 	trigIcon := props.TriggerIcon
 	if trigIcon == "" {
 		trigIcon = icon.MoreH
 	}
-	triggerArgs := []any{
-		css.Class(trigClass),
-		Type("button"),
-		Attr("title", triggerLabel),
-		Attr("aria-label", triggerLabel),
-		Attr("aria-haspopup", "menu"),
-		Attr("aria-expanded", expanded),
-		OnKeyDown(openFromKeyboard),
-		OnClick(toggleOpen),
-		Icon(trigIcon, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-	}
-	// Labeled variant: append the visible text after the glyph (glyph + label), so the
-	// overflow reads as "⋯ More" rather than a bare, ambiguous dots button.
-	if props.TriggerText != "" {
-		triggerArgs = append(triggerArgs, Span(props.TriggerText))
-	}
-	if props.TriggerTestID != "" {
-		triggerArgs = append(triggerArgs, Attr("data-testid", props.TriggerTestID))
-	}
+	// The trigger is the shared ToolButton, so it looks like the other tool buttons beside it.
+	// It stays highlighted while the menu is open.
+	trigger := ToolButton(ToolButtonProps{
+		Label: props.TriggerText, Icon: trigIcon, Title: triggerLabel, AriaLabel: triggerLabel,
+		Open: menu.Open, Class: props.TriggerClass, Variant: props.TriggerVariant, TestID: props.TriggerTestID,
+	},
+		Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(menu.Open)),
+		OnKeyDown(openFromKeyboard), OnClick(toggleOpen),
+	)
 
-	menuClass := "add-menu"
-	if !open.Get() {
-		menuClass += " hidden-menu"
-	}
-	menuArgs := []any{ClassStr(menuClass), Attr("role", "menu")}
-	// Sections (C572): a heading is emitted the first time a section name appears.
-	// It carries role="presentation" so it stays out of the menu's owned children —
-	// a role="menu" may only own menuitems (and groups), and a stray labelled div
-	// would make the menu structurally invalid to a screen reader.
-	//
-	// The heading is therefore a SIGHTED affordance, and each item carries the same
-	// fact in its own accessible name ("Delete — Remove") so the grouping survives
-	// for anyone who never sees the heading. That keeps one flat list of menuitems,
-	// which is both valid ARIA and what the existing keyboard handling expects.
-	// Items with no Section stay unlabelled at the top, which is what an unsectioned
-	// menu (every other caller) renders today.
-	if open.Get() {
+	// The panel carries the menu's classes and role, and the entries follow it. A section heading
+	// goes above the first entry of each run of entries that share a section. The heading is
+	// aria-hidden with role presentation, so it is not part of the menu's accessible structure.
+	menuArgs := []any{ClassStr(menu.PanelClass()), Attr("role", "menu")}
+	if menu.Shown {
 		lastSection := ""
+		sectionID := ""
+		sectionRun := 0
 		for _, item := range props.Items {
 			if item.Hidden {
 				continue
 			}
 			if item.Section != lastSection {
 				lastSection = item.Section
+				sectionID = ""
 				if item.Section != "" {
+					// Each run of entries gets its own id, so two runs with one name never clash.
+					sectionRun++
+					sectionID = fmt.Sprintf("%s-section-%d", id, sectionRun)
 					menuArgs = append(menuArgs,
-						Div(css.Class("add-menu-section"), Attr("role", "presentation"), Attr("aria-hidden", "true"), item.Section))
+						Div(css.Class("add-menu-section"), Attr("id", sectionID), Attr("role", "presentation"), Attr("aria-hidden", "true"), item.Section))
 				}
 			}
 			menuArgs = append(menuArgs, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
 				Item:      item,
-				CloseMenu: func() { open.Set(false) },
+				CloseMenu: func() { menu.Set(false) },
+				SectionID: sectionID,
 			}))
 		}
 	}
@@ -197,234 +155,123 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		menuArgs = append(menuArgs, props.ExtraContent)
 	}
 
-	// No `.add-backdrop` click-catcher: DismissPopover (above) already closes the menu
-	// on any outside pointerdown via a document listener. A fixed backdrop is not only
-	// redundant, it's harmful here — as a transparent, viewport-covering element it wins
-	// the hit-test over the menu items themselves when the row sits inside a bento tile's
-	// stacking context, so clicks on the items land on the backdrop and never fire.
-	wrapClass := "add-wrap"
-	if open.Get() {
-		// The transaction-table styles use this state to tint the owning row while
-		// its menu is open. It is harmless for menus outside a table.
-		wrapClass += " overflow-menu-open"
+	// Outside presses close the menu through DismissPopover's document listener, not through a
+	// full-screen layer. A full-screen layer would take the clicks meant for the entries when the
+	// row sits inside a bento tile's stacking context.
+	var panel uic.Node = Fragment()
+	if menu.Shown || props.ExtraContent != nil {
+		panel = Div(menuArgs...)
 	}
-	var menu uic.Node = Fragment()
-	if open.Get() || props.ExtraContent != nil {
-		menu = Div(menuArgs...)
-	}
-	return Div(css.Class(wrapClass), Attr("id", id), Button(triggerArgs...), menu)
+	return Div(css.Class(menu.WrapClass("add-wrap")), Attr("id", id), trigger, panel)
 }
 
-// dismissOverflowMenu installs the menu-button keyboard and outside-pointer
-// listeners when the host DOM supports them. The component testkit intentionally
-// has a small DOM surface, so missing browser APIs must not panic a wasm effect.
-func dismissOverflowMenu(isOpen bool, wrapID string, onClose func()) {
-	openKey := "closed"
-	if isOpen {
-		openKey = "open"
+// menuPlacementClass returns the flip classes an open menu takes: open-left and open-up. Each
+// class has a leading space, since the caller appends the result to the panel's class list.
+func menuPlacementClass(openLeft, openUp bool) string {
+	class := ""
+	if openLeft {
+		class += " open-left"
 	}
-	uic.UseEffect(func() func() {
-		if !isOpen || wrapID == "" || onClose == nil {
-			return nil
-		}
-		doc := js.Global().Get("document")
-		if !doc.Truthy() || doc.Get("addEventListener").Type() != js.TypeFunction || doc.Get("removeEventListener").Type() != js.TypeFunction {
-			return nil
-		}
-		var typeahead string
-		lastType := time.Time{}
-		keyCB := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
-			}
-			e := args[0]
-			key := e.Get("key").String()
-			if key == "Escape" {
-				onClose()
-				if doc.Get("getElementById").Type() == js.TypeFunction {
-					w := doc.Call("getElementById", wrapID)
-					if w.Truthy() && w.Get("querySelector").Type() == js.TypeFunction {
-						if trigger := w.Call("querySelector", "button"); trigger.Truthy() && trigger.Get("focus").Type() == js.TypeFunction {
-							trigger.Call("focus")
-						}
-					}
-				}
-				return nil
-			}
-			if doc.Get("getElementById").Type() != js.TypeFunction {
-				return nil
-			}
-			w := doc.Call("getElementById", wrapID)
-			active := doc.Get("activeElement")
-			if !w.Truthy() || !active.Truthy() || w.Get("contains").Type() != js.TypeFunction || !w.Call("contains", active).Bool() || w.Get("querySelectorAll").Type() != js.TypeFunction {
-				return nil
-			}
-			items := w.Call("querySelectorAll", `[role="menuitem"]`)
-			n := items.Get("length").Int()
-			if n == 0 {
-				return nil
-			}
-			cur := -1
-			for i := range n {
-				if items.Index(i).Equal(active) {
-					cur = i
-					break
-				}
-			}
-			next := -1
-			switch key {
-			case "ArrowDown":
-				next = (cur + 1) % n
-			case "ArrowUp":
-				next = (cur - 1 + n) % n
-			case "Home":
-				next = 0
-			case "End":
-				next = n - 1
-			default:
-				if len(key) != 1 || e.Get("ctrlKey").Bool() || e.Get("altKey").Bool() || e.Get("metaKey").Bool() {
-					return nil
-				}
-				now := time.Now()
-				if now.Sub(lastType) > 700*time.Millisecond {
-					typeahead = ""
-				}
-				lastType = now
-				typeahead += strings.ToLower(key)
-				start := (cur + 1) % n
-				for offset := range n {
-					idx := (start + offset) % n
-					label := strings.ToLower(strings.TrimSpace(items.Index(idx).Get("textContent").String()))
-					if strings.HasPrefix(label, typeahead) {
-						next = idx
-						break
-					}
-				}
-				if next < 0 {
-					return nil
-				}
-			}
-			e.Call("preventDefault")
-			items.Index(next).Call("focus")
-			return nil
-		})
-		downCB := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 || doc.Get("getElementById").Type() != js.TypeFunction {
-				return nil
-			}
-			w := doc.Call("getElementById", wrapID)
-			target := args[0].Get("target")
-			if w.Truthy() && target.Truthy() && w.Get("contains").Type() == js.TypeFunction && !w.Call("contains", target).Bool() {
-				onClose()
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", keyCB)
-		doc.Call("addEventListener", "pointerdown", downCB)
-		return func() {
-			doc.Call("removeEventListener", "keydown", keyCB)
-			doc.Call("removeEventListener", "pointerdown", downCB)
-			keyCB.Release()
-			downCB.Release()
-		}
-	}, openKey)
+	if openUp {
+		class += " open-up"
+	}
+	return class
 }
 
-// anchorOverflowMenu keeps an open menu attached to its trigger and flips it
-// within its nearest transaction table when possible. Browser APIs are checked
-// before use so a partial test DOM simply skips visual placement.
-func anchorOverflowMenu(isOpen bool, wrapID string) {
-	openKey := "closed"
-	if isOpen {
-		openKey = "open"
+// anchorOverflowMenu keeps an open menu beside its trigger, and flips it to the side and direction
+// that fit, within the nearest transaction table when there is one. It places the menu before
+// paint when the menu opens, and again on every window resize or scroll while it is open.
+func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
+	uic.UseLayoutEffect(func() func() {
+		if isOpen {
+			placeOverflowMenu(wrapID, setPlacement)
+		}
+		return nil
+	}, isOpen, wrapID)
+	// The window listeners stay attached while the menu is closed, so they check isOpen themselves.
+	reposition := func(uic.Event) {
+		if isOpen {
+			placeOverflowMenu(wrapID, setPlacement)
+		}
 	}
-	uic.UseEffect(func() func() {
-		if !isOpen || wrapID == "" {
-			return nil
-		}
-		win := js.Global()
-		doc := win.Get("document")
-		if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction || win.Get("requestAnimationFrame").Type() != js.TypeFunction {
-			return nil
-		}
-		const margin = 8.0
-		reposition := js.FuncOf(func(_ js.Value, _ []js.Value) any {
-			w := doc.Call("getElementById", wrapID)
-			if !w.Truthy() || w.Get("querySelector").Type() != js.TypeFunction || w.Get("getBoundingClientRect").Type() != js.TypeFunction {
-				return nil
-			}
-			menu := w.Call("querySelector", ".add-menu")
-			if !menu.Truthy() || menu.Get("getBoundingClientRect").Type() != js.TypeFunction {
-				return nil
-			}
-			cl := menu.Get("classList")
-			if !cl.Truthy() || cl.Get("remove").Type() != js.TypeFunction || cl.Get("add").Type() != js.TypeFunction {
-				return nil
-			}
-			cl.Call("remove", "open-left")
-			cl.Call("remove", "open-up")
-			st := menu.Get("style")
-			st.Set("maxHeight", "")
-			st.Set("overflowY", "")
-			r := menu.Call("getBoundingClientRect")
-			vw := win.Get("innerWidth").Float()
-			vh := win.Get("innerHeight").Float()
-			boundaryTop, boundaryBottom := margin, vh-margin
-			if w.Get("closest").Type() == js.TypeFunction {
-				if table := w.Call("closest", ".txn-table"); table.Truthy() && table.Get("getBoundingClientRect").Type() == js.TypeFunction {
-					tableRect := table.Call("getBoundingClientRect")
-					boundaryTop = max(boundaryTop, tableRect.Get("top").Float()+margin)
-					boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-margin)
-				}
-			}
-			if r.Get("right").Float() > vw-margin {
-				cl.Call("add", "open-left")
-			}
-			if r.Get("bottom").Float() > boundaryBottom {
-				cl.Call("add", "open-up")
-			}
-			wr := w.Call("getBoundingClientRect")
-			avail := boundaryBottom - wr.Get("bottom").Float() - 6
-			if cl.Get("contains").Type() == js.TypeFunction && cl.Call("contains", "open-up").Bool() {
-				avail = wr.Get("top").Float() - boundaryTop - 6
-			}
-			if r.Get("height").Float() > avail && avail > 80 {
-				st.Set("maxHeight", fmt.Sprintf("%.0fpx", avail))
-				st.Set("overflowY", "auto")
-			}
-			return nil
-		})
-		raf := win.Call("requestAnimationFrame", reposition)
-		if win.Get("addEventListener").Type() != js.TypeFunction || win.Get("removeEventListener").Type() != js.TypeFunction {
-			return func() {
-				if win.Get("cancelAnimationFrame").Type() == js.TypeFunction {
-					win.Call("cancelAnimationFrame", raf)
-				}
-				reposition.Release()
-			}
-		}
-		resizeCB := js.FuncOf(func(_ js.Value, _ []js.Value) any { reposition.Invoke(); return nil })
-		win.Call("addEventListener", "resize", resizeCB)
-		win.Call("addEventListener", "scroll", resizeCB, map[string]any{"capture": true, "passive": true})
-		return func() {
-			if win.Get("cancelAnimationFrame").Type() == js.TypeFunction {
-				win.Call("cancelAnimationFrame", raf)
-			}
-			win.Call("removeEventListener", "resize", resizeCB)
-			win.Call("removeEventListener", "scroll", resizeCB, map[string]any{"capture": true})
-			reposition.Release()
-			resizeCB.Release()
-		}
-	}, openKey)
+	uic.UseWindowEvent("resize", reposition, isOpen, wrapID)
+	uic.UseWindowEvent("scroll", reposition, isOpen, wrapID)
 }
 
-// overflowMenuItemProps carries the item data plus the close callback into the
-// per-item sub-component. The sub-component owns its click hook so we never
-// call On* inside the item loop (the On*-in-loop rule).
+// Pixel spacing for an open menu. menuMargin keeps the menu off the edge of the viewport, or of
+// the transaction table around it. menuGap is the space between the trigger and the menu.
+const (
+	menuMargin = 8.0
+	menuGap    = 6.0
+)
+
+// minCappedMenuHeight is the least space a menu is capped to. With less room than this, the menu
+// keeps its full height rather than being squeezed into a sliver.
+const minCappedMenuHeight = 80.0
+
+// placeOverflowMenu measures an open menu against its trigger and the viewport, or against the
+// transaction table around it. It reports the flip classes that fit, and caps the menu's height
+// when the menu does not fit in the space below or above the trigger.
+func placeOverflowMenu(wrapID string, setPlacement func(string)) {
+	wrap := domNode(wrapID)
+	if !wrap.Truthy() {
+		return
+	}
+	menu := domValue(wrap, "querySelector", ".add-menu")
+	if !menu.Truthy() {
+		return
+	}
+	style := menu.Get("style")
+	// Clear the height cap from the last placement, so the full height is measured.
+	domSet(style, "maxHeight", "")
+	domSet(style, "overflowY", "")
+	// The menu grows in over its fade, so its height reads low until the animation settles.
+	// Suspend the animation to measure the height it settles at. The animation is restored after
+	// the last measurement.
+	domSet(style, "animation", "none")
+	menuRect := domValue(menu, "getBoundingClientRect")
+	window := domDocument().Get("defaultView")
+	viewportWidth := window.Get("innerWidth").Float()
+	viewportHeight := window.Get("innerHeight").Float()
+	boundaryTop, boundaryBottom := menuMargin, viewportHeight-menuMargin
+	if table := domValue(wrap, "closest", ".txn-table"); table.Truthy() {
+		tableRect := domValue(table, "getBoundingClientRect")
+		boundaryTop = max(boundaryTop, tableRect.Get("top").Float()+menuMargin)
+		boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-menuMargin)
+	}
+	// Decide the side from the trigger's position and the menu's width, not from where the menu
+	// sits now. The flip classes from the last open are still applied, so measuring the current
+	// position would give a different answer on each open.
+	wrapRect := domValue(wrap, "getBoundingClientRect")
+	openLeft := wrapRect.Get("left").Float()+menuRect.Get("width").Float() > viewportWidth-menuMargin
+	fullHeight := max(menuRect.Get("height").Float(), menu.Get("scrollHeight").Float())
+	domSet(style, "animation", "")
+	openUp := wrapRect.Get("bottom").Float()+menuGap+fullHeight > boundaryBottom
+	available := boundaryBottom - wrapRect.Get("bottom").Float() - menuGap
+	if openUp {
+		available = wrapRect.Get("top").Float() - boundaryTop - menuGap
+	}
+	// When the menu does not fit, cap it to the room available and let it scroll inside the cap.
+	if fullHeight > available && available > minCappedMenuHeight {
+		domSet(style, "maxHeight", fmt.Sprintf("%.0fpx", available))
+		domSet(style, "overflowY", "auto")
+	}
+	setPlacement(menuPlacementClass(openLeft, openUp))
+}
+
+// overflowMenuItemProps carries an entry's data and its close callbacks into overflowMenuItemBtn.
+// Each entry is its own component and owns its click and key handlers, so no On* option is called
+// inside the item loop.
 type overflowMenuItemProps struct {
-	Item         OverflowMenuItem
-	CloseMenu    func()
+	Item      OverflowMenuItem
+	CloseMenu func()
+	// CloseSubmenu is set only on entries nested inside a submenu. It closes that submenu and
+	// returns focus to the parent entry.
 	CloseSubmenu func()
+	// SectionID is the id of the section heading this entry sits under. The entry names it as its
+	// accessible description, so a screen reader hears which group the entry is in. Empty for an
+	// entry with no section.
+	SectionID string
 }
 
 func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
@@ -433,23 +280,16 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	onSelect := item.OnSelect
 	submenuOpen := uic.UseState(false)
 	itemID := uic.UseId()
-	uic.UseEffect(func() func() {
-		if !submenuOpen.Get() {
-			return nil
+	// Focus the first entry of a freshly opened submenu once it is in the DOM, before paint.
+	uic.UseLayoutEffect(func() func() {
+		if submenuOpen.Get() {
+			focusOverflowSubmenu(itemID)
 		}
-		doc := js.Global().Get("document")
-		if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
-			return nil
-		}
-		var cb js.Func
-		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			defer cb.Release()
-			focusOverflowSubmenu(doc, itemID)
-			return nil
-		})
-		js.Global().Call("setTimeout", cb, 0)
 		return nil
 	}, submenuOpen.Get())
+	// ArrowRight and Enter open a submenu. ArrowLeft and Escape close an open submenu first. When
+	// no submenu is open, a nested entry returns focus to its parent. Escape is not stopped on a
+	// top-level entry, so it reaches the menu and closes it.
 	onKey := uic.UseEvent(func(e uic.KeyboardEvent) {
 		switch e.GetKey() {
 		case "ArrowRight", "Enter":
@@ -466,21 +306,18 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 				e.PreventDefault()
 				e.StopPropagation()
 				props.CloseSubmenu()
-				focusMenuItem(docMenuItem(itemID))
+				focusMenuItem(domNode(itemID))
 			}
 		}
 	})
 
-	// `.danger` is the app's existing destructive overflow-item class (the accounts
-	// kebab's Delete already uses it) — reused rather than forked, so every menu in
-	// the app paints risk the same way.
+	// The danger class is the app's shared destructive style, so every menu shows risk the same way.
 	cls := "add-item"
 	if item.Danger {
 		cls += " danger"
 	}
 	btnArgs := []any{
 		ClassStr(cls),
-		Type("button"),
 		Attr("id", itemID),
 		Attr("role", "menuitem"),
 		OnKeyDown(onKey),
@@ -498,29 +335,36 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		}),
 	}
 	if len(item.Submenu) > 0 {
-		expanded := "false"
-		if submenuOpen.Get() {
-			expanded = "true"
-		}
-		btnArgs = append(btnArgs, Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded))
+		btnArgs = append(btnArgs, Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(submenuOpen.Get())))
 	}
-	// The visible item label is also its accessible name. Section headings remain a
-	// visual grouping and never leak into the action's name.
+	// The visible label is the accessible name. The section heading is visual only, so it is not
+	// part of the name; the entry describes itself with the heading instead.
+	if props.SectionID != "" {
+		btnArgs = append(btnArgs, Attr("aria-describedby", props.SectionID))
+	}
 	if item.TestID != "" {
 		btnArgs = append(btnArgs, Attr("data-testid", item.TestID))
+	}
+	if item.Title != "" {
+		btnArgs = append(btnArgs, Attr("title", item.Title))
 	}
 	if item.Icon != "" {
 		btnArgs = append(btnArgs, Icon(item.Icon, css.Class(tw.W4, tw.H4)))
 	}
 	btnArgs = append(btnArgs, item.Label)
-	parent := Button(btnArgs...)
+	var parent uic.Node
+	if item.Href != "" && len(item.Submenu) == 0 {
+		parent = A(append([]any{Href(item.Href)}, btnArgs...)...)
+	} else {
+		parent = Button(append([]any{Type("button")}, btnArgs...)...)
+	}
 	children := []any{ClassStr("add-submenu"), Attr("role", "menu")}
 	if submenuOpen.Get() {
 		for _, child := range item.Submenu {
 			children = append(children, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
 				Item: child, CloseMenu: closeMenu, CloseSubmenu: func() {
 					submenuOpen.Set(false)
-					focusMenuItem(docMenuItem(itemID))
+					focusMenuItem(domNode(itemID))
 				},
 			}))
 		}
@@ -529,32 +373,22 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		If(submenuOpen.Get(), Div(children...)))
 }
 
-// focusOverflowSubmenu moves focus into an opened submenu. The submenu is a
-// sibling of its parent button, so the lookup must start at the item's wrapper.
-func focusOverflowSubmenu(doc js.Value, itemID string) {
-	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+// focusOverflowSubmenu moves focus to the first entry of an opened submenu. The submenu is a
+// sibling of the parent entry's button, so the lookup starts at the entry's wrapper.
+func focusOverflowSubmenu(itemID string) {
+	wrap := domNode(itemID + "-wrap")
+	if !wrap.Truthy() {
 		return
 	}
-	wrap := doc.Call("getElementById", itemID+"-wrap")
-	if !wrap.Truthy() || wrap.Get("querySelector").Type() != js.TypeFunction {
-		return
-	}
-	menu := wrap.Call("querySelector", ".add-submenu")
-	if menu.Truthy() && menu.Get("querySelector").Type() == js.TypeFunction {
-		focusMenuItem(menu.Call("querySelector", `[role="menuitem"]`))
+	menu := domValue(wrap, "querySelector", ".add-submenu")
+	if menu.Truthy() {
+		focusMenuItem(domValue(menu, "querySelector", `[role="menuitem"]`))
 	}
 }
 
-func docMenuItem(id string) js.Value {
-	doc := js.Global().Get("document")
-	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
-		return js.Null()
-	}
-	return doc.Call("getElementById", id)
-}
-
-func focusMenuItem(item js.Value) {
-	if item.IsNull() || item.IsUndefined() || item.Get("focus").Type() != js.TypeFunction {
+// focusMenuItem focuses a menu entry without scrolling the page to it.
+func focusMenuItem(item interop.Value) {
+	if !item.Truthy() {
 		return
 	}
 	item.Call("focus", map[string]any{"preventScroll": true})

@@ -95,6 +95,27 @@ func TestReceiptCandidates(t *testing.T) {
 	}
 }
 
+func TestReceiptMatchDateChangesFallbackCandidatesByCalendarDay(t *testing.T) {
+	rows := []extract.Row{{Date: "unreadable"}}
+	location := time.FixedZone("test-local", -5*60*60)
+	jan31 := ReceiptMatchDate(rows, time.Date(2026, 1, 31, 23, 55, 0, 0, location))
+	feb6 := ReceiptMatchDate(rows, time.Date(2026, 2, 6, 0, 5, 0, 0, location))
+	if jan31 != time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC) || feb6 != time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC) {
+		t.Fatalf("effective fallback dates = %s and %s", jan31, feb6)
+	}
+	txn := []domain.Transaction{{ID: "candidate", Date: jan31, Desc: "Shop", Amount: money.New(-100, "USD")}}
+	if got := ReceiptCandidates(rows, "Shop", "1.00", 2, txn, jan31); len(got) != 1 {
+		t.Fatalf("same-day fallback candidates = %v", got)
+	}
+	if got := ReceiptCandidates(rows, "Shop", "1.00", 2, txn, feb6); len(got) != 0 {
+		t.Fatalf("six-day-old transaction remained a candidate after fallback-date change: %v", got)
+	}
+	parsedRows := []extract.Row{{Date: "2026-01-31"}}
+	if got := ReceiptMatchDate(parsedRows, feb6); !got.Equal(jan31) {
+		t.Fatalf("parsed receipt date %s changed with fallback %s", got, feb6)
+	}
+}
+
 func FuzzRawPreviewReconciles(f *testing.F) {
 	f.Add(int64(500), int64(-200), int64(300))
 	f.Fuzz(func(t *testing.T, opening, a, b int64) {

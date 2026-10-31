@@ -114,10 +114,8 @@ func TestNwChangeSeamIsActuallyUsed(t *testing.T) {
 	files := readInternal(t)
 	want := []string{
 		"screens/dashboard.go",
-		"screens/dashboard_hero.go",
 		"screens/accounts_tiles.go",
 		"screens/networth.go",
-		"screens/widget_builder.go",
 		"engineenv/networthvars.go",
 	}
 	for _, path := range want {
@@ -129,6 +127,27 @@ func TestNwChangeSeamIsActuallyUsed(t *testing.T) {
 		if !strings.Contains(src, "nwchange.") {
 			t.Errorf("%s no longer reads net-worth change through internal/nwchange (C341)", path)
 		}
+	}
+	// The Builder delegates its string and series preparation to a native model.
+	// Keep the route adapter thin while ensuring that model still uses nwchange's
+	// canonical MonthToDate window for the Builder's net-worth string source.
+	builder := files["screens/widget_builder.go"]
+	if !strings.Contains(builder, "widgetbuilderdata.Prepare(") {
+		t.Error("widget builder no longer delegates its prepared snapshot to the native builder data model")
+	}
+	builderData, ok := files["widgetbuilderdata/prepare.go"]
+	if !ok {
+		t.Error("widgetbuilderdata/prepare.go not found — the C341 guard needs updating")
+	} else if !strings.Contains(builderData, "nwchange.MonthToDateChange(") || !strings.Contains(builderData, "ledger.NetWorthSeries(") {
+		t.Error("widget builder data model no longer uses the canonical net-worth change and series seams")
+	}
+	// The hero delegates its expensive trend to a native model. Require that
+	// connection as well as the model's canonical window seam above, so moving
+	// arithmetic out of markup cannot make this guard pass vacuously.
+	hero := files["screens/dashboard_hero.go"]
+	if !strings.Contains(hero, "nwchange.") &&
+		!(strings.Contains(hero, "dashboardview.BuildNetWorthTrend(") && strings.Contains(files["dashboardview/trend.go"], "nwchange.")) {
+		t.Error("dashboard hero no longer reads the canonical net-worth window directly or through its tested trend model")
 	}
 }
 
@@ -289,8 +308,9 @@ func TestGoalPaceBadgeIsFundingDerived(t *testing.T) {
 		}
 	}
 	// AssessHealth must still be what produces that verdict.
-	if !strings.Contains(src, "goalsvc.AssessHealth(") {
-		t.Error("screens/goals.go no longer calls goals.AssessHealth (C352)")
+	if !strings.Contains(src, "goalsvc.AssessHealth(") &&
+		!(strings.Contains(src, "goalview.Build(") && strings.Contains(readInternal(t)["goalview/goalview.go"], "goals.AssessHealth(")) {
+		t.Error("goal screen no longer delegates to the funding-derived goals.AssessHealth model (C352)")
 	}
 }
 

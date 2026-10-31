@@ -19,10 +19,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // merchantContextPanel renders the TX6 merchant "story" inside the edit modal:
@@ -91,7 +91,7 @@ func receiptThumb(props receiptThumbProps) ui.Node {
 	inner := Span(css.Class("muted", tw.P1), "📎")
 	if props.DataURL != "" {
 		inner = Img(Attr("src", props.DataURL), Attr("alt", label),
-			css.Class(tw.W10, tw.H10), Attr("style", "object-fit:cover;border-radius:4px;"))
+			css.Class(tw.W10, tw.H10, "txn-receipt-thumb-img"))
 	}
 	return Button(css.Class("btn btn-icon"), Type("button"), Attr("data-testid", "txn-receipt-thumb"),
 		Attr("aria-label", label), Title(label), OnClick(open), inner)
@@ -118,49 +118,48 @@ func TransactionEditForm(props TransactionEditFormProps) ui.Node {
 		props.App = appstate.Default
 	}
 	if props.App == nil {
-		return P(css.Class("empty"), uistate.T("common.notReady"))
+		return uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("common.notReady"))})
 	}
 	return ui.CreateElement(transactionEditForm, props)
 }
 
+// Names of the draft fields that carry a refusal message from a save.
+const (
+	txnFieldAmount = "Amount"
+	txnFieldDate   = "Date"
+)
+
+// txnEditErrorInputs maps each draft field that carries a refusal message to the id of the input
+// that shows it, which is where focus goes when a save is refused.
+var txnEditErrorInputs = map[string]string{txnFieldAmount: "txn-edit-amount", txnFieldDate: "txn-edit-date"}
+
+// txnEditState holds one render's view of the edit form. The editable fields are one typed draft
+// (form); errMsg, the open flags, the pending flag and the similar-transactions offer are not
+// transaction data, so each stays its own state.
 type txnEditState struct {
-	app                                                                 *appstate.App
-	props                                                               TransactionEditFormProps
-	txn                                                                 domain.Transaction
-	found                                                               bool
-	categories                                                          []domain.Category
-	members                                                             []domain.Member
-	merchantPanel                                                       ui.Node
-	descS, payeeS, amountS, directionS                                  ui.State[string]
-	catS, dateS, tagsS, noteS                                           ui.State[string]
-	transferToS, accountS, errMsg                                       ui.State[string]
-	memberS                                                             ui.State[[]string]
-	categoryPickerOpen, clearedS, excludeS, debtPayS, saving, splitOpen ui.State[bool]
-	saveLease                                                           *txnFormLease
-	simState                                                            ui.State[[]similartxns.Candidate]
-	simTarget                                                           ui.State[domain.Transaction]
+	app                                   *appstate.App
+	props                                 TransactionEditFormProps
+	txn                                   domain.Transaction
+	found                                 bool
+	categories                            []domain.Category
+	members                               []domain.Member
+	merchantPanel                         ui.Node
+	form                                  ui.Form[txnform.Draft]
+	focus                                 ui.FocusManager
+	errMsg                                ui.State[string]
+	categoryPickerOpen, saving, splitOpen ui.State[bool]
+	saveLease                             *txnFormLease
+	simState                              ui.State[[]similartxns.Candidate]
+	simTarget                             ui.State[domain.Transaction]
 }
 
 func useTxnEditState(props TransactionEditFormProps) txnEditState {
 	app := props.App
 	txn, found := app.TransactionByID(props.TxnID)
-	draft := txnform.Seed(txn, found)
 	s := txnEditState{app: app, props: props, txn: txn, found: found, categories: app.Categories(), members: app.Members()}
 	s.merchantPanel = ui.UseMemo(func() ui.Node { return merchantContextPanel(app, txn) }, app, app.Rev(), txn.ID)
-	s.descS = ui.UseState(draft.Desc)
-	s.payeeS = ui.UseState(draft.Payee)
-	s.amountS = ui.UseState(draft.Amount)
-	s.directionS = ui.UseState(draft.Direction)
-	s.catS = ui.UseState(draft.CategoryID)
-	s.dateS = ui.UseState(draft.Date)
-	s.memberS = ui.UseState(draft.Owners)
-	s.tagsS = ui.UseState(draft.Tags)
-	s.clearedS = ui.UseState(draft.Cleared)
-	s.noteS = ui.UseState(draft.Note)
-	s.excludeS = ui.UseState(draft.Exclude)
-	s.transferToS = ui.UseState(draft.TransferAccountID)
-	s.debtPayS = ui.UseState(draft.DebtPayment)
-	s.accountS = ui.UseState(draft.AccountID)
+	s.form = ui.UseForm(txnform.Seed(txn, found))
+	s.focus = ui.UseFocusManager()
 	s.errMsg = ui.UseState("")
 	s.saving = ui.UseState(false)
 	s.categoryPickerOpen = ui.UseState(false)
@@ -172,10 +171,45 @@ func useTxnEditState(props TransactionEditFormProps) txnEditState {
 	return s
 }
 
-func (s txnEditState) draft() txnform.Draft {
-	return txnform.Draft{Desc: s.descS.Get(), Payee: s.payeeS.Get(), Amount: s.amountS.Get(), Direction: s.directionS.Get(),
-		CategoryID: s.catS.Get(), Date: s.dateS.Get(), Owners: s.memberS.Get(), Tags: s.tagsS.Get(), Cleared: s.clearedS.Get(),
-		Note: s.noteS.Get(), Exclude: s.excludeS.Get(), TransferAccountID: s.transferToS.Get(), DebtPayment: s.debtPayS.Get(), AccountID: s.accountS.Get()}
+// edit applies one change to the draft as a single update, so two fields changed together (the
+// transfer partner and the debt-payment flag) never render apart.
+func (s txnEditState) edit(change func(*txnform.Draft)) {
+	s.form.Update(func(d txnform.Draft) txnform.Draft {
+		change(&d)
+		return d
+	})
+}
+
+// setText returns the setter for one text field of the draft, chosen by selector so the compiler
+// checks the field name.
+func (s txnEditState) setText(field func(*txnform.Draft) *string) func(string) {
+	return func(v string) { s.edit(func(d *txnform.Draft) { *field(d) = v }) }
+}
+
+// setFlag is setText for a checkbox field of the draft.
+func (s txnEditState) setFlag(field func(*txnform.Draft) *bool) func(bool) {
+	return func(v bool) { s.edit(func(d *txnform.Draft) { *field(d) = v }) }
+}
+
+// showProblem replaces what the form says is wrong. An amount or date refusal is stored as that
+// field's error and moves focus to its input; any other message, such as a failed write, is the
+// form-level message, and an empty message clears both.
+func (s txnEditState) showProblem(message string) {
+	errs := ui.FieldErrors{}
+	amountError, dateError := txnform.FieldErrors(message, uistate.T("transactions.positiveAmount"), uistate.T("transactions.amountNotANumber"), uistate.T("transactions.invalidDate"))
+	if amountError != "" {
+		errs[txnFieldAmount] = amountError
+	}
+	if dateError != "" {
+		errs[txnFieldDate] = dateError
+	}
+	s.form.SetErrors(errs)
+	if len(errs) == 0 {
+		s.errMsg.Set(message)
+		return
+	}
+	s.errMsg.Set("")
+	s.focus.FocusFirstError(errs, txnEditErrorInputs, txnFieldAmount, txnFieldDate)
 }
 
 func transactionEditForm(props TransactionEditFormProps) ui.Node {
@@ -190,13 +224,13 @@ func (s txnEditState) render() ui.Node {
 	applySimilar := ui.UseEvent(s.applySimilar)
 	alwaysRule := ui.UseEvent(s.alwaysRule)
 	dismissSimilar := ui.UseEvent(s.dismissSimilar)
-	amountError, dateError := txnform.FieldErrors(s.errMsg.Get(), uistate.T("transactions.positiveAmount"), uistate.T("transactions.amountNotANumber"), uistate.T("transactions.invalidDate"))
-	amountField := ui.CreateElement(txnEditAmount, txnEditInputProps{Value: s.amountS.Get(), Error: amountError, OnInput: s.amountS.Set})
-	directionField := ui.CreateElement(txnEditDirection, txnEditDirectionProps{Value: s.directionS.Get(), OnSelect: s.directionS.Set})
-	payeeField := ui.CreateElement(txnEditPayee, txnEditInputProps{Value: s.payeeS.Get(), OnInput: s.payeeS.Set})
-	dateField := ui.CreateElement(txnEditDate, txnEditInputProps{Value: s.dateS.Get(), Error: dateError, OnInput: s.dateS.Set})
+	d := s.form.Get()
+	amountField := ui.CreateElement(txnEditAmount, txnEditInputProps{Value: d.Amount, Error: s.form.Error(txnFieldAmount), OnInput: s.setText(func(d *txnform.Draft) *string { return &d.Amount })})
+	directionField := ui.CreateElement(txnEditDirection, txnEditDirectionProps{Value: d.Direction, OnSelect: s.setText(func(d *txnform.Draft) *string { return &d.Direction })})
+	payeeField := ui.CreateElement(txnEditPayee, txnEditInputProps{Value: d.Payee, OnInput: s.setText(func(d *txnform.Draft) *string { return &d.Payee })})
+	dateField := ui.CreateElement(txnEditDate, txnEditInputProps{Value: d.Date, Error: s.form.Error(txnFieldDate), OnInput: s.setText(func(d *txnform.Draft) *string { return &d.Date })})
 	categoryPicker := s.categoryNode()
-	accountControl := ui.CreateElement(txnEditAccount, txnEditAccountProps{App: s.app, Txn: s.txn, Selected: s.accountS.Get(), OnSelect: s.accountS.Set})
+	accountControl := ui.CreateElement(txnEditAccount, txnEditAccountProps{App: s.app, Txn: s.txn, Selected: d.AccountID, OnSelect: s.setText(func(d *txnform.Draft) *string { return &d.AccountID })})
 	more := s.moreNodes()
 	rowActions := s.toolsNode()
 	attachments := ui.CreateElement(txnEditAttachments, txnEditAttachmentsProps{App: s.app, Txn: s.txn})
@@ -217,7 +251,7 @@ func (s txnEditState) render() ui.Node {
 		TxnSharedForm(TxnFormModel{Mode: TxnFormEdit, Amount: amountField, Direction: directionField, Payee: payeeField,
 			Category: categoryPicker, Date: dateField, Account: accountControl, More: more, MoreID: "txn-edit-more-" + s.txn.ID,
 			EditTools: rowActions, EditSummary: Div(css.Class("txn-edit-summary"), splits, attachments)}),
-		If(s.errMsg.Get() != "" && amountError == "" && dateError == "", Div(css.Class("form-err-sticky"), errText("txn-edit-err", s.errMsg.Get()))),
+		If(s.errMsg.Get() != "", Div(css.Class("form-err-sticky"), errText("txn-edit-err", s.errMsg.Get()))),
 	)
 	return IfElse(!s.found,
 		ui.CreateElement(txnEditMissing, txnEditMissingProps{Cancel: cancel}),
@@ -245,7 +279,7 @@ func (s txnEditState) saveSplits(updated domain.Transaction) {
 		}
 		s.saving.Set(false)
 		if err != nil {
-			s.errMsg.Set(txnEditSaveError(err))
+			s.showProblem(txnEditSaveError(err))
 		}
 	})
 }
@@ -254,12 +288,12 @@ func (s txnEditState) save() {
 	if s.saving.Get() {
 		return
 	}
-	plan := txnform.Build(s.txn, s.draft(), s.app.Accounts(), s.app.Transactions(), time.Now())
+	plan := txnform.Build(s.txn, s.form.Get(), s.app.Accounts(), s.app.Transactions(), time.Now())
 	if plan.Err != nil {
 		if plan.Failure.Key == "" {
-			s.errMsg.Set(txnEditSaveError(plan.Err))
+			s.showProblem(txnEditSaveError(plan.Err))
 		} else {
-			s.errMsg.Set(txnEditMessage(plan.Failure))
+			s.showProblem(txnEditMessage(plan.Failure))
 		}
 		return
 	}
@@ -312,7 +346,7 @@ func (s txnEditState) performSave(t domain.Transaction, syncDirectionOut, remove
 		}
 		s.saving.Set(false)
 		if err != nil {
-			s.errMsg.Set(txnEditSaveError(err))
+			s.showProblem(txnEditSaveError(err))
 			return
 		}
 
@@ -325,13 +359,13 @@ func (s txnEditState) afterSave(t domain.Transaction, syncDirectionOut bool) {
 	// with what was stored. Doing this earlier re-rendered the form mid-save
 	// and lost the write.
 	if syncDirectionOut {
-		s.directionS.Set(txnDirOut)
+		s.edit(func(d *txnform.Draft) { d.Direction = txnDirOut })
 	}
 
 	// TX1 learning flow: when the user renamed the payee, quietly offer to always
 	// show the original (raw) name as the new one — creating a view-layer alias so
 	// every transaction with that raw name reads cleanly (the raw stays on the transaction).
-	origPayee, newPayee, learnAlias := txnform.LearnAlias(s.txn.Payee, s.payeeS.Get(), s.app.PayeeResolver().HasLearned(s.txn.Payee))
+	origPayee, newPayee, learnAlias := txnform.LearnAlias(s.txn.Payee, s.form.Get().Payee, s.app.PayeeResolver().HasLearned(s.txn.Payee))
 	if learnAlias {
 		uistate.ConfirmModal(uistate.T("payeealias.learnPrompt", origPayee, newPayee), false, func(ok bool) {
 			if !ok {
@@ -378,7 +412,7 @@ func (s txnEditState) applySimilar() {
 		}
 		s.saving.Set(false)
 		if err != nil {
-			s.errMsg.Set(txnEditSaveError(err))
+			s.showProblem(txnEditSaveError(err))
 			return
 		}
 		s.simState.Set(nil)
@@ -404,7 +438,7 @@ func (s txnEditState) attach() {
 			}
 			s.saving.Set(false)
 			if err != nil {
-				s.errMsg.Set(txnEditSaveError(err))
+				s.showProblem(txnEditSaveError(err))
 			}
 		})
 	})
@@ -521,22 +555,19 @@ type txnEditCategoryProps struct {
 }
 
 func txnEditCategory(props txnEditCategoryProps) ui.Node {
+	selectID := ui.UseId()
 	selectGeneration := ui.UseState(0)
-	onCategory := ui.UseEvent(func(e ui.Event) {
-		if value := e.GetValue(); value == txnEditNewCategoryOption {
+	onCategory := func(value string) {
+		if value == txnEditNewCategoryOption {
 			// Selecting the command mutates the browser's live value even though
-			// the category state did not change. Replace just the native select
-			// so dismissing or reopening the picker retains the real category.
+			// the category state did not change. Remount just the select, keyed by
+			// the generation, so dismissing or reopening the picker retains the
+			// real category.
 			selectGeneration.Set(selectGeneration.Get() + 1)
 			props.OnOpen()
 		} else {
 			props.OnSelect(value)
 		}
-	})
-	selectArgs := []any{css.Class("field"), Value(props.Selected), Attr("aria-label", uistate.T("quickAdd.category")),
-		Attr("data-testid", "txn-edit-category"), OnChange(onCategory)}
-	for _, option := range props.Options {
-		selectArgs = append(selectArgs, Option(Value(option.Value), SelectedIf(option.Value == props.Selected), option.Label))
 	}
 	app := props.App
 	if app == nil {
@@ -544,10 +575,13 @@ func txnEditCategory(props txnEditCategoryProps) ui.Node {
 	}
 	return Div(css.Class("labeled-field", "txn-edit-category-field"),
 		Div(css.Class("txn-edit-category-label"),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category"))),
+			Label(For(selectID), css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category"))),
 		Div(css.Class("txn-cat-picker"),
 			Div(css.Class("txn-cat-row"),
-				WithKey(Select(selectArgs...), selectGeneration.Get()),
+				WithKey(Div(css.Class("txn-cat-select"), ui.CreateElement(uiw.SelectInput, uiw.SelectInputProps{
+					Options: props.Options, Selected: props.Selected, OnChange: onCategory,
+					AriaLabel: uistate.T("quickAdd.category"), TestID: "txn-edit-category", ID: selectID, SyncValue: true,
+				})), selectGeneration.Get()),
 			),
 			props.Suggestion,
 			If(props.Open && app != nil, ui.CreateElement(categoryPickerComponent, categoryPickerComponentProps{App: app, Props: CategoryPickerProps{
@@ -566,28 +600,32 @@ type txnEditSuggestion struct {
 
 func (s txnEditState) categoryNode() ui.Node {
 	revision := uistate.UseDataRevision().Get()
+	d := s.form.Get()
 	proposal := ui.UseMemo(func() txnEditSuggestion {
 		defer txnPerfStart("edit-category-suggestion")()
-		candidate := txnform.SuggestionTransaction(s.txn, s.amountS.Get(), s.directionS.Get())
+		candidate := txnform.SuggestionTransaction(s.txn, d.Amount, d.Direction)
 		suggested, ok := reviewSuggestion(s.app, candidate)
 		return txnEditSuggestion{Suggestion: suggested, Found: ok}
-	}, s.app, s.app.Rev(), revision, s.txn.ID, s.amountS.Get(), s.directionS.Get())
-	options, kind := txnform.Categories(s.categories, s.directionS.Get())
+	}, s.app, s.app.Rev(), revision, s.txn.ID, d.Amount, d.Direction)
+	options, kind := txnform.Categories(s.categories, d.Direction)
 	catOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}}
 	for _, o := range options {
 		catOpts = append(catOpts, uiw.SelectOption{Value: o.Value, Label: o.Label})
 	}
 	catOpts = append(catOpts, uiw.SelectOption{Value: txnEditNewCategoryOption, Label: uistate.T("transactions.newCategoryOption")})
-	name, show := txnform.SuggestionName(s.categories, proposal.Suggestion.CategoryID, s.catS.Get(), proposal.Found)
+	name, show := txnform.SuggestionName(s.categories, proposal.Suggestion.CategoryID, d.CategoryID, proposal.Found)
 	var suggestion ui.Node
 	if show {
 		suggestion = uiw.Pill(uiw.PillProps{
 			Label: uistate.T("r5e.suggestedCategory", name), AriaLabel: uistate.T("sol1.useCategory", name), Tone: uiw.PillAccent,
-			TestID: "txn-edit-category-suggestion", OnClick: func() { s.catS.Set(proposal.Suggestion.CategoryID) }})
+			TestID: "txn-edit-category-suggestion", OnClick: func() {
+				s.edit(func(d *txnform.Draft) { d.CategoryID = proposal.Suggestion.CategoryID })
+			}})
 	}
-	return ui.CreateElement(txnEditCategory, txnEditCategoryProps{App: s.app, Options: catOpts, Kind: kind, Selected: s.catS.Get(), Open: s.categoryPickerOpen.Get(), Suggestion: suggestion,
-		OnOpen: func() { s.categoryPickerOpen.Set(true); s.errMsg.Set("") }, OnClose: func() { s.categoryPickerOpen.Set(false) }, OnSelect: s.catS.Set,
-		OnPick: func(id string) { s.catS.Set(id); s.categoryPickerOpen.Set(false) }})
+	setCategory := s.setText(func(d *txnform.Draft) *string { return &d.CategoryID })
+	return ui.CreateElement(txnEditCategory, txnEditCategoryProps{App: s.app, Options: catOpts, Kind: kind, Selected: d.CategoryID, Open: s.categoryPickerOpen.Get(), Suggestion: suggestion,
+		OnOpen: func() { s.categoryPickerOpen.Set(true); s.showProblem("") }, OnClose: func() { s.categoryPickerOpen.Set(false) }, OnSelect: setCategory,
+		OnPick: func(id string) { setCategory(id); s.categoryPickerOpen.Set(false) }})
 }
 
 type txnEditDetailsProps struct {
@@ -601,6 +639,8 @@ type txnEditDetailsProps struct {
 }
 
 func txnEditDetails(props txnEditDetailsProps) ui.Node {
+	idBase := ui.UseId()
+	clearedHintID, excludeHintID := idBase+"-cleared-hint", idBase+"-exclude-hint"
 	return Fragment(
 		uiw.Field(uiw.FieldProps{ID: "txn-edit-description", Label: uistate.T("transactions.descPlaceholder"), Hint: uistate.T("sol1.bankDescription"),
 			Control: func(a uiw.FieldA11y) ui.Node {
@@ -614,11 +654,11 @@ func txnEditDetails(props txnEditDetailsProps) ui.Node {
 			Attr("aria-label", uistate.T("transactions.noteLabel")), Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(props.OnNote), props.Note)),
 		Div(css.Class("txn-form-check-field"),
 			Label(css.Class("txn-form-check"), Input(Type("checkbox"), Attr("data-testid", "txn-edit-cleared"), Attr("aria-label", uistate.T("txnwidget.clearedLabel")),
-				Attr("aria-describedby", "txn-edit-cleared-hint"), CheckedIf(props.Cleared), OnChange(func(e ui.Event) { props.OnCleared(e.IsChecked()) })), Span(uistate.T("txnwidget.clearedLabel"))),
-			Span(ID("txn-edit-cleared-hint"), css.Class("txn-form-help"), uistate.T("sol1.clearedHint"))),
+				Attr("aria-describedby", clearedHintID), CheckedIf(props.Cleared), OnChange(func(e ui.Event) { props.OnCleared(e.IsChecked()) })), Span(uistate.T("txnwidget.clearedLabel"))),
+			Span(ID(clearedHintID), css.Class("txn-form-help"), uistate.T("sol1.clearedHint"))),
 		Div(css.Class("txn-exclude-field", tw.FlexCol, tw.Gap1),
-			Label(css.Class("txn-check"), Input(Type("checkbox"), Attr("data-testid", "txn-edit-exclude"), Attr("aria-describedby", "txn-edit-exclude-hint"), Attr("aria-label", uistate.T("transactions.excludeLabel")), CheckedIf(props.Exclude), OnChange(func(e ui.Event) { props.OnExclude(e.IsChecked()) })), Span(uistate.T("transactions.excludeLabel"))),
-			Span(ID("txn-edit-exclude-hint"), css.Class("txn-form-help"), uistate.T("transactions.excludeHint"))),
+			Label(css.Class("txn-check"), Input(Type("checkbox"), Attr("data-testid", "txn-edit-exclude"), Attr("aria-describedby", excludeHintID), Attr("aria-label", uistate.T("transactions.excludeLabel")), CheckedIf(props.Exclude), OnChange(func(e ui.Event) { props.OnExclude(e.IsChecked()) })), Span(uistate.T("transactions.excludeLabel"))),
+			Span(ID(excludeHintID), css.Class("txn-form-help"), uistate.T("transactions.excludeHint"))),
 	)
 }
 
@@ -628,16 +668,23 @@ func (s txnEditState) moreNodes() []ui.Node {
 	for _, o := range options {
 		memberOpts = append(memberOpts, uiw.PickerOption{Value: o.Value, Label: o.Label})
 	}
-	details := ui.CreateElement(txnEditDetails, txnEditDetailsProps{Desc: s.descS.Get(), Tags: s.tagsS.Get(), Note: s.noteS.Get(), Owners: s.memberS.Get(), Cleared: s.clearedS.Get(), Exclude: s.excludeS.Get(), HasMembers: len(s.members) > 0,
-		MemberOptions: memberOpts, MemberColors: colors, OnDesc: s.descS.Set, OnTags: s.tagsS.Set, OnNote: s.noteS.Set,
-		OnOwner: func(owner string) { s.memberS.Set(txnform.ToggleOwner(s.memberS.Get(), owner)) }, OnCleared: s.clearedS.Set, OnExclude: s.excludeS.Set})
-	movement := ui.CreateElement(txnEditMovement, txnEditMovementProps{App: s.app, Txn: s.txn, Selected: s.transferToS.Get(), DebtPay: s.debtPayS.Get(),
+	d := s.form.Get()
+	details := ui.CreateElement(txnEditDetails, txnEditDetailsProps{Desc: d.Desc, Tags: d.Tags, Note: d.Note, Owners: d.Owners, Cleared: d.Cleared, Exclude: d.Exclude, HasMembers: len(s.members) > 0,
+		MemberOptions: memberOpts, MemberColors: colors,
+		OnDesc: s.setText(func(d *txnform.Draft) *string { return &d.Desc }), OnTags: s.setText(func(d *txnform.Draft) *string { return &d.Tags }),
+		OnNote:    s.setText(func(d *txnform.Draft) *string { return &d.Note }),
+		OnOwner:   func(owner string) { s.edit(func(d *txnform.Draft) { d.Owners = txnform.ToggleOwner(d.Owners, owner) }) },
+		OnCleared: s.setFlag(func(d *txnform.Draft) *bool { return &d.Cleared }), OnExclude: s.setFlag(func(d *txnform.Draft) *bool { return &d.Exclude })})
+	movement := ui.CreateElement(txnEditMovement, txnEditMovementProps{App: s.app, Txn: s.txn, Selected: d.TransferAccountID, DebtPay: d.DebtPayment,
 		OnSelect: func(v string) {
-			s.transferToS.Set(v)
-			if !txnform.IsLiability(s.app.Accounts(), v) {
-				s.debtPayS.Set(false)
-			}
-		}, OnDebtPay: s.debtPayS.Set})
+			clearDebt := !txnform.IsLiability(s.app.Accounts(), v)
+			s.edit(func(d *txnform.Draft) {
+				d.TransferAccountID = v
+				if clearDebt {
+					d.DebtPayment = false
+				}
+			})
+		}, OnDebtPay: s.setFlag(func(d *txnform.Draft) *bool { return &d.DebtPayment })})
 	return []ui.Node{details, movement, s.merchantPanel}
 }
 
@@ -743,7 +790,7 @@ type txnEditMissingProps struct{ Cancel ui.Handler }
 
 func txnEditMissing(props txnEditMissingProps) ui.Node {
 	return Div(css.Class("form-grid"),
-		P(css.Class("empty"), uistate.T("txnwidget.notFound")),
+		uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("txnwidget.notFound"))}),
 		Button(css.Class("btn"), Type("button"), OnClick(props.Cancel), uistate.T("action.cancel")),
 	)
 }
@@ -771,8 +818,8 @@ func txnSimilarOffer(props txnSimilarOfferProps) ui.Node {
 
 	// Keep the prompt, evidence, and answers in one stack; the actions wrap rather
 	// than being squeezed into a third grid column.
-	return Div(ClassStr("txn-recat-offer"), Attr("data-testid", "txn-recat-offer"), Attr("role", "status"),
-		P(css.Class("t-body"), offer),
+	return Div(ClassStr("txn-recat-offer"), Attr("data-testid", "txn-recat-offer"),
+		P(css.Class("t-body"), Attr("role", "status"), offer),
 		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mb2), rows),
 		Div(css.Class("txn-recat-actions", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-recat-apply"), OnClick(props.Apply), uistate.T("similartxns.apply")),

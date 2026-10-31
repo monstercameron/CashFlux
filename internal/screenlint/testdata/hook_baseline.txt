@@ -1,19 +1,11 @@
 # Existing true hook-order hazards outside the transactions and budgets ownership scope.
 # One file:function entry; remove entries as each site is fixed.
 screens/accountaddform.go:accountAddForm
-screens/accounts_docs.go:accountDocsDrawer
-screens/accounts_groups.go:AccountGroupsForm
-screens/accounts_groups.go:acctGroupHeader
-screens/accounts_institutions.go:institutionEditForm
 screens/accounts_institutions.go:InstitutionsManagerForm
-screens/accounts_integrity.go:accountEarmarkWarning
-screens/accounts_recurring.go:accountRecurringPanel
-screens/accounts_row.go:AccountRow
 screens/accounts_sweep_card.go:accountsSweepCard
 screens/accounts_sweep_card.go:accountsSweepCards
 screens/accounts_sweep_config.go:SweepRulesForm
 screens/accounts_tiles.go:acctIdleCashLine
-screens/accounts_tiles.go:acctInvestmentsBanner
 screens/accounts_tiles.go:acctListWidget
 screens/accounts_widget.go:Accounts
 screens/activity.go:Activity
@@ -28,18 +20,14 @@ screens/categoryaddform.go:categoryAddForm
 screens/changeset_card.go:AgentActionHistory
 screens/changeset_card.go:changesetReviewCard
 screens/contradictions.go:contradictionStrip
-screens/credit.go:CreditHealthPanel
-screens/credit.go:CreditScreen
 screens/customfieldform.go:CustomFieldInput
 screens/customfields.go:CustomFieldsManager
 screens/customize.go:Customize
 screens/custompage.go:addWidgetBar
 screens/custompage.go:CustomPage
 screens/custompage.go:editWidgetForm
-screens/dashboard.go:Dashboard
 screens/dashboard.go:dashCatchUpCard
 screens/dashboard.go:freshnessWidget
-screens/dashboard_hero.go:dashboardHero
 screens/dashboard_hero.go:heroQuote
 screens/dashboard_onboard.go:dashOnboardCard
 screens/dashboard_onboard.go:onboardRow
@@ -68,7 +56,6 @@ screens/formula_builder.go:FormulaBuilder
 screens/goaladdform.go:goalAddForm
 screens/goals_allocate_form.go:goalAllocateForm
 screens/goals_edit_form.go:GoalEditForm
-screens/goals_lane5.go:goalConflictStrip
 screens/goals_lane5.go:goalsFundingOrderCard
 screens/goals_lane5.go:goalsPaycheckPreviewCard
 screens/goals_pause_form.go:GoalPauseForm
@@ -83,7 +70,6 @@ screens/health.go:HealthScreen
 screens/health.go:healthStepRow
 screens/health.go:healthWidgetNode
 screens/help.go:HelpScreen
-screens/household.go:householdByPersonPanel
 screens/household.go:HouseholdHub
 screens/insights.go:asstVoiceButton
 screens/insights.go:ConversationPill
@@ -100,7 +86,6 @@ screens/investments_pools.go:investPoolsWidget
 screens/investments_tiles.go:investGrowthWidget
 screens/loans.go:loanCard
 screens/memberaddform.go:memberAddForm
-screens/members.go:Members
 screens/members.go:membersBody
 screens/members_lane5.go:membersLeavePreview
 screens/monthly_review.go:MonthlyReviewCard
@@ -109,12 +94,9 @@ screens/networth_drill.go:nwsDrillRow
 screens/networth_page.go:NetWorth
 screens/notifications.go:notifyRow
 screens/notifications_history.go:notifHistoryRow
-screens/notifications_history.go:notificationHistoryView
-screens/notifications_tiles.go:notifListWidget
 screens/notifications_tiles.go:notifSummaryWidget
 screens/notifications_tiles.go:notifUndoBar
 screens/notifications_widget.go:NotificationCenter
-screens/notifications_wins.go:notifWinsWidget
 screens/payday_preflight.go:paydayPreflightCard
 screens/payeealias_section.go:payeeAliasSection
 screens/payeeclean_modal.go:PayeeCleanBody
@@ -133,13 +115,9 @@ screens/recurring_roster.go:rhyClaimRow
 screens/recurring_roster.go:rhyRosterSection
 screens/recurring_rows.go:rhyFindingRow
 screens/recurring_rows.go:rhyOverdueRow
-screens/reports_annual.go:Reports
 screens/reports_annual.go:rptaHistRow
 screens/reports_events.go:reportEventChips
 screens/reports_range.go:reportRangePicker
-screens/reports_screen.go:deductibleSection
-screens/reports_screen.go:investmentPerformanceSection
-screens/reports_tax.go:taxDepthSection
 screens/reports_tax.go:taxScheduleTable
 screens/roundups_card.go:goalsRoundUpCard
 screens/roundups_card.go:roundupConfigForm
@@ -178,7 +156,6 @@ screens/taskaddform.go:taskAddForm
 screens/todo.go:TaskRow
 screens/todo_board.go:BoardCard
 screens/todo_bulk.go:todoBulkBar
-screens/todo_suggest.go:todoSuggestStrip
 screens/todo_tiles.go:todoListWidget
 screens/todo_tiles.go:todoToolbarWidget
 screens/todo_widget.go:Todo

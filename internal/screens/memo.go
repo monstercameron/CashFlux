@@ -10,13 +10,32 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/viewcache"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// revKey returns the store's mutation revision as a string — the base cache key for a
-// derived view that depends only on stored data. Append any non-store inputs (member,
-// date window) to it before passing to memoByRev.
-func revKey(app *appstate.App) string { return strconv.FormatUint(app.Rev(), 10) }
+// revKey identifies the app, stored-data revision, and browser-preference revision.
+// The store counter is global, so two App instances can have the same revision.
+// Preferences also affect computed views without necessarily changing the store.
+// Append all remaining inputs (scope, date window, clock day) before caching.
+func revKey(app *appstate.App) string {
+	if app == nil {
+		return "none:" + strconv.Itoa(uistate.CurrentDataRevision())
+	}
+	return strconv.FormatUint(app.InstanceID(), 10) + ":" +
+		strconv.FormatUint(app.Rev(), 10) + ":" + strconv.Itoa(uistate.CurrentDataRevision())
+}
+
+// newViewCache bounds retained page models. Heavy indexes can request capacity one;
+// smaller models default to eight recent contexts so scope changes stay warm.
+func newViewCache[T any](capacity ...int) *viewcache.Cache[string, T] {
+	limit := 8
+	if len(capacity) > 0 {
+		limit = capacity[0]
+	}
+	return viewcache.New[string, T](limit)
+}
 
 // useAfterSettle returns false on a component's first paint and true ~300ms later (past
 // the 160ms route cross-fade), via a browser timer. Gate a page's heavy secondary / below-
@@ -25,6 +44,12 @@ func revKey(app *appstate.App) string { return strconv.FormatUint(app.Rev(), 10)
 // scans, chart builds, long lists) off the mount critical path. `key` just names the
 // deferral for the effect's dependency; hooks stay unconditional either way.
 func useAfterSettle(key string) bool {
+	return useAfterDelay(key, 300*time.Millisecond)
+}
+
+// useAfterDelay is useAfterSettle with a chosen delay. A caller that wants a loading
+// state held long enough to read uses a longer one.
+func useAfterDelay(key string, delay time.Duration) bool {
 	_ = key // descriptive only; the effect re-arms via the ready state below
 	ready := ui.UseState(false)
 	// Depend on ready itself so the effect fires on mount (ready=false → schedule the
@@ -33,7 +58,7 @@ func useAfterSettle(key string) bool {
 	// leave deferred content missing on a return visit.
 	ui.UseEffect(func() func() {
 		if !ready.Get() {
-			return afterSettleTimer(300*time.Millisecond, func() { ready.Set(true) })
+			return afterSettleTimer(delay, func() { ready.Set(true) })
 		}
 		return nil
 	}, ready.Get())
@@ -62,25 +87,8 @@ func afterSettleTimer(delay time.Duration, settled func()) func() {
 	}
 }
 
-// memoByRev caches a derived view by a string key. The key MUST include the store's
-// mutation revision (app.Rev()) so an entry is dropped the moment any data changes;
-// include any other inputs the view depends on that aren't reflected in the store
-// (e.g. the active member, a date window). It keeps a handful of recent keys — enough
-// to cover the several identical recomputations a single render triggers across
-// separate tile components — and resets once it grows past the cap so stale-revision
-// keys don't accumulate. Single-threaded wasm, so no locking.
-//
-// This exists because the compute*View functions each aggregate over the full ledger,
-// yet a single surface render calls them once per tile (investments has ~6 tiles, each
-// calling computeInvestView). Memoizing collapses those to one computation per frame.
-func memoByRev[T any](cache map[string]T, key string, compute func() T) T {
-	if v, ok := cache[key]; ok {
-		return v
-	}
-	if len(cache) > 8 {
-		clear(cache)
-	}
-	v := compute()
-	cache[key] = v
-	return v
+// memoByRev shares one computation across tiles and keeps recently used scopes
+// warm. Keys must begin with revKey and include all remaining calculation inputs.
+func memoByRev[T any](cache *viewcache.Cache[string, T], key string, compute func() T) T {
+	return cache.GetOrCompute(key, compute)
 }

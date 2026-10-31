@@ -11,10 +11,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type moreMenuProps struct {
@@ -33,23 +33,12 @@ type moreMenuProps struct {
 // audio player — is duplicated here. The popover/backdrop are always rendered and
 // shown/hidden with a class so the On* hooks keep stable positions.
 func MoreMenu(props moreMenuProps) uic.Node {
-	open := uic.UseState(false)
 	menuID := uic.UseId()
+	// The shared menu state: the same fade, placement, dismissal and stacking as the other ⋯ menus.
+	menu := ui.UseMenu(menuID)
 	nav := router.UseNavigate()
 	pAtom := uistate.UsePrefs()
-	closeMenu := func() { open.Set(false) }
-
-	// Escape / outside-click dismissal, matching the +Add menu.
-	ui.DismissPopover(open.Get(), menuID, closeMenu)
-
-	hidden := ""
-	if !open.Get() {
-		hidden = " hidden-menu"
-	}
-	expanded := "false"
-	if open.Get() {
-		expanded = "true"
-	}
+	closeMenu := func() { menu.Set(false) }
 
 	// item builds one labeled menu row. Called a fixed number of times at stable
 	// positions (If only gates RENDERING — the node, and thus its OnClick hook, is
@@ -88,16 +77,12 @@ func MoreMenu(props moreMenuProps) uic.Node {
 
 	lockEnabled := loadAppLock().Enabled
 
-	return Div(css.Class("add-wrap topbar-more", tw.Flex, tw.ItemsCenter), Attr("id", menuID),
-		Button(css.Class("icon-btn more-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg), Type("button"),
-			Attr("title", uistate.T("topbar.more")), Attr("aria-label", uistate.T("topbar.more")),
-			Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
-			Attr("data-testid", "topbar-more"),
-			OnClick(func() { open.Set(!open.Get()) }),
-			ui.Icon(icon.MoreH, css.Class(tw.W5, tw.H5)),
+	return Div(css.Class(menu.WrapClass("add-wrap topbar-more"), tw.Flex, tw.ItemsCenter), Attr("id", menuID),
+		ui.ToolButton(ui.ToolButtonProps{Icon: icon.MoreH, Title: uistate.T("topbar.more"), Open: menu.Open, TestID: "topbar-more"},
+			Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(menu.Open)),
+			OnClick(func() { menu.Toggle() }),
 		),
-		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
-		Div(ClassStr("add-menu open-left"+hidden), Attr("role", "menu"),
+		Div(ClassStr(menu.PanelClass()), Attr("role", "menu"),
 			// DP-header refinement (2026-07-19): a quiet cluster of the ambient controls
 			// relocated out of the crowded top bar — the activity/history "Updated …"
 			// stamp and the Smart-insights peek. They render as their real components

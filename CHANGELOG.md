@@ -6,11 +6,368 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- `docs/CLEANUP_METHODOLOGY.md` records the method, standards, bugs and open items from the last 73 commits, so the same cleanup can be repeated on other pages. It now includes the shared UI elements, the typed CSS rules, the render-helper standard (`If`, `ui.If`, `ClassNames`, `Map`, `MapKeyed`, `Match`), and the Accounts sites that still assign markup inside an `if` or use inline styles.
+- One z-index scale on `:root`, for every layer above the page content: `--z-base`, `--z-raised`, `--z-sticky`, `--z-dropdown`, `--z-overlay`, `--z-popover`, `--z-modal`, `--z-dialog`, `--z-toast`, `--z-banner` and `--z-lock`. The app lock gate, the save-failure and update banners, the help and shortcut overlays, and the widget builder's status note now use these tokens instead of literal values. The app lock gate and banners keep a fallback value so they still stack without the stylesheet.
+
+### Added
+- Services on the Accounts page. A service is a monthly bill (a utility, subscription or other bill) with a provider. The Services filter lists them under their monthly total. One Add menu on the Accounts summary creates either an account or a service, and each item names what it creates. The account form is titled "Add an account" and the service form "Add a monthly service". A service is not an account, and it does not change the asset, liability or net worth totals. It also stays out of budgets, reports, forecasts, planning, bills and subscriptions: `App.Recurring` leaves services out and `App.Services` lists them. The domain adds `Recurring.Service` and `Recurring.Provider`, and the pure `internal/services` package holds the list, the monthly total and the builder. The Services view stays on when chosen, even before any service exists, so its empty state shows.
+- The set-institution prompt lists the institutions already in the household as quick picks under its entry. Choosing one fills the entry, and the person can still type a new name. The list is empty, and not shown, when the household has no institutions yet.
+
 ### Changed
 - Prepared v1.19.10 with encrypted local storage for restored account documents and a PDF cap that fits the default encrypted server upload limit.
 - PDF selection now caps files at 23 MiB so their base64 encrypted blob envelopes fit within the server's default 32 MiB upload limit.
 - Account PDF and image attachments now save to encrypted local blob storage, and a server pull stores restored files there before committing the local dataset. The three-browser regression checks PDF bytes and encrypted IndexedDB records on both devices.
 - Image uploads now commit bytes to the encrypted local blob store before saving artifact metadata, keeping large files out of the autosaved dataset; the three-browser sync regression checks that local record and the returned file bytes.
+- The Transactions page uses the shared components where they fit. The toolbar and bulk-bar buttons are shared tool buttons, the period control is a shared select, and the scheduled-row menu is the shared overflow menu. The receipt preview is the shared accessible overlay, so it has a name, traps focus, closes on Escape and backdrop click, and returns focus to the button that opened it. The edit form's draft lives in one shared form, and a refused save focuses the first invalid field. Fixed element ids come from the framework's id helper. The category select stays native, because choosing "New category" remounts it and the shared select cannot do that. Shared overflow menu entries can link to a route with the new `Href` option.
+- A payment linked to a bill saves its transaction and repeating rule in one write, so a failed rule save no longer leaves a half-saved payment. The Transactions page's brittle class-list and vacuous absence assertions are now real checks.
+- The Transactions page follows the page cleanup checklist. Its hand-built notices (not ready, not found, empty, error and status messages) are shared callouts with the same text, test ids and live-region roles, and its static inline styles are named rules in internal/styles. The ledger's columns, sorting, selection, bulk actions, paging, totals, calendar and engine wiring are unchanged. Disclosures that take their open state from the page stay controlled.
+- The page cleanup checklist (docs/CLEANUP_METHODOLOGY.md) covers the last 300 commits: the read-first list, framework and library checks before writing code, shared components, GWC features, performance rules, pitfalls, data and form checks, tests, browser checks and shipping.
+- The boot loading skeleton fills the full width from the first frame. The skeleton shell sets its own width, so it no longer shrinks to its content when the stylesheet arrives.
+- Accounts balances render green for assets and red for liabilities again, and the balance figure drops the Budgets button's card background. Group, document-removal and project reads now return storage errors instead of treating them as missing.
+- Accounts page componentized on shared components. Account rows, details, lists, sweep rules, the reconcile panel, summary notes, the toolbar and the transfer form now use the shared UI library. New shared components in internal/ui: Disclosure, Callout and KeyValue, plus a value slot, test id and attributes on EntityRow, an open-change callback on Disclosure, a title on overflow items, an id on SelectInput, and test id, placeholder, id and extras on MoneyInput. The transfer form opens as a Sheet. Sweep approvals never report a fresh move for a replay, a repair, or a stale cadence. Sweep due dates count local calendar days in the caller's zone, and a sweep replayed after a cadence edit reports already posted.
+- Accounts page overhaul, reviewed over several rounds. Account saves, balance updates, reconciliations, sweeps, transfers, document attachments, institutions and default accounts now go through one appstate or pure-package rule each, with typed issues and mapped messages instead of raw errors. Sweeps approve through one commit that cannot move money twice, cannot be re-proposed in the same cadence window, and stamp the cadence on the posted day. Household settings (FX rates, base currency, AI spend cap and record) need edit rights; per-person settings stay open. Account currency and class cannot change while records (transactions, holdings, recurring bills, goal links, earmarks, realized sales, debt links, sweep rules) depend on the account. Attachments refuse script-capable and markup types, cap size, and delete unreferenced files on removal or account delete. Class merges fix several elements whose base classes were overwritten by a second class option. Internal packages: accountedit, accountselect ready rules, accountview projections, acctproject outlook, idlecash, reconcile display and uncleared helpers, services, institution, domain account kinds.
+-- Approving a sweep moves the money and marks the proposal handled through one appstate method. A transfer that fails leaves the proposal open. If the transfer posts but the mark fails, the card is hidden so the money cannot be moved twice.
+- Recording a reconciliation goes through one appstate method for both the normal and the forced path. It stamps the balance, saves the history and retires the superseded checkpoints. A forced reconciliation now retires them too, and a checkpoint that cannot be retired is reported.
+- An account with transactions cannot be deleted from the appstate, so no caller can orphan them. The sweep rule's keep amount is validated: a value that cannot be read is reported and no rule is created. The document-expiry reconcile runs once on mount, and its error is logged.
+- Updating an account's balance goes through the appstate reconciliation preview and commit, so the checkpoint replacement is atomic and checked against the ledger. The balance update takes its category through the preview. The callback no longer takes the unused current balance.
+- Account saves follow one set of rules. A new pure package, internal/accountedit, turns the add and edit forms' fields into an account and reports typed issues: class and scope from type and owner, the liability and asset field rules, strict number and date checks, and the ownership-share total. The add form and the edit form both use it, so they no longer disagree on lender-to-institution or statement days. A blank opening balance or a value that cannot be read is now reported instead of being silently dropped.
+- The account add form has four more wasm tests: the debt-only fields follow the account type, copying an account fills the draft, adding an account saves it, and an empty name is rejected. The type select has a test id. The name field marks its invalid state with ClassIf and AttrIf, and the danger outline is a typed rule.
+- The account add form's copy-an-account handler is memoized on the base currency, so the copy control keeps its identity between keystrokes.
+- The account add form builds a section only while it is shown. The debt, asset, advanced and split-ownership fields, and their share rows, are not built while closed. Option lists are memoized on the data revision, and child callbacks keep their identity through UseCallback. Accounts and members are read once per render. Handlers still read the live lists.
+- The Accounts Add menu is back in the summary's top-right corner as the green primary action. Its trigger now takes the primary tint through a TriggerVariant on the overflow menu, and the menu sits in a wrapper that the corner rule targets.
+- The account add form keeps its data in one typed draft with ui.UseForm instead of about twenty separate state hooks. Copying an account and clearing the form are each one update. Text fields bind with BindFunc, and a required name shows a field error that takes focus (ui.UseFocusManager). A saved account is announced (ui.UseAnnouncer). The owner, debt, asset and advanced fields and the split-ownership editor are their own components. The option lists are memoized on the data revision. Its error and name ids are unique to the form, and its checkboxes use CheckedIf, as do the account edit form's checkboxes. Two wasm tests drive the form: one adds an account and one rejects an empty name.
+ Four UI test files are renamed without their ticket tags: `overflowmenu_focus_wasm_test.go`, `overflowmenu_entries_wasm_test.go`, `flippanel_closeonly_wasm_test.go` and `flippanel_title_wasm_test.go`. Their test ids are descriptive (`menu-*`, `flip-title-body`).
+- Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
+
+### Fixed
+- The Transactions period control is shared toolbar buttons around one select. The previous and next steps and the clear control are the shared ToolButton, and the select takes the same height, radius, border and fill, so the row matches Filters and More.
+- The Transactions Review button carries a check-circle glyph, the same icon its menu entry uses.
+- The Transactions summary names its category bar "Spending by category", and the overflow reads "Show N more" so it is clear it opens the rest of the list.
+- The Transactions Filters sheet opens from the right edge of the window, not from inside the toolbar tile. The shared Overlay portals it, so a tile transform no longer moves it. Escape and clicking outside close it, and focus returns to the Filters button.
+- The Transactions Ledger and Calendar switch is the shared radio group the Accounts page uses, with the same selected-state look and keyboard handling. The old segmented styles and the contrast rule written for them are removed.
+- The Transactions Review, Filters and More buttons are the shared ToolButton, with the same size, radius, border and tints as the Accounts buttons. Search, Filters and More sit on one row, as Accounts lays them out. The Review button keeps its attention tint.
+- The Transactions summary and toolbar bubbles are 10px apart, the same gap the page grid uses between widgets, and their padding and gaps use the Accounts 0.7rem tokens. The toolbar wrapper was a plain block, so its gap never applied.
+- The Transactions Add action is one primary button labelled "Add". Its menu holds the Expense, Income, Transfer and Import options, so the separate caret button and its split styling are gone. Review sits to the left of Add.
+- The Transactions summary bar runs the full width of the card. The top-right actions had pushed the whole footer in by 16rem; that padding now sits on the figure column only. The count labels and category legend use the Accounts fact tokens: body size, regular dimmed labels, semibold text-coloured values.
+- Each overflow menu entry names its section as its accessible description, so a screen reader hears which group an entry is in. Section headings stay hidden from the accessibility tree.
+- The bulk bar on the Transactions page sits at the bottom of the screen when rows are selected. The page entrance animation now fills backwards, so the page no longer keeps a transform that made it the container for the fixed bar. The bar wraps its actions and clears the phone tab bar on narrow screens.
+- Excluding or deleting a transaction reads the ledger with a checked read. If the ledger cannot be read, the confirm does not open and the person is told nothing was changed.
+- Saving a payment link reports when its repeating rule could not be saved, after the payment itself saved, and keeps the form open instead of reporting success.
+- Template chips on the Transactions page have their delete control beside the pick button, not nested inside it, and the recategorise offer keeps its buttons outside its live status message.
+
+### Changed
+- The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.
+- The Accounts pages build their conditional markup with `ui.If` and `ui.Match()` in place of assigning nodes inside `if` and `switch` blocks, and the account add form's static inline styles are typed rules (`.acct-add-wide`, `.acct-liab-toggle`). Nothing renders differently.
+- Every FlipPanel modal shares one backdrop: a single `.flip-backdrop` rule set and one class helper, replacing four overlapping rule blocks and the unused dialog scrim styles. The panel's shadow now sits on its wrapper, so the flip's 3D layer no longer clips it into a hard-edged rectangle around the card. The unused `webkitBackdropFilter` property constructor is removed.
+- Comments across the menu, picker, filter, dialog and credential code now describe the GWC design, with stale history and ticket tags removed. Two comments that claimed behaviour the code does not have are corrected. Small helpers replace repeated code (boolAttr, jsString, tileIndex, tileSpan, slices.Contains). No behaviour changes.
+- FlipPanel, the shared modal, runs on GWC's managed modal overlay. The overlay traps Tab, dismisses on Escape or a backdrop click, and keeps the page inert, so nested panels close in order. The panel keeps its own initial focus (its first body field, retried over a few frames) and returns focus to the opener, or to the main landmark. Enter with a footer form no longer submits while the form is invalid. The raw-JS focus, key and backdrop code is gone.
+- Every modal on the account page uses the Update value layout: a titled panel, a scrolling body, and Cancel with the primary action pinned at the bottom. Confirms, prompts, the credential gate and the vault form follow it, and reconcile's Finish is its primary action. The set-institution details row no longer overhangs its account row. A cancelled set-institution prompt no longer clears the institution, and Enter on the dialog confirms rather than cancelling. Pressing Enter with focus on the document no longer exits the app. Account comments and dead code are refined without behaviour changes.
+- The window and popover helpers in internal/ui have their comments rewritten to describe the current GWC design, with ticket tags removed. Duplicate tile lookups and the picker's repeated height constant are now single helpers. Two comments that claimed behaviour the code does not have are corrected: the picker's blur check and the overflow menu's section names.
+- Every modal on the account page uses the standard panel and the Update value layout: a titled panel, a scrolling body, and the action bar pinned at the bottom with Cancel and the primary action. Confirms, prompts, the credential gate and the vault form follow it, and reconcile's Finish is the primary action. A cancelled set-institution prompt no longer clears the institution. Enter on the dialog could exit the app when the event target was the document; the global shortcut now checks the target first.
+- Menus, popovers, the picker and the filter toolbar talk to the browser only through GWC: document and window listeners use the framework hooks, timers and frames use GWC's scheduler, and DOM lookups use its interop wrapper. Account menus now measure their settled height before choosing where to open. Pointer and focus containment no longer compare event targets.
+- Row ⋯ menus open on the side and direction that fit. The menu now measures its settled height before choosing where to open, so a menu opened near the bottom of the screen opens upward instead of running off it.
+- Account screens read in the user's own date style (the date preference) instead of fixed English formats, and the missing-exchange-rate and excluded-balance notes are translation keys. The balance button names its account, and the details toggle names the panel it controls.
+- Everything under an account row's head (the recurring-charges line and the details panel) indents to the account name's column, so nested content reads as belonging to the name instead of the row edge.
+- The account details panel is a two-column layout: the period money in, out and net sit across the top, the balance chart and the 90-day projection sit on the left, the reading and the account facts sit on the right, and documents and the institution share a footer line. Narrow screens stack it into one column.
+- Update balance shows the current figure with its sign, explains a debt going down or up in plain words, and flags a debt typed without its minus sign. The typed figure is converted to the account's stored convention before it is posted, so debts no longer move in opposite directions.
+- "These figures disagree" rows can be dismissed, and "Bring back" restores them. Dismissals are kept with the household data and follow each finding, so they survive the amounts changing and end when the contradiction does. Dismissing and bringing back can be undone.
+- Budgets and Accounts open with one shared page headline, so the summary reads the same as Transactions; Accounts drops its three summary cards for a single net-worth figure with assets and liabilities beneath it.
+- The Accounts headline carries the six-month net-worth trend on its right, drawn with the shared area chart and faded at both ends, and liabilities show as a red negative figure.
+- Headline and transaction summary text takes its sizes from the shared --fs tokens, so Accounts, Budgets and Transactions read the same. The Budgets window label no longer repeats its wording.
+- When every "These figures disagree" finding is dismissed, the strip disappears instead of showing a "Bring back" box. Bring back stays available while some findings are still shown, and Undo on the dismissal toast restores the last one.
+- The Accounts headline is one left column (figure, change, facts, liquidity) with the six-month trend beside it, so the header has no dead space under the figure. Budgets and Accounts share the same headline layout and type tokens.
+- Transactions follows the Accounts order: the two actions (add, review) sit on top, then the period summary with its running-total line, then the search and filter bubble above the list. The summary uses the shared page headline and the shared type tokens.
+- The spending breakdown bar on Transactions colours each category from the chart palette, with matching swatches in its labels, so the segments can be told apart.
+- The Transactions summary drops its running-total line and sits in its own bubble above the search and filters, matching the input bubble.
+- The Transactions summary holds the two actions at its top, and the toolbar tiles use the shared type and radius tokens so the summary, toolbar and other pages match.
+- The two Transactions actions sit on the same row as the net figure, on the right, so the figure starts at the top of the bubble like the other pages.
+- The Transactions actions are pinned to the top-right corner of the summary bubble, and the net figure starts at the top-left.
+- The Accounts trend shows a spinner while its series is worked out, then draws in from the left. Both stop under reduced motion.
+- The accounts spinner holds for at least 700 ms and the drawn line lasts 1.1 s, so the loading state reads on screen. The spinner fades in.
+- The Investments panel is removed from the Accounts page. The Investments page is unchanged.
+- The Accounts filters use the standard select for account type, and archived accounts are a radio group with an eye glyph for showing and a crossed eye for hiding, so the choice reads without text.
+- Account type in the Accounts filters is a multi-select: pick several types and the list shows accounts of any of them. The chosen types show as one chip each. The choices open beside the field with a check mark on each chosen type.
+- Picking a filter no longer closes its open choice panel when the first filter chip appears.
+- The account type sheet has its own solid surface with a thin scrollbar, and a chosen type no longer changes weight, so the rows keep their width.
+- The multi-select is a shared component: a standard field trigger and a sheet that opens beside it. It closes when focus leaves it, and it re-renders only when the sheet actually moves.
+- The filter field and the Archived choice use the Filters button's border and active tints, and sit at the same height so they line up.
+- The Filters panel fades and grows in over 250ms when it opens, and fades and collapses over the same time when it closes, so the content below moves with it. Reduced motion turns this off.
+- The More menu fades and grows in the same way, and it anchors by the height it settles at, so it flips up or left correctly while it is still growing.
+- The More menu keeps its row raised through the fade-out, so the next row no longer paints over it as it closes.
+- Card headings read their size, weight, leading, tracking and colour from shared heading tokens (--heading-*), so every card heading is set in one place.
+- The bento tile and its menu stay raised while the More menu fades out, keyed on the menu being present rather than on the trigger's aria-expanded, so a neighbouring tile no longer paints over a menu that is closing.
+- The More menu keeps its open placement while it fades out, so it no longer jumps to the right when it closes. The flip is now part of the menu's state, not patched onto it after render.
+- The More menu opens on the same side every time. The side is decided from the menu's default position, so it no longer alternates on each toggle.
+- Menu items fill the menu's width, and the hover and focus highlight uses the same tints as the open Filters and More buttons instead of a flat grey.
+- The More menu has a layered drop shadow from a shared --shadow-menu token, so its options read as raised above the content.
+- The More menu and the row "⋯" menus are one shared component. They open, fade, stay on screen, dismiss and stack the same way, so the row menus no longer jump when they close.
+- Typed search waits 250ms after the last keystroke before it applies, in every filter toolbar. The note and the stale rows still answer each keystroke at once, and Clear or Escape applies immediately. Transactions no longer adds its own second delay on top.
+- Every button on the Accounts page is one shared tool button, the same component as the Filters button: the same height, radius, border and states. Row Transactions, the row ⋯ menus, Manage debts and Add account all use it.
+- The top-bar ⋯ menu, the row ⋯ menus and the toolbar More menu all open and close with the same fade and grow, and their icon buttons are the same tool button.
+- Accounts page styling is typed: inline style maps are typed css rules (display, flex, gap, margin, width), and single-value conditional markup uses If() instead of a Fragment assigned in an if.
+- Accounts row notes, valuation change and balance delta are built with a lazy IfLazy conditional, so their branches are only built when shown.
+- Institution colours are checked to be a plain #rgb or #rrggbb value before they reach the stylesheet. Anything else falls back to the default colour, so a stored colour cannot inject CSS.
+- Accounts page uses the framework helpers instead of hand-built attributes: AriaLabel, AriaExpanded, AriaHidden, Role and Title, ui.If for lazy branches, and ClassNames with When for conditional classes. The local IfLazy helper is removed.
+- Switching the Accounts All / Assets / Liabilities view is about 2 to 4 times faster. The view is stored as a viewer preference rather than household data, so it no longer invalidates the page's cached totals, and the Smart insight pass for the list is cached per data revision.
+- Account rows are shorter: the name and its type and currency line sit side by side and wrap only when the pane is narrow. The shared badge and the details disclosure are glyphs, with their words kept as tooltips and accessible names.
+- The account row's details, projected-drivers, recurring-charges and documents disclosures fade and grow in, and fade out when they close, with the shared panel animation.
+- Every account row reserves its recurring-charges line, so rows with and without charges are the same height. The row's text sizes come from the type scale.
+- Expanding a row's recurring charges no longer overlaps the row below. The reserved line is a minimum height, so it grows to fit the list.
+- The shared tw text sizes read the --type-* scale, so the app's Go and CSS type steps match and follow the UI-scale setting. Sizes with no token (15, 28 and 13.5px) are unchanged.
+- New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
+- The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
+- The radio group uses the button radius token, so its corners match buttons and fields.
+- The radio group keeps the same label weight in every state, so changing the selection no longer resizes the group or its options.
+- The radio selection indicator slides between options even when reduced motion is on, since it is the selection itself. Option hover and colour transitions still stop there.
+- The Accounts "Add account" button sits in the top-right corner of the summary, over the trend graph, and leaves the toolbar row.
+- Toolbar buttons (.btn-tool) take their height, padding and text size from the shared control and button tokens, matching the other buttons.
+- Transfer money moves into the Accounts settings menu, which reads More beside the dots icon.
+- The More menu sits on the Accounts search row beside Filters.
+- The toolbar search is a standard field: the same --border as the Filters button, the field radius and height, and an accent focus ring on the box rather than on the input inside it.
+- The overflow menu trigger shows the same open state as the Filters button, so More highlights while its menu is open.
+- The toolbar search and the Filters button share one row height, so their top and bottom edges line up.
+- The toolbar search uses the Filters open border when focused, instead of a glow ring, on Accounts and Transactions.
+- The accounts toolbar no longer leaves an empty row under the search, and the Filters panel fields are standard labelled fields with the shared field tokens.
+- The Account metrics (formulas) toggle is removed from the Accounts Filters panel.
+- The accounts header trend fits the text column, so the dead space under the headline is gone.
+- The liquidity line under the accounts headline no longer adds its caption margin, so the space under it matches the top.
+- The accounts headline text has a little more line spacing, so the figure, sentence, facts and footer breathe.
+- Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
+- A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
+- Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
+- Pin GoWebComponents v7.0.1 after the final latest-version check.
+- Componentization inventory reflects current native seams and records remaining source and performance gaps.
+- Performance tools use bounded asset settling and explicit applied-search completion with retained provenance.
+- Pay-yourself-first duplicate checks run at the native write boundary for all callers.
+- Subscription spending share uses native checked prior-month totals and fixes month-end window normalization.
+- Recurring agenda and calendar share native occurrence, settlement and checked conversion facts.
+- Debt tuner, coach and strategy comparison share checked native payoff results and suppress partial FX totals.
+- Planning retirement uses native checked balances and dependency-complete bounded simulation reuse.
+- What changed preserves source errors, exact cutoff and app identity while sharing transaction indexes.
+- Budget summary pool calculations preserve unknown plans and arithmetic overflow.
+- Goal-funded budget details show unavailable results for missing conversion rates or arithmetic overflow.
+- Budget funding and month-close actions preserve unavailable income and assignment facts instead of treating errors as zero.
+- Custom-field edit forms share the native, tested value-to-string converter.
+- Give recovery-copy deduplication its own household scope while retaining durable one-copy and readable-payload assertions.
+- Isolate hosted pull tests from scoped encryption and durable workspace state, and verify plaintext downgrade refusal before import.
+- Upgrade GoWebComponents from v5.0.1 to v7.0.0, migrate typed handlers and Markdown registration, and select Go 1.27.3 consistently.
+- Unmount each transaction performance fixture before restoring shared state.
+- Move custom-field, deductible and investment summary calculations into native prepared models with truthful unavailable states.
+- Move Goals Compare pooled monthly money into native checked preparation and reuse goal stats across its sections.
+- Move Dashboard trend movement, safe magnitudes and live-inclusive range into tested native preparation.
+- Use checked net-worth differences and safe display magnitudes on Accounts; distinguish unavailable movement from known zero.
+- Block dev reload sockets in benchmark contexts and retain bounded startup failure diagnostics.
+- Reuse bounded, owned SMART results between the page strip and peek, preserving settings, page, time, language and data dependencies.
+- Verify frozen benchmark artifacts, require complete route content, and add representative nine-page interaction measurements and optional CPU profiles.
+- Move Allocate allocatable amounts into native preparation and retain failed income-prefill availability.
+- The top-bar period pill receives the live shared window and reads current state when stepping, matching page calculations after changes.
+- Returning to Dashboard skips unchanged placement writes, preserving the store revision and prepared financial snapshots.
+- Componentization docs now record current first-nine shared components, native seams and validation references, with explicit residuals and performance limits.
+- Budget flex and Household host tests explicitly unmount before releasing their fixture and browser stubs.
+- Reports retains bounded successful tax preparation across Summary and Full remounts with exact source invalidation.
+- Assistant rail and chat scrolling use managed browser timers that cancel when their component unmounts.
+- Repeated Settings reads reuse a successful revision snapshot while retaining readiness errors and independently owned nested values.
+- Receipt candidate matching includes its effective calendar date in memo dependencies.
+- Workflow authoring delegates schedule and transfer preparation to native validation.
+- Budget income-source facts retain unknown amounts separately from known fixed income.
+- Auto-budget rows, impact preview and save share one checked native tuning result.
+- Artifact rows and storage meters use native checked facts with successful snapshot reuse.
+- Admin overview and user reads share a tested native client and bounded successful-response cache.
+- Budget flex views delegate window proration, meter verdicts and days-left facts to native models.
+- Bills prepare shared upcoming flows and category-budget indexes before evaluating checked fit facts.
+- Recurring views use checked native cadence, FX, occurrence and monthly facts.
+- Visual Builder shares typed native datasets with dependency-complete successful snapshot reuse.
+- Settings FX and APR inputs use native finite-value validation.
+- Planning renders independent checked native forecast, affordability, runway and spending facts.
+- Plan and Health use checked native financial inputs with independent availability.
+- Debt and loan views consume checked native balances, totals, payoff schedules and extra-payment input.
+- Allocate uses native eligibility, balance, goal, validation and distribution facts.
+- Split previews and saves use native typed amount and weight validation.
+- Activity prepares a bounded ordered feed, filter facts and undo display assessments once.
+- Categories render native checked income, expense and lifetime usage facts.
+- Net Worth views consume prepared snapshot, bridge, series, expense and health facts.
+- Investment summaries use checked native balances, conversion and reconciliation facts.
+- Custom-field forms validate typed values natively before creating or updating records.
+- Full, embedded and AI Credit views share checked native preparation and keyed limit editors.
+- Household and Members share checked native facts with stable interactive rows.
+- Workflow drafts use injected-clock native scheduling and reject same-account transfers before persistence or execution.
+- Category deletion fails closed when any canonical non-child reference still needs reassignment.
+- Revision caches retain successful snapshots and retry failed reads without requiring a data mutation.
+- Prepared view adapters can distinguish failed account, budget, goal, transaction and link reads from empty data.
+- Tax net income avoids unused receipt gathering through the canonical selected-category fold.
+- Recorded the 47-route inventory, completed model slices and raw detector allocation evidence.
+- Unusual detection reuses candidate history capacity while preserving price-job ownership.
+- Rule coverage prepares ordered counts and conflicts once using the canonical matcher.
+- Net Worth account windows use native checked balances, flows and availability.
+- Investment growth headlines render checked native facts and explicit unavailable states.
+- Setup validates money through native typed preparation before saving or advancing.
+- Subscription rows and totals use native checked cadence, currency and share facts.
+- Budget summaries now use checked native preparation and shared category selection.
+- Credit utilization history preserves selected snapshots and renders unavailable points rather than wrapped or zero values.
+- Tax report net-income facts use canonical split/refund aggregation and explicit source failures outside markup.
+- Household spending, period income and fractional ownership propagate arithmetic failures instead of wrapping.
+- Category descendant unions share one adjacency map and avoid revisiting overlapping subtrees.
+- Document assistant data, tools, calculation paths, regression gates and remaining boundaries.
+- Render the assistant header and keyed conversation through typed presentational child components.
+- Assistant title requests cancel safely, account usage, respect limits and preserve saved chats during switching.
+- On-device answers distinguish unavailable calculations from genuine zero and use current bound financial inputs.
+- Retain raw native model benchmark samples and environment metadata before further app refactoring.
+- Document the all-route componentization contract and measured performance criteria.
+- Large assistant tax exports provide lossless bounded CSV continuation rather than oversized responses.
+- Assistant report drilldowns cap the complete response and identify omitted transactions for exact recovery.
+- Formula continuations fingerprint financial inputs instead of the global usage revision.
+- Assistant sessions now bound request history, cancel on dataset replacement, and refresh reads after uncertain writes.
+- Assistant financial calculations now read calendar and rollover preferences from their own workspace.
+- Added financial-plan questionnaire discovery and a native assessment tool, bringing full-detail access to 77 collections and 59 tools.
+- Incomplete or failed Responses replies no longer expose partial function calls for dispatch.
+- Assistant data and list continuations now survive model usage bookkeeping and unrelated writes.
+- Assistant credit formulas now use checked FX-weighted card utilization and explicit-currency paydown targets.
+- Health formulas now distinguish unavailable factors from valid independent scores.
+- Net-worth formula composition and change now preserve unavailable values instead of zero or partial totals.
+- The complete enabled assistant catalog is now checked against relay tool-count and schema-size limits.
+- Assistant record pages now include envelope and redaction metadata in their encoded byte budget.
+- Assistant what-if scenarios now use exact account-currency amounts, anchored monthly dates, and explicit simulation limits.
+- Assistant memory reads and approved writes now stay bound to their original dataset and checked preview.
+- Assistant formula discovery now sizes complete encoded pages and provides exact record recovery for oversized custom metadata.
+- Assistant audits now read current bound data and separate recurring, one-time and unclassified estimates.
+- Assistant tax gathering now uses fresh bound records, canonical refund and split rules, checked totals, and exact currency CSV amounts.
+- Dormant-account fee estimates now convert amounts before thresholding and annualization.
+- Report statistics and payee reductions now return checked errors, and assistant report formulas preserve unavailable results.
+- Assistant formulas now use checked pool, group, event, debt and saved-plan calculations.
+- Updated assistant instructions to discover complete data, respect calculation scope and use exact approved selectors.
+- Corrected the malformed sort property in the assistant ledger-search tool schema.
+- Assistant list and duplicate tools now expose complete paginated selections with strict filters and fresh storage reads.
+- Assistant document search now reaches all retained artifact rows and reports bounded, source-linked evidence.
+- Expanded assistant data discovery to 76 typed collections, including financial decision settings, learning evidence, memory and retained transfer receipts.
+- Assistant record detail chunks now fit a complete encoded response byte budget while preserving lossless continuation.
+- Added checked saved-plan and forecast calculations with explicit overflow and resource-limit errors.
+- Assistant formula facts now preserve unavailable goal, bill, and earmarked calculations instead of substituting zero.
+- Assistant subscription-call preparation preserves currency and exact annual costs with honest evidence limits.
+- Assistant edits validate and preview exact before/after transaction rows, including supported paired transfers.
+- Assistant baseline-history errors use the shared translation catalog.
+- Assistant readers preserve category storage failures while using the shared natural-ordering seam.
+- Assistant citations identify data collections, record selectors and calculation scope without rounding decimal arguments.
+- Formula facts preserve unavailable FX and overflow for account flows, recurring amounts and essential spending.
+- Assistant task/account creation rejects invalid drafts before approval and preserves exact money and selected defaults.
+- Assistant transaction/category creation and bulk categorization use complete fixed previews and atomic expected-state writes.
+- Assistant balance updates and transfers commit the exact previewed financial state with checked arithmetic.
+- Assistant tool rounds refresh data and currency settings, enforce per-round budgets, and retain reported usage from interrupted requests.
+- Assistant batch receipts distinguish real changes, no-ops and unverified mutations; Undo All reverses only exact captured changes.
+- Assistant data discovery covers 65 typed collections including financial assumptions, saved reports and retained benchmark history.
+- Assistant goal check-ins use canonical goal coverage and funding plans in each goal currency.
+- Assistant formula tools expose the complete paginated metric catalog and evaluate against one explicit bound-store observation.
+- Smart bill calculations use checked recurring income normalization, currency conversion and scheduler arithmetic bounds.
+- Assistant data discovery now covers 49 typed collections, including retained notifications and shared financial configurations.
+- Corrected 2025 and 2026 standard deductions in Assistant tax references and attached official verification sources.
+- Assistant reports preserve exact requested periods, share checked calculations, and return supporting records with explicit scope.
+- Cancel, new chat, and conversation switching stop pending Assistant requests and approvals; first-message model and budget choices persist.
+- Assistant approval permissions identify stable record IDs and preserve exact decimal amounts.
+- Assistant action history now records actual captured changes and only undoes its matching durable change.
+- Assistant workflow conditions now discover and validate transaction fields only for transaction-added triggers, matching the actual runtime context.
+- Assistant transaction deletion and duplicate merging now bind exact preview records and revalidate them atomically before changing storage.
+- Assistant goal contributions now resolve an exact goal, parse exact currency amounts and use the canonical checked contribution service after revalidating approval.
+- Assistant planning pages now pin continuation revisions and preserve known recurring dates even when their account source is unavailable.
+- Formula evaluation now keys its cache with the complete non-store configuration snapshot and exact calculation clock instead of retaining stale allocation/planning inputs.
+- Assistant data reads now include safe financial preferences and compare numeric filters exactly across decimal notation without losing large integer precision.
+- Assistant financial summaries, category spending, account balances, budgets and affordability now use fresh checked canonical models with explicit scope, period and unavailable states.
+- Assistant flag dismissal now validates arguments and applies only the exact set of activities shown in the approval preview.
+- Assistant rule/workflow creation now validates exact arguments, previews all persisted effects, and refuses stale or ambiguous approval targets.
+- Assistant can inspect checked account details, balance projections, goal progress, funding suggestions, retained reservations and recurring schedules through six live read tools.
+- Full-detail Assistant conversations can discover and page through 42 typed financial collections, with exact IDs, fresh reads and long-record continuation.
+- Responses function tools now explicitly preserve the app schemas optional-argument behavior with strict false.
+- Assistant task completion now resolves stable IDs, previews the exact occurrence, preserves recurring successors, and rejects stale or ambiguous approvals.
+- Assistant approval metadata now describes rule/workflow changes and matching scopes accurately; aggregate-only conversations withhold document, recurring and paginated record detail tools.
+- Accounts and Goals now share checked native-currency reservation facts and configurable warning content, including archived claims and explicit unavailable states.
+- Account projections now return arithmetic and currency errors, preserve independent horizon availability, and include same-day cash flows in the forward curve.
+- Reports mode and popover changes no longer write period settings or rebuild unchanged financial sections.
+- Goals and Earmarks tabs use the shared segmented control with keyboard navigation and roving focus.
+- The account detail forecast includes 90 days of recurring events while its near-term summary retains 30 days.
+- Shared report-scope hooks avoid repeated storage reads and legacy migration on warm renders.
+- Screen selectors remove an unused budget-health hook that duplicated native budget-view preparation.
+- Durable hydration reuses the transaction-link synchronization already performed by dataset import.
+- Budget task automation preserves open tasks when missing exchange rates or overflow prevents spending calculation.
+- Performance notes distinguish the transaction benchmark AMD64 target from its ARM64 host.
+- Transaction-filter readers avoid repeated SQLite reads and ignored JSON decoding on warm renders.
+- Primary-page verification records the current frozen build, passing checks and slower observed timings with load limitations.
+- Local development notes record the WebSocket write repair needed to keep the 8080 reload server running.
+- Account history series avoid repeated full transaction copies and scans of unrelated accounts.
+- Shared layout and widget-settings hooks avoid repeated storage reads and JSON decoding on warm renders.
+- The development service watcher skips generated tool trees before traversal and avoids an unchanged duplicate startup build.
+- WASM validator tests verify their generated temporary path before recursive cleanup.
+- Typed undo snapshots avoid decoding each freshly encoded row just to recover its collection key.
+- The WASM test runner reports missing, empty or invalid compiler output before starting Node.
+- Net-worth headlines, monthly changes and trends consistently respect the account exclusion setting.
+- Transaction focus tests wait for the actual deferred callback rather than a fixed timer delay.
+- Dashboard, Accounts, Assistant and Notifications distinguish complete net worth, disclosed missing-rate subtotals and fatal calculation failures.
+- To-do List paging and tree preparation are memoized across selection, drag and error-only renders; alternate views skip that work.
+- Undo initialization and record-writer startup share one checked credential-free snapshot instead of serializing and reparsing the full dataset separately.
+- Contribution validation and quick-fill now use the direct goal lookup instead of decoding every saved goal.
+- Warm notification renders no longer reread SQLite and decode feed JSON merely to supply an ignored atom default.
+- Notification budget wins share one previous-month netted ledger projection instead of rescanning all history for every monthly budget.
+- Document checked totals and history, atomic contribution effects, prepared import contracts and the completed pass-five verification.
+- Goal history uses checked native totals and bar percentages, shows unavailable for invalid history, and shares the FX-aware monthly assignment from the card.
+- Smart import placement regressions now wait for the visible Review panel after asynchronous extraction.
+- Dashboard and Assistant use checked period totals, explicit unavailable states and safe savings percentages; affordability waits for known figures.
+- Undo snapshots now preserve named molecules and placements sharing an ID across different surfaces, and reject duplicate keys.
+- Goal contributions and their optional debit now commit together; failed saves and Undo retain all records for a safe retry.
+- Validated imported datasets now retain an opaque prepared handle so reloads do not repeat completed normalization passes.
+- Compact Goal cards now avoid hidden interest, trajectory, history, task and action-node preparation.
+- Native goal history rollover now checks monthly money and count arithmetic and leaves the original goal unchanged on failure.
+- Document the two-artifact live development entry point, full-page reload requirement, and locally repaired matching-version runner.
+- Component guidance now records lazy Accounts facts, current-state goal allocation drafts, and separate Dashboard layout/frame cache contracts.
+- Dashboard render context counts now use a memoized native report-eligible transaction counter.
+- Goal contributions and Undo now validate checked amounts against the current stored goal; completion notices and workflows require known canonical coverage.
+- Reused bounded Dashboard source snapshots, pipeline results and validated layout configurations.
+- Made the manual earmark editor preserve untouched currencies and revalidate account headroom at save time.
+- Replaced overflowing proportional earmark arithmetic with exact bounded allocation.
+- Recorded native matcher benchmarks against the frozen previous per-row parsing implementation.
+- Made Accounts details lazy and reused indexed history and recurring projection inputs.
+- Moved numeric search parsing and multi-value filter preparation outside per-transaction matching.
+- Added fixed duration-only startup details for state creation, hydration and undo preparation.
+- Documented native goal row ownership, Reports lazy section identities and verified third-pass checks.
+- Made the asynchronous Import review regression wait for its visible result instead of a fixed transport delay.
+- Reduced sample payoff-baseline preparation to one checked ledger traversal.
+- Split Reports into typed child sections so Summary skips hidden charts and full-detail builders.
+- Aligned budget savings, annual goal projections, dashboard goal summaries and Assistant questions with canonical goal evaluation.
+- Made goal-win notifications use canonical FX-aware completion and one linked-task index.
+- Prepared Goals rows once and extracted figures and task previews using canonical checked coverage.
+- Added canonical currency-aware goal coverage, lifecycle, planner evaluation and bounded shared task indexing.
+- Avoided reparsing unchanged authenticated checkpoints during hydration while retaining replay and import safeguards.
+- Added checked native per-hundred spending and savings calculations with explicit overflow results.
+- Recorded matched nine-page latency captures, build hashes, startup phase timings, and background-load limitations.
+- Browser journeys use current shared-control semantics and web-first state checks for menus, dates, sorting, views and notification tabs.
+- Reports reuse native activity facts across summary/full and display changes. Category averages follow the selected month count, and parent totals share their rolled-up sparkline basis.
+- Dashboard cash forecasts reject overflowing aggregate totals and disclose accounts omitted for unavailable exchange rates.
+- Goals share native checked reservation, headroom and funding facts. Quick funding rechecks current balances, counts existing earmarks once and preserves foreign allocation currencies when merging.
+- Explicit Goal sorts apply across all open goals instead of pinning the Needs-a-plan section ahead of the selected order. The default actionable view retains its sections.
+- Report category rollups and monthly aggregates expose overflow errors, and runway durations retain int64 month counts on WebAssembly.
+- The component inventory documents control/action slots, keyed tabs and choices, shared tile hosts, native view models and bounded cache ownership.
+- The transaction calendar reuses its native projection across selection-only renders, with full scope, date, formatting, clock, preference and data dependencies.
+- Notifications cache native milestone preparation by app, revision and day, refresh member names/options after roster edits, and share accessible triage tabs.
+- To-do tiles share one bounded revision/day snapshot for counts, child relationships, open links and referenced display names. View and quick-filter switches use the shared segmented control.
+- Startup phase timings retain a common elapsed-time origin if the performance clock temporarily becomes unavailable.
+- Assistant spending-habit preparation uses native checked daily aggregates and overflow-safe averages, leaving wording and formatting in the screen.
+- Annual budget recurring/goal projections are reused when only a scenario or visible month window changes.
+- Budget savings timelines and age-of-money inputs use native tested models. Timelines retain wide month counts, and invalid cash-age totals show an explicit unavailable reason.
+- Account summary and liquidity buckets reuse the shared balance snapshot and native checked arithmetic, with explicit incomplete totals for omitted or invalid balances.
+- Startup exposes a bounded duration-only phase record, and the browser benchmark captures it alongside app readiness. Boot ordering and readiness semantics are unchanged.
+- Household position evaluation exposes calculation failures instead of wrapped debt, payment, surplus, coverage or utilization figures. Ratios use wide checked intermediates.
+- Payoff plans reject overflowing payment budgets, balance and interest additions, and cumulative totals through an explicit checked API.
+- Age-of-money keeps full-range int64 flows and exact weighted averages without overflowing dollar-days or the rounding increment. An unrepresentable exposed window total is explicitly unavailable.
+- Added a configurable segmented control for pressed choices and tabs, with optional counts, existing class slots, stable keyed handlers, disabled choices and keyboard navigation.
+- Added an isolated nine-page browser benchmark with raw samples, matched dataset counts, build identity and machine-load metadata. Local before/after captures are documented with noise and coverage limits.
+- To-do filtering, counts and calendar preparation use a native task projection. Suggestion caches track exact freshness transitions, and keyed rows preserve local state through sorting and view changes.
+- Notification summaries, filtering and grouping use native projections and keyed components. Empty transitions preserve actions and Undo; history renders legacy message text and wins retain their seen state.
+- Dashboard budget snapshots, net-worth trend preparation and cash-forecast eligibility use native models. The hero keeps a stable hook boundary through unavailable, empty and populated data states.
+- Report time series share one monthly ledger traversal. Native report models prepare scoped series, household financial position and budget adherence with consistent FX units and checked totals.
+- Assistant briefing, starter questions and purchase attribution use native projections and complete data/scope/time memo keys. Chat typing reuses ledger facts, and partially uncategorized split receipts count once.
+- Transaction description sorting uses the same native display rule as ledger rows, including a safe raw-label fallback, and account/category indexes refresh only when their data context changes.
+- Budget income allocation delegates checked money arithmetic, state selection and chart percentages to the native budgeting package; the page retains formatting and event handling.
+- Goal summaries and ordering use tested native projections, consistent base-currency totals, explicit FX exclusions and cache keys that track deadline and pause transitions.
+- Accounts share an indexed ledger snapshot for balances, payment hints and row series. Group subtotals exclude invalid or unconvertible balances and disclose incomplete totals.
+- Architecture checks follow the canonical money calculations through extracted native view models, and calendar overflow regressions require an unavailable amount rather than preserving the old overflowing conversion.
+- Shared derived views use bounded LRU caches keyed by app identity, stored data, browser preferences, scope, and time inputs. Heavy Smart snapshots retain one context, and anomaly/action sections share the same deterministic engine pass.
 - Prepared v1.19.9 with the verified encrypted cross-browser file sync and privacy fixes.
 - The server load smoke test now waits for its watch subscription before sending writes and allows for CI load, so it cannot miss events before the watch starts.
 - Smart Import WebAssembly review tests now wait for the mocked response to finish before fixture teardown, preventing an intermittent CI render panic.
@@ -47,6 +404,7 @@ and every commit updates this file under `Unreleased`.
 - Improved Transactions date filtering, fixed calendar cell overflow, and made unusual-spend evidence readable on click.
 
 ### Added
+- Shared configurable control strips and keyed tile surfaces preserve page-specific actions, attributes, tile context, and component state during reordering. Presentation components accept already-derived content and own no financial calculations.
 - The sync privacy review now records local blobs retained after artifact deletion and the queued-snapshot constraint on safe cleanup.
 - A file-sync and privacy review records the tested two-device flow, server-visible metadata, local attachment exposure, and backup recovery limits.
 - **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
@@ -132,6 +490,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Currency conversion rejects non-finite rates and results outside the money range. An exact fallback preserves valid boundary amounts and half-away-from-zero rounding without adding allocations to ordinary conversions.
+- Bulk balance reads now omit corrupted accounts instead of returning a partial balance. Net-worth aggregation shares one ledger pass while preserving account-specific errors, archived/excluded-account rules, and duplicate-ID behavior.
 - Let an in-flight local save finish before “Start fresh” replaces the sample dataset, so the durable wipe does not lose its generation check.
 - Verify downloaded attachment bytes against the content hash in the encrypted dataset before decrypting or importing them.
 - Require HTTPS or secure WebSockets for remote sync and credential requests; allow unencrypted loopback only for local development. Reject server URLs containing user credentials, queries, or fragments.

@@ -77,3 +77,65 @@ func TestAccountDocArtifactIDsAndLabelKey(t *testing.T) {
 		t.Errorf("DisplayLabel fallback = %q", l)
 	}
 }
+
+func TestInstitutionDisplayNameSuppliesTheViewsPlaceholder(t *testing.T) {
+	cases := []struct {
+		name        string
+		institution Institution
+		placeholder string
+		wantClean   string
+		wantDisplay string
+		wantTrimmed string
+	}{
+		{"named", Institution{Name: "  Chase "}, "Sans titre", "Chase", "Chase", "Chase"},
+		{"blank", Institution{Name: "   "}, "Sans titre", "", "Sans titre", UntitledInstitution},
+		{"empty", Institution{}, "", "", "", UntitledInstitution},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.institution.CleanName(); got != tc.wantClean {
+				t.Errorf("CleanName = %q, want %q", got, tc.wantClean)
+			}
+			if got := tc.institution.DisplayName(tc.placeholder); got != tc.wantDisplay {
+				t.Errorf("DisplayName = %q, want %q", got, tc.wantDisplay)
+			}
+			if got := tc.institution.TrimmedName(); got != tc.wantTrimmed {
+				t.Errorf("TrimmedName = %q, want %q", got, tc.wantTrimmed)
+			}
+		})
+	}
+}
+
+func TestReassignAccountsOnInstitutionDeleteOwnsItsReferenceFields(t *testing.T) {
+	original := []Account{
+		{
+			ID: "a1", InstitutionID: "i1",
+			DocRefs:         []AccountDocRef{{ArtifactID: "doc"}},
+			OwnershipShares: map[string]int{"m1": 60, "m2": 40},
+			Reconciliations: []Reconciliation{{DifferenceMinor: 5}},
+			Custom:          map[string]any{"k": "v"},
+		},
+		{ID: "a2", InstitutionID: "other"},
+	}
+	changed := ReassignAccountsOnInstitutionDelete(original, "i1")
+	if len(changed) != 1 || changed[0].ID != "a1" || changed[0].InstitutionID != "" {
+		t.Fatalf("changed = %+v, want only a1 with its institution cleared", changed)
+	}
+	if original[0].InstitutionID != "i1" {
+		t.Error("the input account was modified")
+	}
+
+	changed[0].DocRefs[0].ArtifactID = "mutated"
+	changed[0].OwnershipShares["m1"] = 1
+	changed[0].Reconciliations[0].DifferenceMinor = 99
+	changed[0].Custom["k"] = "mutated"
+
+	if original[0].DocRefs[0].ArtifactID != "doc" || original[0].OwnershipShares["m1"] != 60 ||
+		original[0].Reconciliations[0].DifferenceMinor != 5 || original[0].Custom["k"] != "v" {
+		t.Errorf("mutating the result leaked into the original: %+v", original[0])
+	}
+
+	if got := ReassignAccountsOnInstitutionDelete(original, ""); got != nil {
+		t.Errorf("blank id changed %v accounts", got)
+	}
+}

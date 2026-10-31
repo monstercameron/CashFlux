@@ -3,13 +3,13 @@
 package allocate
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/split"
 )
 
 // MemberIncomeSplit is one household member's share of the total period income,
@@ -84,12 +84,15 @@ func SplitPeriodIncome(txns []domain.Transaction, members []domain.Member, start
 	}
 
 	// Equal weights: each non-group member gets weight 1.
-	weighted := make([]split.WeightedMember, len(nonGroup))
-	for i, m := range nonGroup {
-		weighted[i] = split.WeightedMember{MemberID: m.ID, Weight: 1}
+	weights := make([]int64, len(nonGroup))
+	for i := range weights {
+		weights[i] = 1
 	}
 
-	shares := split.ByWeights(totalIncome, weighted)
+	shares, err := money.Allocate(totalIncome, weights)
+	if err != nil {
+		return nil, fmt.Errorf("split period income: %w", err)
+	}
 
 	// Build name lookup.
 	nameOf := make(map[string]string, len(members))
@@ -99,14 +102,10 @@ func SplitPeriodIncome(txns []domain.Transaction, members []domain.Member, start
 
 	out := make([]MemberIncomeSplit, len(nonGroup))
 	for i, m := range nonGroup {
-		var amt int64
-		if shares != nil && i < len(shares) {
-			amt = shares[i].Amount
-		}
 		out[i] = MemberIncomeSplit{
 			MemberID: m.ID,
 			Name:     nameOf[m.ID],
-			Amount:   amt,
+			Amount:   shares[i],
 		}
 	}
 	return out, nil

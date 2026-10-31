@@ -5,6 +5,7 @@ package reports
 import (
 	"bytes"
 	"encoding/csv"
+	"fmt"
 	"strconv"
 
 	"github.com/monstercameron/CashFlux/internal/csvsafe"
@@ -46,6 +47,12 @@ func isInvestmentType(t domain.AccountType) bool {
 // dividends, realized gains, and value updates). Return is Gain / Invested. All
 // amounts convert to the base currency. Accounts are returned in the input order.
 func InvestmentPerformance(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) ([]AccountPerformance, error) {
+	return InvestmentPerformanceChecked(accounts, txns, rates)
+}
+
+// InvestmentPerformanceChecked computes the canonical history-derived return,
+// preserving FX, accumulation, subtraction and host integer range errors.
+func InvestmentPerformanceChecked(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) ([]AccountPerformance, error) {
 	byAcct := map[string][]domain.Transaction{}
 	for _, t := range txns {
 		byAcct[t.AccountID] = append(byAcct[t.AccountID], t)
@@ -65,17 +72,39 @@ func InvestmentPerformance(accounts []domain.Account, txns []domain.Transaction,
 			if err != nil {
 				return nil, err
 			}
-			allTxns += conv.Amount
+			allTxns, err = money.Add(allTxns, conv.Amount)
+			if err != nil {
+				return nil, fmt.Errorf("account %q transactions: %w", a.ID, err)
+			}
 			if t.IsTransfer() {
-				transfersIn += conv.Amount
+				transfersIn, err = money.Add(transfersIn, conv.Amount)
+				if err != nil {
+					return nil, fmt.Errorf("account %q transfers: %w", a.ID, err)
+				}
 			}
 		}
-		invested := opening + transfersIn
-		current := opening + allTxns
-		gain := current - invested
+		invested, err := money.Add(opening, transfersIn)
+		if err != nil {
+			return nil, err
+		}
+		current, err := money.Add(opening, allTxns)
+		if err != nil {
+			return nil, err
+		}
+		gain, err := money.Sub(current, invested)
+		if err != nil {
+			return nil, err
+		}
 		bips := 0
 		if invested > 0 {
-			bips = int(gain * 10000 / invested)
+			wide, err := money.MulDiv(gain, 10000, invested, money.RoundTowardZero)
+			if err != nil {
+				return nil, err
+			}
+			if int64(int(wide)) != wide {
+				return nil, fmt.Errorf("account %q return exceeds host integer range", a.ID)
+			}
+			bips = int(wide)
 		}
 		out = append(out, AccountPerformance{
 			AccountID: a.ID, Name: a.Name,

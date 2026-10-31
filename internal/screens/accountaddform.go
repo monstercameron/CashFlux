@@ -5,23 +5,22 @@
 package screens
 
 import (
-	"strconv"
+	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountedit"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // AccountAddFormProps configures the AccountAddForm component.
@@ -32,19 +31,19 @@ type AccountAddFormProps struct {
 	OnDone func()
 	// PrefillLiability seeds the type as a credit card (a liability) instead of a
 	// checking account, so opening this from the Debt page's "Add debt" lands on a
-	// debt with the APR / limit / minimum / due-day fields already showing — not a
+	// debt with the APR / limit / minimum / due-day fields already showing, not a
 	// checking account someone adds as an asset by accident.
 	PrefillLiability bool
 }
 
 // AccountAddForm is the standalone add-an-account form. It owns all its state
 // and handlers. On success it calls props.OnDone; on error it shows an inline
-// message and stays open. Extracted from Accounts() for use in the AddHost modal.
+// message and stays open. The AddHost modal renders it.
 func AccountAddForm(props AccountAddFormProps) ui.Node {
 	return ui.CreateElement(accountAddForm, props)
 }
 
-// acctCopyOptions builds the "Copy an existing account…" starter options (G5): a
+// acctCopyOptions builds the "Copy an existing account…" starter options: a
 // placeholder action label first, then every unarchived account.
 func acctCopyOptions(accounts []domain.Account) []uiw.SelectOption {
 	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.copyExisting")}}
@@ -56,410 +55,661 @@ func acctCopyOptions(accounts []domain.Account) []uiw.SelectOption {
 	return opts
 }
 
+// accountDraft is everything the add form collects. It is one typed value, so a copy or a reset is
+// a single update and a field is named by the compiler, not by a string.
+type accountDraft struct {
+	Name           string
+	Currency       string
+	Amount         string
+	Type           string
+	Owner          string
+	AsLiability    bool // an "Other" account counted as a debt
+	CreditLimit    string
+	APR            string
+	MinPayment     string
+	DueDay         string
+	Lender         string
+	Institution    string
+	InstitutionID  string // the institution-directory entry the institution was copied from, if any
+	ExpectedReturn string
+	Liquidity      string
+	Stability      string
+	LockUntil      string
+	OwnerShares    map[string]int
+	Custom         map[string]string
+}
+
+// newAccountDraft is the empty draft: the base currency, an opening balance of zero, and the type
+// and owner the form starts from.
+func newAccountDraft(baseCur, typ string) accountDraft {
+	return accountDraft{
+		Currency: baseCur, Amount: "0", Type: typ, Owner: domain.GroupOwnerID,
+		OwnerShares: map[string]int{}, Custom: map[string]string{},
+	}
+}
+
+// clearedAfterAdd keeps the currency, type, owner and the debt override for the next account, and
+// clears everything the person typed for this one.
+func clearedAfterAdd(d accountDraft) accountDraft {
+	d.Name = ""
+	d.Amount = "0"
+	d.CreditLimit, d.APR, d.MinPayment, d.DueDay, d.Lender, d.Institution, d.InstitutionID = "", "", "", "", "", "", ""
+	d.ExpectedReturn, d.Liquidity, d.Stability, d.LockUntil = "", "", "", ""
+	d.OwnerShares = map[string]int{}
+	d.Custom = map[string]string{}
+	return d
+}
+
+// copiedDraft prefills the draft from an existing account (the "copy an existing account" starter):
+// the name is copyName, and the type, owner, institution, currency and class-appropriate figures
+// carry over; the figures of the other class are cleared, and so are the ownership shares and the
+// custom values. The currency is always the source account's,
+// or baseCur when the source has none, so copying a foreign account and then a base-currency one does
+// not leave the foreign currency behind, and the money figures are written with that currency's
+// decimals.
+func copiedDraft(d accountDraft, ac domain.Account, baseCur, copyName string) accountDraft {
+	d.Name = copyName
+	d.Type = string(ac.Type)
+	d.Owner = ac.OwnerID
+	d.Institution = ac.Institution
+	d.InstitutionID = ac.InstitutionID
+	d.Currency = ac.Currency
+	if d.Currency == "" {
+		d.Currency = baseCur
+	}
+	d.AsLiability = accountedit.CountsAsDebt(ac.Type, ac.Class)
+	d.CreditLimit, d.APR, d.MinPayment, d.DueDay, d.Lender = "", "", "", "", ""
+	d.ExpectedReturn, d.Liquidity, d.Stability, d.LockUntil = "", "", "", ""
+	d.OwnerShares = map[string]int{}
+	d.Custom = map[string]string{}
+	decimals := currency.Decimals(d.Currency)
+	if accountedit.ClassOf(ac.Type, d.AsLiability) == domain.ClassLiability {
+		d.CreditLimit = moneyMajorOrEmpty(ac.CreditLimit, decimals)
+		d.APR = rateFieldValue(ac)
+		d.MinPayment = moneyMajorOrEmpty(ac.MinPayment, decimals)
+		d.DueDay = intOrEmpty(ac.DueDayOfMonth)
+		d.Lender = ac.Lender
+	} else {
+		d.ExpectedReturn = floatOrEmpty(ac.ExpectedReturnAPR)
+		d.Liquidity = intOrEmpty(ac.LiquidityScore)
+		d.Stability = intOrEmpty(ac.StabilityScore)
+	}
+	return d
+}
+
+// draftFields is the add form's draft as the shared account builder reads it. memberIDs lists the
+// members that exist.
+func draftFields(d accountDraft, split bool, varName string, memberIDs []string) accountedit.Fields {
+	return accountedit.Fields{
+		Name: d.Name, Type: d.Type, Owner: d.Owner, Currency: d.Currency, Opening: d.Amount,
+		AsLiability: d.AsLiability, CreditLimit: d.CreditLimit, APR: d.APR, MinPayment: d.MinPayment,
+		DueDay: d.DueDay, Lender: d.Lender, Institution: d.Institution, InstitutionID: d.InstitutionID,
+		ExpectedReturn: d.ExpectedReturn, Liquidity: d.Liquidity, Stability: d.Stability, LockUntil: d.LockUntil,
+		VarName: varName, Shares: sharesOrNil(d.OwnerShares, split), MemberIDs: memberIDs,
+	}
+}
+
+// sharesOrNil returns the split-ownership map while the split is on, even when no share is entered yet,
+// so the builder reports a total that is not 100 and the save is refused. It returns nil while the
+// split is off. The add and edit forms both read it, so what the view shows and what the save accepts
+// agree.
+func sharesOrNil(shares map[string]int, split bool) map[string]int {
+	if !split {
+		return nil
+	}
+	if shares == nil {
+		return map[string]int{}
+	}
+	return shares
+}
+
+// updateDraft applies an edit the person made to the draft. It first drops a save failure the form
+// is still showing, because that message was about the draft as it stood before this edit.
+func updateDraft(f ui.Form[accountDraft], edit func(accountDraft) accountDraft) {
+	if f.FormError() != "" {
+		f.SetFormError("")
+	}
+	f.Update(edit)
+}
+
+// draftTextOf binds one text field of the draft. It satisfies the get and set shape the shared
+// field helpers take, so a field is read and written the same way wherever it is used. The field is
+// named by a selector, so the compiler checks the name.
+func draftTextOf(f ui.Form[accountDraft], field func(*accountDraft) *string) draftText {
+	return draftText{
+		get: func() string {
+			d := f.Get()
+			return *field(&d)
+		},
+		set: func(v string) {
+			updateDraft(f, func(d accountDraft) accountDraft {
+				*field(&d) = v
+				return d
+			})
+		},
+	}
+}
+
+// draftText is one text field of the draft, read and written through closures.
+type draftText struct {
+	get func() string
+	set func(string)
+}
+
+func (t draftText) Get() string  { return t.get() }
+func (t draftText) Set(v string) { t.set(v) }
+
+// accountAddForm is the add-an-account form. Its state is one typed draft; the presentation toggles
+// (advanced, split ownership, the currency reveal) stay as separate state because they are not
+// account data.
+//
+// Every hook runs before the form checks that the app is ready, so the hook count does not depend
+// on whether the app has loaded. Hidden sections are not built. Each one is a native Go condition,
+// and an input that registers a handler lives in a component of its own, so the components keep
+// their hooks in stable positions whichever sections are shown.
+//
+// Once a save has been refused, the form checks the draft on every render and shows what is still
+// wrong, so a message goes away as soon as its field is fixed.
 func accountAddForm(props AccountAddFormProps) ui.Node {
 	app := appstate.Default
-	if app == nil {
-		return P(css.Class("empty"), uistate.T("common.notReady"))
+
+	// One snapshot of the accounts and members for this render. Handlers read the live lists instead,
+	// so a submit never works from a stale copy.
+	var accounts []domain.Account
+	var members []domain.Member
+	baseCur := accountedit.DefaultBaseCurrency
+	fxConfigured := false
+	if app != nil {
+		accounts = app.Accounts()
+		members = app.Members()
+		settings := app.Settings()
+		baseCur = accountedit.BaseCurrencyOrDefault(settings.BaseCurrency)
+		fxConfigured = len(settings.FXRates) > 0
+	}
+	// A single-currency household has no FX rates configured and no accounts that use a currency
+	// other than the base. The currency picker adds noise there, so it is hidden and the currency
+	// defaults silently to the base.
+	singleCurrency := !fxConfigured
+	for _, a := range accounts {
+		if a.Currency != "" && a.Currency != baseCur {
+			singleCurrency = false
+		}
 	}
 
-	baseCur := app.Settings().BaseCurrency
-	if baseCur == "" {
-		baseCur = "USD"
-	}
-	// A "single-currency household" has no FX rates configured and no accounts that
-	// use a currency other than the base. In that case the currency picker adds noise
-	// without value — hide it and default silently to the base currency (L37).
-	singleCurrency := func() bool {
-		if len(app.Settings().FXRates) > 0 {
-			return false
-		}
-		for _, a := range app.Accounts() {
-			if a.Currency != "" && a.Currency != baseCur {
-				return false
-			}
-		}
-		return true
-	}()
-
-	name := ui.UseState("")
-	ev := useEntityVarField(accountVarKind, name, "")
-	curr := ui.UseState(baseCur)
-	amount := ui.UseState("0")
 	defaultType := string(domain.TypeChecking)
 	if props.PrefillLiability {
 		defaultType = string(domain.TypeCreditCard)
 	}
-	accType := ui.UseState(defaultType)
-	// asLiab: for an "Other"-type account (no natural class), an explicit "count as a
-	// liability (debt)" override so the net-worth/debt formulas include it.
-	asLiab := ui.UseState(false)
-	onToggleAsLiab := ui.UseEvent(func() { asLiab.Set(!asLiab.Get()) })
-	owner := ui.UseState(domain.GroupOwnerID)
-	creditLimit := ui.UseState("")
-	apr := ui.UseState("")
-	minPayment := ui.UseState("")
-	dueDay := ui.UseState("")
-	lender := ui.UseState("")
-	institution := ui.UseState("")
-	expReturn := ui.UseState("")
-	liquidity := ui.UseState("")
-	stability := ui.UseState("")
-	lockUntil := ui.UseState("")
+	form := ui.UseForm(newAccountDraft(baseCur, defaultType))
+	d := form.Get()
+	idBase := strings.ReplaceAll(ui.UseId(), ":", "-")
+	nameID, errID := idBase+"-name", idBase+"-err"
+	inputIDs := accountInputIDs(idBase, nameID)
+	moveToProblem := useProblemFocus(errID)
+
+	// Each draft field is bound once and shared by the render, the setters and the sub-forms.
+	name := draftTextOf(form, func(d *accountDraft) *string { return &d.Name })
+	typeField := draftTextOf(form, func(d *accountDraft) *string { return &d.Type })
+	currencyField := draftTextOf(form, func(d *accountDraft) *string { return &d.Currency })
+	ownerField := draftTextOf(form, func(d *accountDraft) *string { return &d.Owner })
+	amountField := draftTextOf(form, func(d *accountDraft) *string { return &d.Amount })
+	ev := useEntityVarField(accountVarKind, name, "")
+
 	advOpen := ui.UseState(false)
 	splitOwn := ui.UseState(false)
-	ownerShares := ui.UseState(map[string]int{})
-	customVals := ui.UseState(map[string]string{})
-	errMsg := ui.UseState("")
-	// C78: single-currency households hide the currency picker (L37), which otherwise
-	// makes the first foreign account impossible (chicken-egg: no rate → no picker →
-	// no foreign account → no reason to add a rate). A "Use a different currency" link
-	// reveals the full picker on demand so going multi-currency is always possible.
+	// attempted is set by the first refused save. From then on the form shows what is wrong with the
+	// draft as it stands.
+	attempted := ui.UseState(false)
+	// Single-currency households hide the currency picker, which would otherwise make the first
+	// foreign account impossible (no rate, so no picker, so no foreign account, so no reason to add
+	// a rate). A "Use a different currency" link reveals the full picker on demand.
 	revealCurr := ui.UseState(false)
 	onRevealCurr := ui.UseEvent(Prevent(func() { revealCurr.Set(true) }))
-
-	// onCurr/onType/onOwner hooks kept for stable hook ordering; SelectInput owns the
-	// change event internally, so these event-handler hooks are no longer wired to DOM.
-	ui.UseEvent(func(e ui.Event) { curr.Set(strings.ToUpper(e.GetValue())) })
-	onAmount := ui.UseEvent(func(v string) { amount.Set(v) })
-	ui.UseEvent(func(e ui.Event) { accType.Set(e.GetValue()) })
-	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
-	onCreditLimit := ui.UseEvent(func(v string) { creditLimit.Set(v) })
-	onApr := ui.UseEvent(func(v string) { apr.Set(v) })
-	onMinPayment := ui.UseEvent(func(v string) { minPayment.Set(v) })
-	onDueDay := ui.UseEvent(func(v string) { dueDay.Set(v) })
-	onLender := ui.UseEvent(func(v string) { lender.Set(v) })
-	onInstitution := func(v string) { institution.Set(v) }
-	onExpReturn := ui.UseEvent(func(v string) { expReturn.Set(v) })
-	onLiquidity := ui.UseEvent(func(v string) { liquidity.Set(v) })
-	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
-	onLockUntil := ui.UseEvent(func(v string) { lockUntil.Set(v) })
 	onToggleAdv := ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
 	onToggleSplitOwn := ui.UseEvent(func() { splitOwn.Set(!splitOwn.Get()) })
+	onToggleAsLiab := ui.UseEvent(func() {
+		updateDraft(form, func(d accountDraft) accountDraft {
+			d.AsLiability = !d.AsLiability
+			return d
+		})
+	})
 
-	accDefs := app.CustomFieldDefsFor("account")
-	onCustom := func(key, value string) {
-		m := customVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
+	// The field setters the child controls call. Each is memoized so a control's props keep their
+	// identity from one keystroke to the next. The setters capture only the form, whose state is
+	// stable, so an empty dependency list is correct.
+	onTypeChange := ui.UseCallback(func(v string) { typeField.Set(v) })
+	onCurrencyChange := ui.UseCallback(func(v string) { currencyField.Set(strings.ToUpper(v)) })
+	// Typing in the institution box makes it free text again, so the directory entry it was copied
+	// from no longer describes it.
+	onInstitutionChange := ui.UseCallback(func(v string) {
+		updateDraft(form, func(d accountDraft) accountDraft {
+			d.Institution, d.InstitutionID = v, ""
+			return d
+		})
+	})
+	onOwnerChange := ui.UseCallback(func(v string) { ownerField.Set(v) })
+	onCustom := ui.UseCallback(func(key, value string) {
+		updateDraft(form, func(d accountDraft) accountDraft {
+			nm := make(map[string]string, len(d.Custom)+1)
+			for k, v := range d.Custom {
+				nm[k] = v
+			}
+			nm[key] = value
+			d.Custom = nm
+			return d
+		})
+	})
+
+	// The option lists are derived from the accounts, members and currencies. They are rebuilt only
+	// when the data revision moves, not on every keystroke. The revision is the change token: the
+	// lists hold slices and maps, which compare by identity, so their own values would never match.
+	rev := uistate.UseDataRevision().Get()
+	copyOptions := ui.UseMemo(func() []uiw.SelectOption { return acctCopyOptions(accounts) }, rev)
+	institutionNames := ui.UseMemo(func() []string { return domain.UniqueInstitutions(accounts) }, rev)
+	typeOptions := ui.UseMemo(func() []uiw.SelectOption {
+		return uiw.OptionsFrom(domain.AllAccountTypes,
+			func(t domain.AccountType) string { return string(t) },
+			func(t domain.AccountType) string { return humanizeType(string(t)) },
+			d.Type)
+	}, d.Type)
+	ownerOptions := ui.UseMemo(func() []uiw.SelectOption { return ownerSelectOptions(members, d.Owner) }, rev, d.Owner)
+	currencyOpts := ui.UseMemo(func() []uiw.SelectOption {
+		if app == nil {
+			return nil
 		}
-		nm[key] = value
-		customVals.Set(nm)
-	}
+		return currencyOptions(app, d.Currency)
+	}, rev, d.Currency)
 
-	// G5: copy an existing account — prefills the form (name gets a "copy" suffix; type,
-	// currency, owner, institution, and the class-appropriate figures carry over) so a
-	// second card at the same bank never means retyping everything.
-	copyFrom := func(aid string) {
+	// Copy an existing account: prefills the whole draft in one update, so the copy and its
+	// currency reveal land together.
+	copyFrom := ui.UseCallback(func(aid string) {
+		if app == nil {
+			return
+		}
 		for _, ac := range app.Accounts() {
 			if ac.ID != aid {
 				continue
 			}
-			name.Set(uistate.T("budgets.copySuffix", ac.Name))
-			accType.Set(string(ac.Type))
-			owner.Set(ac.OwnerID)
-			institution.Set(ac.Institution)
+			copyName := uistate.T("budgets.copySuffix", ac.Name)
+			updateDraft(form, func(d accountDraft) accountDraft { return copiedDraft(d, ac, baseCur, copyName) })
+			ev.SuggestFor(copyName)
 			if ac.Currency != "" && ac.Currency != baseCur {
-				curr.Set(ac.Currency)
 				revealCurr.Set(true)
 			}
-			asLiab.Set(ac.Type == domain.TypeOther && ac.Class == domain.ClassLiability)
-			if ac.Class == domain.ClassLiability {
-				creditLimit.Set(moneyMajorOrEmpty(ac.CreditLimit, currency.Decimals(ac.Currency)))
-				apr.Set(rateFieldValue(ac))
-				minPayment.Set(moneyMajorOrEmpty(ac.MinPayment, currency.Decimals(ac.Currency)))
-				dueDay.Set(intOrEmpty(ac.DueDayOfMonth))
-				lender.Set(ac.Lender)
-			} else {
-				expReturn.Set(floatOrEmpty(ac.ExpectedReturnAPR))
-				liquidity.Set(intOrEmpty(ac.LiquidityScore))
-				stability.Set(intOrEmpty(ac.StabilityScore))
-			}
 			return
 		}
-	}
+	}, baseCur)
 
+	// checkDraft checks the draft the way a save does. It reads the live lists, so it is right inside
+	// a handler as well as in the render.
+	checkDraft := func(d accountDraft) (domain.Account, formProblem) {
+		return checkAccountForm(domain.Account{BalanceAsOf: time.Now()},
+			draftFields(d, splitOwn.Get() && accountedit.SplitAvailable(len(app.Members())), ev.VarName.Get(), memberIDsOf(app.Members())),
+			accountCheck{
+				Accounts: app.Accounts(), Defs: app.CustomFieldDefsFor("account"), Custom: d.Custom,
+				IDs: inputIDs, VarInputID: accountVarInputID,
+			})
+	}
 	add := ui.UseEvent(Prevent(func() {
-		// G6: product copy, not a leaked validator string.
-		if strings.TrimSpace(name.Get()) == "" {
-			errMsg.Set(uistate.T("accounts.nameRequired"))
+		if app == nil {
 			return
 		}
-		c := strings.ToUpper(strings.TrimSpace(curr.Get()))
-		amt, err := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(c))
-		if err != nil {
-			errMsg.Set(uistate.T("accounts.invalidOpening"))
+		form.SetFormError("")
+		attempted.Set(true)
+		acc, problem := checkDraft(form.Get())
+		if problem.Any() {
+			if problem.NeedsAdvanced {
+				advOpen.Set(true)
+			}
+			moveToProblem(problem.First())
 			return
 		}
-		if warn := entityVarCollision(accountVarKind, accountVarEntities(app.Accounts()), "", ev.VarName.Get(), name.Get()); warn != "" {
-			errMsg.Set(warn)
-			return
-		}
-		typ := domain.AccountType(accType.Get())
-		class := typ.Class()
-		if typ == domain.TypeOther && asLiab.Get() {
-			class = domain.ClassLiability
-		}
-		scope := domain.ScopeIndividual
-		if owner.Get() == domain.GroupOwnerID {
-			scope = domain.ScopeShared
-		}
-		acc := domain.Account{
-			ID: id.New(), Name: strings.TrimSpace(name.Get()), OwnerID: owner.Get(), Scope: scope,
-			Class: class, Type: typ, Currency: c,
-			OpeningBalance: money.New(amt, c), BalanceAsOf: time.Now(),
-			VarName: strings.TrimSpace(ev.VarName.Get()),
-		}
-		if class == domain.ClassLiability {
-			if cl, e := money.ParseMinor(strings.TrimSpace(creditLimit.Get()), currency.Decimals(c)); e == nil && cl > 0 {
-				acc.CreditLimit = money.New(cl, c)
-			}
-			acc = applyRateAPR(acc, apr.Get())
-			if mp, e := money.ParseMinor(strings.TrimSpace(minPayment.Get()), currency.Decimals(c)); e == nil && mp > 0 {
-				acc.MinPayment = money.New(mp, c)
-			}
-			if dd, e := strconv.Atoi(strings.TrimSpace(dueDay.Get())); e == nil {
-				acc.DueDayOfMonth = dd
-			}
-			acc.Lender = strings.TrimSpace(lender.Get())
-		} else {
-			if r, e := strconv.ParseFloat(strings.TrimSpace(expReturn.Get()), 64); e == nil {
-				acc.ExpectedReturnAPR = r
-			}
-			if l, e := strconv.Atoi(strings.TrimSpace(liquidity.Get())); e == nil {
-				acc.LiquidityScore = l
-			}
-			if s, e := strconv.Atoi(strings.TrimSpace(stability.Get())); e == nil {
-				acc.StabilityScore = s
-			}
-			if lu := strings.TrimSpace(lockUntil.Get()); lu != "" {
-				if d, e := dateutil.ParseDate(lu); e == nil {
-					acc.LockUntil = d
-				}
-			}
-		}
-		// MIA-extend (#445-10): normalise institution; pre-fill from lender when blank.
-		inst := titleCaseWords(strings.TrimSpace(institution.Get()))
-		if inst == "" && acc.Lender != "" {
-			inst = titleCaseWords(acc.Lender)
-		}
-		acc.Institution = inst
-		acc.Custom = customValuesToMap(accDefs, customVals.Get())
-		if splitOwn.Get() {
-			shares := cloneSharesMap(ownerShares.Get())
-			sum := 0
-			for _, v := range shares {
-				sum += v
-			}
-			if sum != 100 {
-				errMsg.Set(uistate.T("account.shareSumError", sum))
-				return
-			}
-			acc.OwnershipShares = shares
-		}
+		acc.ID = id.New()
 		if err := app.PutAccount(acc); err != nil {
-			errMsg.Set(err.Error())
+			slog.Error("add account", "account", acc.Name, "error", err)
+			form.SetFormError(acctWriteErrorText(err))
+			moveToProblem("")
 			return
 		}
-		// Reset fields.
-		name.Set("")
+		attempted.Set(false)
+		form.Update(clearedAfterAdd)
 		ev.Reset()
-		amount.Set("0")
-		creditLimit.Set("")
-		apr.Set("")
-		minPayment.Set("")
-		dueDay.Set("")
-		lender.Set("")
-		institution.Set("")
-		expReturn.Set("")
-		liquidity.Set("")
-		lockUntil.Set("")
-		stability.Set("")
-		customVals.Set(map[string]string{})
 		splitOwn.Set(false)
-		ownerShares.Set(map[string]int{})
-		errMsg.Set("")
-		// The add modal lives in AddHost (a sibling of the Accounts screen), so
-		// closing it only re-renders AddHost. Bump the shared data revision so the
-		// Accounts list (which subscribes via UseDataRevision) shows the new account
-		// immediately instead of only after a reload (C223/C71/R2).
+		// The add modal lives in AddHost (a sibling of the Accounts screen), so closing it only
+		// re-renders AddHost. Bump the shared data revision so the Accounts list, which subscribes
+		// through UseDataRevision, shows the new account immediately. The confirmation is a notice,
+		// which outlives this form; a live region inside the form would be unmounted with the modal
+		// before it was read.
 		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("accounts.addedAnnounce", acc.Name), false)
 		if props.OnDone != nil {
 			props.OnDone()
 		}
 	}))
 
-	typeOptions := uiw.OptionsFrom(domain.AllAccountTypes,
-		func(t domain.AccountType) string { return string(t) },
-		func(t domain.AccountType) string { return humanizeType(string(t)) },
-		accType.Get())
-	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
+	var accDefs []customfields.Def
+	if app != nil {
+		accDefs = app.CustomFieldDefsFor("account")
+	}
 
-	isOther := domain.AccountType(accType.Get()) == domain.TypeOther
-	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability || (isOther && asLiab.Get())
-	// C74: lock-until is meaningful for illiquid asset types (savings, investment,
-	// retirement, crypto, other) where a maturity / lock date matters at creation time.
-	// Everyday liquid accounts (checking, debit, cash) can still reach it via Advanced.
-	at := domain.AccountType(accType.Get())
-	isLockableAsset := at == domain.TypeSavings || at == domain.TypeInvestment ||
-		at == domain.TypeRetirement || at == domain.TypeCrypto ||
-		at == domain.TypeProperty || at == domain.TypeVehicle || at == domain.TypeOther
+	class := accountedit.ClassOf(domain.AccountType(d.Type), d.AsLiability)
+	isOther := domain.AccountType(d.Type) == domain.TypeOther
+	isLiab := class == domain.ClassLiability
+	// Lock-until is offered at creation for the lockable asset types (see accountedit.IsLockable).
+	// The liquid everyday types (checking, debit, cash) can still reach it through Advanced.
+	// Liabilities never show it.
+	isLockableAsset := !isLiab && accountedit.IsLockable(domain.AccountType(d.Type))
 
-	return Form(css.Class("form-grid"), Attr("id", "account-add-form"), Attr("data-testid", "account-add-form"), OnSubmit(add),
-		// C7: first-run framing — when this is the household's very first account,
-		// explain in one friendly line what an account is and that nothing leaves the
-		// device. Disappears once any account exists, so it never nags returning users.
-		If(len(app.Accounts()) == 0,
-			P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
-				uistate.T("accounts.firstRunHint"))),
-		// Name leads the form — the main path. (The "Copy an existing account…"
-		// shortcut is a secondary convenience, so it sits BELOW the name, not above
-		// it: an edge case shouldn't be the first field a new user meets.)
-		Div(Attr("style", "grid-column:1 / -1"),
-			labeledField(uistate.T("common.name"),
-				Input(append(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
-		// G5: the copy-existing starter (only once accounts exist to copy), demoted
-		// below the name field.
-		If(len(app.Accounts()) > 0, Div(Attr("style", "grid-column:1 / -1"),
+	var problem formProblem
+	if attempted.Get() && app != nil {
+		_, problem = checkDraft(d)
+	}
+	message := problem.Message
+	if message == "" {
+		message = form.FormError()
+	}
+	moneyStep := accountedit.MoneyStep(d.Currency)
+
+	// Each optional section is built only when it is shown.
+	var firstRun, copyStarter, otherToggle, ownership, currencyPicker, useOtherCurrency ui.Node
+	var liability, advanced, assetFields, lockUntil ui.Node
+	if len(accounts) == 0 {
+		// First-run framing: when this is the household's very first account, explain in one
+		// friendly line what an account is and that nothing leaves the device. It disappears once any
+		// account exists, so it never nags returning users.
+		firstRun = P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
+			uistate.T("accounts.firstRunHint"))
+	}
+	if len(accounts) > 0 {
+		// The copy-existing starter, offered once accounts exist to copy and placed below the name
+		// field.
+		copyStarter = Div(css.Class("acct-add-wide"),
 			labeledField(uistate.T("accounts.copyExisting"),
 				uiw.SelectInput(uiw.SelectInputProps{
-					Options: acctCopyOptions(app.Accounts()), Selected: "", TestID: "account-copy-existing",
-					OnChange: func(v string) { copyFrom(v) }, AriaLabel: uistate.T("accounts.copyExisting"),
-				})))),
+					Options: copyOptions, Selected: "", TestID: "account-copy-existing",
+					OnChange: copyFrom, AriaLabel: uistate.T("accounts.copyExisting"),
+				})))
+	}
+	if isOther {
+		// "Other" has no natural class, so the person can mark it a liability (debt) and the
+		// net-worth and debt formulas count it.
+		otherToggle = Div(css.Class("acct-add-wide"),
+			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), CheckedIf(d.AsLiability), OnChange(onToggleAsLiab)),
+				Div(css.Class("row-main"),
+					Span(uistate.T("accounts.countAsLiability")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint")))))
+	}
+	ownership = ui.CreateElement(accountOwnershipFields, accountOwnershipProps{
+		Form: form, Members: members, Owner: ownerOptions, OnOwner: onOwnerChange, Split: splitOwn, OnToggleSplit: onToggleSplitOwn,
+	})
+	if !singleCurrency || revealCurr.Get() {
+		currencyPicker = labeledField(uistate.T("accounts.currency"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   currencyOpts,
+				Selected:  d.Currency,
+				OnChange:  onCurrencyChange,
+				AriaLabel: uistate.T("accounts.currency"),
+				TestID:    "account-currency-select",
+			}))
+	}
+	// Reveal the currency picker on demand for single-currency households.
+	if singleCurrency && !revealCurr.Get() {
+		useOtherCurrency = Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "account-use-other-currency"),
+			OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))
+	}
+	fieldProps := accountFieldsProps{Form: form, Prefix: idBase, Problem: problem, ErrID: errID, MoneyStep: moneyStep}
+	if isLiab {
+		liability = ui.CreateElement(accountLiabilityFields, fieldProps)
+	}
+	if advOpen.Get() {
+		advanced = ui.CreateElement(accountAdvancedFields, accountAdvancedProps{Form: form, EV: ev, Accounts: accounts, Name: d.Name})
+	}
+	if !isLiab && advOpen.Get() {
+		assetFields = ui.CreateElement(accountAssetFields, fieldProps)
+	}
+	if isLockableAsset || (!isLiab && advOpen.Get()) {
+		lockUntil = ui.CreateElement(accountLockUntilField, fieldProps)
+	}
+	openingID := accountFieldInputID(idBase, accountedit.FieldOpening)
+
+	// The form is built before the check that the app is ready, so its handlers register on every
+	// render.
+	node := Form(css.Class("form-grid"), Attr("id", "account-add-form"), Attr("data-testid", "account-add-form"), Attr("novalidate", true), OnSubmit(add),
+		firstRun,
+		// Name leads the form, the main path. The "Copy an existing account…" shortcut is a
+		// secondary convenience, so it sits below the name.
+		Div(css.Class("acct-add-wide"),
+			labeledField(uistate.T("common.name"),
+				Input(append([]any{css.Class("field", fieldInvalidName(problem, nameID)), Type("text"), Attr("id", nameID), Attr("data-testid", "account-add-name"),
+					Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)},
+					append(fieldInvalidAttrs(problem, nameID, errID), uiw.FieldValue(name.Get()))...)...))),
+		copyStarter,
 		labeledField(uistate.T("accounts.typeLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   typeOptions,
-				Selected:  accType.Get(),
-				OnChange:  func(v string) { accType.Set(v) },
+				Selected:  d.Type,
+				OnChange:  onTypeChange,
 				AriaLabel: uistate.T("accounts.typeLabel"),
+				TestID:    "account-type-select",
 			})),
-		// "Other" has no natural class — let the user mark it a liability (debt) so the
-		// net-worth/debt formulas count it.
-		If(isOther, Div(Attr("style", "grid-column:1 / -1"),
-			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiab.Get())...)...),
-				Div(css.Class("row-main"),
-					Span(uistate.T("accounts.countAsLiability")),
-					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint")))))),
-		// C30: the owner picker only offers "Everyone/Group" until members exist, so in
-		// a 0-member household it's noise that defaults to a meaningless group. Hide it
-		// (owner stays GroupOwnerID = shared) until at least one member is added.
-		If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   ownerOptions,
-				Selected:  owner.Get(),
-				OnChange:  func(v string) { owner.Set(v) },
-				AriaLabel: uistate.T("common.owner"),
-			}))),
-		// Split-ownership disclosure: available when there are 2+ members.
-		// Per-member input rows use OwnerShareRow (a standalone component)
-		// so no On* handler is called inside the MapKeyed loop (CLAUDE.md §gotchas).
-		If(len(app.Members()) >= 2, func() ui.Node {
-			shareSum := 0
-			for _, v := range ownerShares.Get() {
-				shareSum += v
-			}
-			// onShareChange is a plain func — not an On* hook — so it is safe
-			// to capture as a prop inside MapKeyed.
-			onShareChange := func(memberID string, valStr string) {
-				n, _ := strconv.Atoi(valStr)
-				m := ownerShares.Get()
-				nm := make(map[string]int, len(m)+1)
-				for k, v := range m {
-					nm[k] = v
-				}
-				nm[memberID] = n
-				ownerShares.Set(nm)
-			}
-			return Div(
-				Button(css.Class("btn cf-adv-toggle"), Type("button"),
-					Attr("aria-expanded", ariaBool(splitOwn.Get())),
-					OnClick(onToggleSplitOwn),
-					IfElse(splitOwn.Get(),
-						Text(uistate.T("account.splitOwnership")+" ▴"),
-						Text(uistate.T("account.splitOwnership")+" ▾"))),
-				If(splitOwn.Get(), Div(
-					P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
-					MapKeyed(app.Members(),
-						func(m domain.Member) any { return m.ID },
-						func(m domain.Member) ui.Node {
-							return ui.CreateElement(OwnerShareRow, ownerShareRowProps{
-								Member:   m,
-								Share:    ownerShares.Get()[m.ID],
-								OnChange: onShareChange,
-							})
-						}),
-					If(shareSum != 100 && splitOwn.Get(),
-						P(css.Class("err"), Attr("role", "alert"),
-							uistate.T("account.shareSumError", shareSum))),
-				)),
-			)
-		}()),
-		If(!singleCurrency || revealCurr.Get(), labeledField(uistate.T("accounts.currency"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   currencyOptions(app, curr.Get()),
-				Selected:  curr.Get(),
-				OnChange:  func(v string) { curr.Set(strings.ToUpper(v)) },
-				AriaLabel: uistate.T("accounts.currency"),
-				TestID:    "account-currency-select",
-			}))),
-		// C78: reveal the currency picker on demand for single-currency households.
-		If(singleCurrency && !revealCurr.Get(),
-			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "account-use-other-currency"),
-				OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))),
+		otherToggle,
+		ownership,
+		currencyPicker,
+		useOtherCurrency,
 		labeledField(uistate.T("accounts.openingBalance"),
-			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amount.Get()))),
-		// C27: explain what the opening balance is — and that for a card/loan you enter
-		// the amount currently owed (it's tracked as a liability).
+			Input(append([]any{css.Class("field", fieldInvalidName(problem, openingID)), Type("number"), Attr("id", openingID), Placeholder(uistate.T("accounts.openingBalance")), Step(moneyStep),
+				OnInput(amountField.Set), uiw.FieldValue(amountField.Get())}, fieldInvalidAttrs(problem, openingID, errID)...)...)),
+		// Explains what the opening balance is, and that for a card or loan the person enters the
+		// amount currently owed (it is tracked as a liability).
 		P(css.Class(tw.TextFaint, tw.Text12), func() string {
 			if isLiab {
 				return uistate.T("accounts.openingBalanceHintLiab")
 			}
 			return uistate.T("accounts.openingBalanceHint")
 		}()),
-		If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step("0.01"), OnInput(onCreditLimit), uiw.FieldValue(creditLimit.Get())))),
-		If(isLiab, labeledField(uistate.T("accounts.apr"),
-			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step("0.01"), OnInput(onApr), uiw.FieldValue(apr.Get())))),
-		If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step("0.01"), OnInput(onMinPayment), uiw.FieldValue(minPayment.Get())))),
-		If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), OnInput(onDueDay), uiw.FieldValue(dueDay.Get())))),
-		If(isLiab, labeledField(uistate.T("accounts.lender"),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(onLender), uiw.FieldValue(lender.Get())))),
-		// MIA-extend (#445-10): institution field shown for all account types.
+		liability,
+		// The institution field is shown for every account type.
 		labeledField(uistate.T("accounts.institution"),
 			uiw.Combobox(uiw.SuggestProps{
-				Value:       institution.Get(),
+				Value:       d.Institution,
 				Placeholder: uistate.T("accounts.institutionHint"),
 				AriaLabel:   uistate.T("accounts.institution"),
-				OnInput:     onInstitution,
-				Options:     domain.UniqueInstitutions(app.Accounts()),
+				OnInput:     onInstitutionChange,
+				Options:     institutionNames,
 				ListID:      "inst-list-add",
 			})),
 		Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "account-add-advanced"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
 			IfElse(advOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
-		// Optional explicit variable name for formulas/widgets — engine plumbing, behind
-		// the disclosure (same convention as the budgets and goals add forms).
-		If(advOpen.Get(), Div(Attr("style", "grid-column:1 / -1"),
-			labeledField(uistate.T("accounts.varNameLabel"),
-				entityVarField(accountVarKind, accountVarEntities(app.Accounts()), "", "account-add-varname", "account-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName)))),
-		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
-			Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step("0.01"), OnInput(onExpReturn), uiw.FieldValue(expReturn.Get())))),
-		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), OnInput(onLiquidity), uiw.FieldValue(liquidity.Get())))),
-		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.stability"),
-			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), OnInput(onStability), uiw.FieldValue(stability.Get())))),
-		// C74: lock-until is surfaced directly for lockable asset types (savings /
-		// investment / retirement / crypto / other) — no Advanced toggle required.
-		// Liquid everyday accounts (checking / debit / cash) can still reach it via
-		// Advanced when it's genuinely useful (e.g. a locked flex-savings account
-		// classified loosely as "checking"). Liabilities never show this field.
-		If(isLockableAsset || (!isLiab && advOpen.Get()), labeledField(uistate.T("accounts.lockUntil"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), OnInput(onLockUntil), uiw.FieldValue(lockUntil.Get())))),
-		MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+		advanced,
+		assetFields,
+		lockUntil,
+		MapKeyed(accDefs, func(def customfields.Def) any { return def.ID }, func(def customfields.Def) ui.Node {
+			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: def, Value: d.Custom[def.Key], OnChange: onCustom})
 		}),
-		errText("acct-err", errMsg.Get()),
+		errText(errID, message),
 	)
+	if app == nil {
+		return P(css.Class("empty"), uistate.T("common.notReady"))
+	}
+	return node
+}
+
+// accountVarInputID is the id of the variable-name input in the add form's Advanced section.
+const accountVarInputID = "account-add-varname"
+
+// accountOwnershipProps configures the owner picker and the split-ownership editor.
+type accountOwnershipProps struct {
+	Form    ui.Form[accountDraft]
+	Members []domain.Member
+	Owner   []uiw.SelectOption
+	// OnOwner sets the owner. The parent memoizes it, so the picker's props keep their identity.
+	OnOwner       func(string)
+	Split         ui.State[bool]
+	OnToggleSplit ui.Handler
+}
+
+// accountOwnershipFields is the owner picker and, with two or more members, the split-ownership
+// disclosure. The disclosure is built only when there are members to split between.
+func accountOwnershipFields(props accountOwnershipProps) ui.Node {
+	// The owner picker only offers "Everyone/Group" until members exist, so with no members it is
+	// noise that defaults to a meaningless group. It is hidden (the owner stays GroupOwnerID, which
+	// is shared) until at least one member is added.
+	var ownerPicker, split ui.Node
+	if len(props.Members) > 0 {
+		ownerPicker = labeledField(uistate.T("common.owner"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   props.Owner,
+				Selected:  props.Form.Get().Owner,
+				OnChange:  props.OnOwner,
+				AriaLabel: uistate.T("common.owner"),
+			}))
+	}
+	// Split-ownership disclosure: available when there are 2+ members.
+	if accountedit.SplitAvailable(len(props.Members)) {
+		split = ui.CreateElement(accountSplitFields, accountSplitProps{
+			Form: props.Form, Members: props.Members, Split: props.Split, OnToggleSplit: props.OnToggleSplit,
+		})
+	}
+	return Fragment(ownerPicker, split)
+}
+
+// accountSplitProps configures the split-ownership editor.
+type accountSplitProps struct {
+	Form          ui.Form[accountDraft]
+	Members       []domain.Member
+	Split         ui.State[bool]
+	OnToggleSplit ui.Handler
+}
+
+// accountSplitFields is the split-ownership disclosure. Once it is open, it builds one share row per
+// member; while it is closed, the rows are not built at all. While it is open the shares must total
+// 100, which the alert shows and the save enforces.
+func accountSplitFields(props accountSplitProps) ui.Node {
+	open := props.Split.Get()
+	// onShareChange is a plain func, not an On* hook, so it is safe to pass as a prop inside MapKeyed.
+	// It is memoized so the share rows keep their identity between keystrokes. A figure that is not
+	// a whole percentage leaves the member's share as it was; the new map still re-renders the row,
+	// which puts the previous figure back.
+	onShareChange := ui.UseCallback(func(memberID string, valStr string) {
+		updateDraft(props.Form, func(d accountDraft) accountDraft {
+			d.OwnerShares = accountedit.WithShare(d.OwnerShares, memberID, valStr)
+			return d
+		})
+	})
+	var editor ui.Node
+	if open {
+		shares := props.Form.Get().OwnerShares
+		memberIDs := memberIDsOf(props.Members)
+		editor = Div(
+			P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
+			MapKeyed(props.Members,
+				func(m domain.Member) any { return m.ID },
+				func(m domain.Member) ui.Node {
+					return ui.CreateElement(OwnerShareRow, ownerShareRowProps{
+						Member:   m,
+						Share:    shares[m.ID],
+						OnChange: onShareChange,
+					})
+				}),
+			If(!accountedit.SharesValid(shares, memberIDs),
+				P(css.Class("err"), Attr("data-testid", "account-share-sum-error"),
+					uistate.T("account.shareSumError", accountedit.ShareTotal(shares, memberIDs)))),
+		)
+	}
+	return Div(
+		Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "account-split-toggle"),
+			Attr("aria-expanded", ariaBool(open)),
+			OnClick(props.OnToggleSplit),
+			IfElse(open,
+				Text(uistate.T("account.splitOwnership")+" ▴"),
+				Text(uistate.T("account.splitOwnership")+" ▾"))),
+		editor,
+	)
+}
+
+// accountFieldsProps configures the debt-only fields, the asset-only figures and the lock-until
+// date: the draft, the prefix of the inputs' ids, what is wrong after a refused save, and the step
+// of the money boxes.
+type accountFieldsProps struct {
+	Form      ui.Form[accountDraft]
+	Prefix    string
+	Problem   formProblem
+	ErrID     string
+	MoneyStep string
+}
+
+// numberInput is a number box for one field of the form: its id, the danger marking when the save
+// refused it, and the draft text bound both ways. The extra options are the box's own (min, max,
+// step, placeholder, title). It registers the box's handler hook, so a section that builds it is a
+// component of its own.
+func (p accountFieldsProps) numberInput(field accountedit.Field, text draftText, opts ...any) ui.Node {
+	id := accountFieldInputID(p.Prefix, field)
+	args := append([]any{css.Class("field", fieldInvalidName(p.Problem, id)), Type("number"), Attr("id", id)}, opts...)
+	args = append(args, fieldInvalidAttrs(p.Problem, id, p.ErrID)...)
+	return Input(append(args, OnInput(text.Set), uiw.FieldValue(text.Get()))...)
+}
+
+// accountLiabilityFields is the credit limit, APR, minimum payment, due day and lender of a debt.
+func accountLiabilityFields(props accountFieldsProps) ui.Node {
+	field := func(sel func(*accountDraft) *string) draftText { return draftTextOf(props.Form, sel) }
+	limit := field(func(d *accountDraft) *string { return &d.CreditLimit })
+	apr := field(func(d *accountDraft) *string { return &d.APR })
+	minPay := field(func(d *accountDraft) *string { return &d.MinPayment })
+	due := field(func(d *accountDraft) *string { return &d.DueDay })
+	lender := field(func(d *accountDraft) *string { return &d.Lender })
+	return Fragment(
+		labeledField(uistate.T("accounts.creditLimit"),
+			props.numberInput(accountedit.FieldCreditLimit, limit, Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step(props.MoneyStep))),
+		labeledField(uistate.T("accounts.apr"),
+			props.numberInput(accountedit.FieldAPR, apr, Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step(rateStep))),
+		labeledField(uistate.T("accounts.minPayment"),
+			props.numberInput(accountedit.FieldMinPayment, minPay, Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step(props.MoneyStep))),
+		labeledField(uistate.T("accounts.dueDay"),
+			props.numberInput(accountedit.FieldDueDay, due, Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")))),
+		labeledField(uistate.T("accounts.lender"),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(lender.Set), uiw.FieldValue(lender.Get()))),
+	)
+}
+
+// accountAssetFields is the expected return, liquidity and stability of an asset, shown in Advanced.
+func accountAssetFields(props accountFieldsProps) ui.Node {
+	ret := draftTextOf(props.Form, func(d *accountDraft) *string { return &d.ExpectedReturn })
+	liq := draftTextOf(props.Form, func(d *accountDraft) *string { return &d.Liquidity })
+	stab := draftTextOf(props.Form, func(d *accountDraft) *string { return &d.Stability })
+	return Fragment(
+		labeledField(uistate.T("accounts.expReturn"),
+			props.numberInput(accountedit.FieldExpectedRet, ret, Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step(rateStep))),
+		labeledField(uistate.T("accounts.liquidity"),
+			props.numberInput(accountedit.FieldLiquidity, liq, Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")))),
+		labeledField(uistate.T("accounts.stability"),
+			props.numberInput(accountedit.FieldStability, stab, Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")))),
+	)
+}
+
+// accountLockUntilField is the lock-until date. It is a component of its own because its input
+// registers a handler hook and the field comes and goes with the account type and the Advanced
+// section; built inline, it would change the form's hook count each time it appeared.
+func accountLockUntilField(props accountFieldsProps) ui.Node {
+	lock := draftTextOf(props.Form, func(d *accountDraft) *string { return &d.LockUntil })
+	id := accountFieldInputID(props.Prefix, accountedit.FieldLockUntil)
+	args := []any{css.Class("field", fieldInvalidName(props.Problem, id)), Type("date"), Attr("id", id), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil"))}
+	args = append(args, fieldInvalidAttrs(props.Problem, id, props.ErrID)...)
+	return labeledField(uistate.T("accounts.lockUntil"), Input(append(args, OnInput(lock.Set), uiw.FieldValue(lock.Get()))...))
+}
+
+// accountAdvancedProps configures the Advanced disclosure's contents.
+type accountAdvancedProps struct {
+	Form     ui.Form[accountDraft]
+	EV       entityVarState
+	Accounts []domain.Account
+	Name     string
+}
+
+// accountAdvancedFields is the optional variable name. It is engine plumbing, so it sits behind the
+// disclosure, the same as the budgets and goals add forms.
+func accountAdvancedFields(props accountAdvancedProps) ui.Node {
+	return Div(css.Class("acct-add-wide"),
+		labeledField(uistate.T("accounts.varNameLabel"),
+			entityVarField(accountVarKind, accountVarEntities(props.Accounts), "", accountVarInputID, "account-add-varname-warn", props.EV.VarName.Get(), props.Name, props.EV.OnVarName)))
 }

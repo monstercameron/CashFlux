@@ -12,10 +12,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // durableNoticeApp identifies the page whose durable writer has been installed.
@@ -117,9 +117,9 @@ func staleDatasetBanner() ui.Node {
 		message = "tc4n9.staleReady"
 	}
 	return Div(
-		Div(Attr("aria-hidden", "true"), Attr("style", "position:fixed;inset:0;z-index:9998;background:transparent;cursor:not-allowed")),
+		Div(Attr("aria-hidden", "true"), Attr("style", "position:fixed;inset:0;z-index:calc(var(--z-banner, 9000) - 1);background:transparent;cursor:not-allowed")),
 		Div(css.Class("toast toast-err"), Attr("data-testid", "stale-dataset-banner"), Attr("role", "alert"),
-			Attr("style", "position:fixed;top:1rem;bottom:auto;z-index:10000;max-width:calc(100vw - 2rem)"),
+			Attr("style", "position:fixed;top:1rem;bottom:auto;z-index:var(--z-banner, 9000);max-width:calc(100vw - 2rem)"),
 			Span(uistate.T(message)),
 			Button(Type("button"), Disabled(!staleRecoveryReady), css.Class("btn"), Attr("data-testid", "download-stale-recovery"), OnClick(download), uistate.T("tc4n9.download")),
 			Button(Type("button"), Disabled(!staleRecoveryReady), css.Class("btn"), Attr("data-testid", "reload-stale-dataset"), OnClick(reload), uistate.T("tc4n9.reload")),
@@ -138,7 +138,7 @@ func retrySaveBanner() ui.Node {
 	}
 	return Div(css.Class("toast toast-err"), Attr("data-testid", "unsaved-changes"),
 		Attr("role", "alert"), Attr("aria-live", "assertive"),
-		Attr("style", "position:fixed;top:1rem;bottom:auto;z-index:10000;max-width:calc(100vw - 2rem)"),
+		Attr("style", "position:fixed;top:1rem;bottom:auto;z-index:var(--z-banner, 9000);max-width:calc(100vw - 2rem)"),
 		Span(uistate.T(message)),
 		Button(Type("button"), css.Class("btn"), Attr("data-testid", testID),
 			OnClick(action), uistate.T(button)))

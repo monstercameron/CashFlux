@@ -8,24 +8,23 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/categoryview"
 	"github.com/monstercameron/CashFlux/internal/catmerge"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/reports"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // categoryMapGrid renders the at-a-glance "Category map" as a wrapping grid of
@@ -142,28 +141,9 @@ func Categories() ui.Node {
 	mergeNewName := state.UseAtom("categories:mergeNewName", "")
 	onMergeNewName := ui.UseEvent(func(e ui.Event) { mergeNewName.Set(e.GetValue()) })
 
-	categoryUsage := func(catID string) int {
-		used := 0
-		for _, t := range app.Transactions() {
-			if t.CategoryID == catID {
-				used++
-			}
-		}
-		for _, b := range app.Budgets() {
-			if b.CategoryID == catID {
-				used++
-			}
-		}
-		return used
-	}
-
-	// txnByCat counts transactions per category in one pass, for the per-row usage
-	// badge (C63). Budgets are excluded here: the badge drills into Transactions, so
-	// it counts exactly the thing it links to.
-	txnByCat := map[string]int{}
-	for _, t := range app.Transactions() {
-		txnByCat[t.CategoryID]++
-	}
+	// Read the canonical immutable transaction snapshot once; the prepared facts
+	txns, transactionsErr := app.TransactionsChecked()
+	budgets, budgetsErr := app.BudgetsChecked()
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
 	viewTxns := func(catID string) {
@@ -213,8 +193,14 @@ func Categories() ui.Node {
 	}
 
 	deleteCat := func(catID string) {
-		// If in use, open the reassign panel instead of deleting; otherwise delete now.
-		if categoryUsage(catID) > 0 {
+		// The canonical merge sweep knows every live reference type. Open the
+		// existing reassignment panel whenever any reference needs to move.
+		refs, err := app.CategoryDeleteReferences(catID)
+		if err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		if refs.Total() > 0 {
 			panelMerge.Set(false)
 			reassignID.Set(catID)
 			reassignTo.Set("")
@@ -293,7 +279,7 @@ func Categories() ui.Node {
 		bump()
 	}))
 
-	cats := app.Categories()
+	cats, categoriesErr := app.CategoriesChecked()
 	var incomeList, expenseList []domain.Category
 	catByID := make(map[string]domain.Category, len(cats))
 	for _, c := range cats {
@@ -331,33 +317,11 @@ func Categories() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
 	pr := uistate.UsePrefs().Get()
-
-	spendByCat := map[string]int64{}
-	var totalSpend, unfiledSpend, maxSpend int64
-	var topSpendID string
-	if rows, err := reports.SpendingByCategory(app.Transactions(), periodStart, periodEnd, false, time.Time{}, time.Time{}, rates); err == nil {
-		for _, r := range rows {
-			spendByCat[r.CategoryID] = r.Amount
-			totalSpend += r.Amount
-			if r.CategoryID == "" {
-				unfiledSpend = r.Amount
-				continue
-			}
-			if r.Amount > maxSpend {
-				maxSpend, topSpendID = r.Amount, r.CategoryID
-			}
-		}
+	if categoriesErr != nil || transactionsErr != nil || budgetsErr != nil {
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), Attr("role", "status"), Attr("data-testid", "categories-data-unavailable"), uistate.T("calculation.unavailable"))})
 	}
-	incomeByCat := map[string]int64{}
-	var maxIncome int64
-	if rows, err := reports.IncomeByCategory(app.Transactions(), periodStart, periodEnd, rates); err == nil {
-		for _, r := range rows {
-			incomeByCat[r.CategoryID] = r.Amount
-			if r.CategoryID != "" && r.Amount > maxIncome {
-				maxIncome = r.Amount
-			}
-		}
-	}
+	links, linksErr := app.TxnLinksChecked()
+	facts := categoryview.PreparePeriod(categoryview.PeriodInput{Transactions: txns, Budgets: budgets, TxnLinks: links, TxnLinksErr: linksErr}, periodStart, periodEnd, rates)
 
 	deductibleCount := 0
 	for _, c := range cats {
@@ -376,22 +340,28 @@ func Categories() ui.Node {
 	if deductibleCount > 0 {
 		chips = append(chips, rptChip(uistate.T("categories.chipDeduct"), fmt.Sprintf("%d", deductibleCount), ""))
 	}
-	if unfiledSpend > 0 {
-		chips = append(chips, rptChip(uistate.T("categories.chipUnfiled"), fmtMoney(money.New(unfiledSpend, base)), rptToneCls("neg")))
+	if facts.SpendingAvailable && facts.UnfiledSpend > 0 {
+		chips = append(chips, rptChip(uistate.T("categories.chipUnfiled"), fmtMoney(money.New(facts.UnfiledSpend, base)), rptToneCls("neg")))
 	}
 
 	takeaway := uistate.T("cats.quietTake")
-	if totalSpend > 0 {
-		if top, ok := catByID[topSpendID]; ok {
+	if facts.TotalSpendAvailable && facts.TotalSpend > 0 {
+		if top, ok := catByID[facts.TopSpendCategoryID]; ok {
 			takeaway = uistate.T("cats.leadTake", top.Name)
 		} else {
 			takeaway = ""
 		}
-		if unfiledSpend > 0 {
-			takeaway = strings.TrimSpace(takeaway + " " + uistate.T("cats.unfiledClause", fmtMoney(money.New(unfiledSpend, base))))
+		if facts.UnfiledSpend > 0 {
+			takeaway = strings.TrimSpace(takeaway + " " + uistate.T("cats.unfiledClause", fmtMoney(money.New(facts.UnfiledSpend, base))))
 		} else if takeaway != "" {
 			takeaway = takeaway + " " + uistate.T("cats.filedClause")
 		}
+	} else if !facts.TotalSpendAvailable {
+		takeaway = ""
+	}
+	var totalSpendValue ui.Node = Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("data-countup", ""), fmtMoney(money.New(facts.TotalSpend, base)))
+	if !facts.TotalSpendAvailable {
+		totalSpendValue = Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("role", "status"), uistate.T("calculation.unavailable"))
 	}
 
 	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-cats-hero"),
@@ -399,35 +369,42 @@ func Categories() ui.Node {
 		Div(css.Class("rpt-hero-main"),
 			Div(
 				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("categories.heroLabel")),
-				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("data-countup", ""), fmtMoney(money.New(totalSpend, base))),
+				totalSpendValue,
 			),
 		),
 		Div(css.Class("debt-chips"), chips),
+		If(!facts.SpendingAvailable || !facts.TotalSpendAvailable || !facts.IncomeAvailable,
+			P(css.Class("muted", tw.Text13), Attr("role", "status"), Attr("data-testid", "categories-calculation-unavailable"), uistate.T("calculation.unavailable"))),
 		If(takeaway != "", P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "cats-takeaway"), takeaway)),
 	)
 	heroTile := rptTile("cats-hero", "1 / span 4", rptSection("", uistate.T("categories.heroTitle"), nil, heroBody))
 
 	renderFlat := func(f categorytree.Flat) ui.Node {
 		catID := f.Category.ID
-		amt, hasAmt := spendByCat[catID], false
-		maxAmt := maxSpend
+		amt := facts.SpendByCategory[catID]
 		sub := uistate.T("categories.spentSub")
+		pct := facts.SpendSharePctByCategory[catID]
+		familyAvailable := facts.SpendingAvailable
+		if !facts.SpendSharesAvailable {
+			pct = 0
+		}
 		if f.Category.Kind == domain.KindIncome {
-			amt, maxAmt, sub = incomeByCat[catID], maxIncome, uistate.T("categories.earnedSub")
+			amt, sub = facts.IncomeByCategory[catID], uistate.T("categories.earnedSub")
+			pct = facts.IncomeSharePctByCategory[catID]
+			familyAvailable = facts.IncomeAvailable
+			if !facts.IncomeSharesAvailable {
+				pct = 0
+			}
 		}
-		hasAmt = amt > 0
-		pct := 0
-		if maxAmt > 0 {
-			pct = int(amt * 100 / maxAmt)
-		}
+		hasAmt := familyAvailable && amt > 0
 		return ui.CreateElement(CategoryRow, categoryRowProps{
 			Category:    f.Category,
 			Depth:       f.Depth,
-			TxnCount:    txnByCat[catID],
+			TxnCount:    facts.TxnCountByCategory[catID],
 			HasChildren: hasChildrenSet[catID],
 			Collapsed:   collapsed.Get()[catID],
 			IsChild:     f.Depth > 0,
-			IsZeroUsage: txnByCat[catID] == 0,
+			IsZeroUsage: facts.TxnCountByCategory[catID] == 0,
 			Amount:      money.New(amt, base),
 			AmountSub:   sub,
 			HasAmount:   hasAmt,
@@ -446,7 +423,7 @@ func Categories() ui.Node {
 			flats[i] = categorytree.Flat{Category: c, Depth: 0}
 		}
 		sort.SliceStable(flats, func(i, j int) bool {
-			ci, cj := txnByCat[flats[i].Category.ID], txnByCat[flats[j].Category.ID]
+			ci, cj := facts.LifetimeUsageByCategory[flats[i].Category.ID], facts.LifetimeUsageByCategory[flats[j].Category.ID]
 			if ci != cj {
 				return ci > cj
 			}
@@ -504,7 +481,11 @@ func Categories() ui.Node {
 		}
 		merging := panelMerge.Get()
 		title := uistate.T("common.reassignTitle")
-		desc := uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))
+		refs, refsErr := app.CategoryDeleteReferences(rid)
+		desc := uistate.T("calculation.unavailable")
+		if refsErr == nil {
+			desc = uistate.T("categories.reassignDesc", target.Name, refs.Total())
+		}
 		confirmLabel := uistate.T("common.moveAndDelete")
 		if merging {
 			title = uistate.T("categories.mergeTitle", target.Name)

@@ -64,10 +64,9 @@ var txnScopeKeys = Catalog{
 
 	// The one primary entry point and its type-scoped menu (C573). Each label names
 	// the KIND of thing being created, and the form it opens is already set that way.
-	"transactions.addKindLabel": "Choose a transaction type",
-	"transactions.addExpense":   "Expense (money out)",
-	"transactions.addIncome":    "Income (money in)",
-	"transactions.addTransfer":  "Transfer (between your accounts)",
+	"transactions.addExpense":  "Expense (money out)",
+	"transactions.addIncome":   "Income (money in)",
+	"transactions.addTransfer": "Transfer (between your accounts)",
 	// The section heading sits over "Import" and had to stop reading as a fourth
 	// KIND of transaction: the three items above it are kinds, so a heading of the
 	// same weight in the same list gets read as one. It names the different thing

@@ -4,12 +4,15 @@
 
 package uistate
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestActionHistoryRecordsInOrderAndDropsTheLastOnUndo(t *testing.T) {
 	assistantActions = nil
-	NoteAssistantAction("add_transaction")
-	NoteAssistantAction("create_category")
+	NoteAssistantAction("add_transaction", "undo-1")
+	NoteAssistantAction("create_category", "undo-2")
 	got := AssistantActions()
 	if len(got) != 2 || got[0].Tool != "add_transaction" || got[1].Tool != "create_category" {
 		t.Fatalf("history = %+v, want the two actions in the order they happened", got)
@@ -27,6 +30,7 @@ func TestActionHistoryRecordsInOrderAndDropsTheLastOnUndo(t *testing.T) {
 func TestActionHistoryIgnoresAnEmptyToolName(t *testing.T) {
 	assistantActions = nil
 	NoteAssistantAction("")
+	NoteAssistantAction("add_transaction") // no captured mutation receipt
 	if got := AssistantActions(); len(got) != 0 {
 		t.Fatalf("history = %+v, want nothing recorded for a nameless tool", got)
 	}
@@ -35,10 +39,24 @@ func TestActionHistoryIgnoresAnEmptyToolName(t *testing.T) {
 func TestActionHistoryIsBounded(t *testing.T) {
 	assistantActions = nil
 	for i := 0; i < maxAssistantActions+50; i++ {
-		NoteAssistantAction("add_transaction")
+		NoteAssistantAction("add_transaction", fmt.Sprintf("undo-%d", i))
 	}
 	if got := len(AssistantActions()); got != maxAssistantActions {
 		t.Fatalf("history length = %d, want it capped at %d", got, maxAssistantActions)
+	}
+}
+
+func TestDropActionRequiresExactUndoID(t *testing.T) {
+	assistantActions = nil
+	NoteAssistantAction("add_transaction", "undo-1")
+	if DropLastAssistantActionFor("undo-other") {
+		t.Fatal("removed an action for a different undo ID")
+	}
+	if len(AssistantActions()) != 1 {
+		t.Fatal("mismatched ID changed the action history")
+	}
+	if !DropLastAssistantActionFor("undo-1") || len(AssistantActions()) != 0 {
+		t.Fatal("matching undo ID did not remove the action")
 	}
 }
 

@@ -27,10 +27,10 @@ import (
 // ride in the key — a pin change must invalidate immediately or "Not recurring"
 // would appear to do nothing until the next data write.
 var (
-	discoverTxnCache = map[string][]recurdiscover.Txn{}
-	commitmentCache  = map[string][]recurdiscover.Commitment{}
-	discoverCache    = map[string]recurdiscover.Result{}
-	recurViewCache   = map[string]recurView{}
+	discoverTxnCache = newViewCache[[]recurdiscover.Txn](1)
+	commitmentCache  = newViewCache[[]recurdiscover.Commitment](1)
+	discoverCache    = newViewCache[recurdiscover.Result]()
+	recurViewCache   = newViewCache[recurView]()
 )
 
 // dayKey renders an instant at day granularity — the resolution every window on

@@ -13,9 +13,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // NotificationCenter is the widgetized notifications surface — a thin SURFACE HOST like
@@ -23,7 +23,7 @@ import (
 // spec/render pipeline:
 //
 //   - notif-summary (Native): alert count + interactive severity filter chips + Clear all
-//     (also marks everything read on open); hides itself when the feed is empty
+//     (preserves per-item read states); hides itself when the feed is empty
 //   - notif-list    (Native): the severity-sorted feed of notifyRow cards (⋯ per item)
 func NotificationCenter() ui.Node {
 	app := appstate.Default
@@ -54,19 +54,8 @@ func NotificationCenter() ui.Node {
 		notifNativeSpec("notif-wins"),
 	}
 
-	live := Div(css.Class("bento bento-notif"),
-		MapKeyed(specs,
-			func(sp domain.WidgetSpec) any { return sp.ID },
-			func(sp domain.WidgetSpec) ui.Node {
-				c := rctx
-				c.Spec = sp
-				if node, ok := safeRenderSpec(sp, c); ok {
-					return node
-				}
-				return Fragment()
-			},
-		),
-	)
+	live := surfaceTiles(surfaceTilesProps{Class: "bento-notif", Specs: specs, Context: rctx})
+
 	// Wrap the live feed in the Live/History view shell (notifications.go), which
 	// adds the two-way toggle and the persisted archive view.
 	return ui.CreateElement(notifSurfaceShell, notifSurfaceShellProps{App: app, Live: live})

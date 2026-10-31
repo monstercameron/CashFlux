@@ -25,9 +25,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // buildDiscoverTxns converts the store's transactions into the discovery input:
@@ -54,9 +54,13 @@ func buildDiscoverTxns(app *appstate.App, rates currency.Rates) []recurdiscover.
 		} else {
 			mag = -mag
 		}
-		if conv, err := rates.Convert(money.New(mag, t.Amount.Currency), rates.Base); err == nil {
-			mag = conv.Amount
+		// An amount with no rate to the base currency cannot be compared with the others, and
+		// labelling it as base currency would misstate it, so the transaction is left out.
+		conv, err := rates.Convert(money.New(mag, t.Amount.Currency), rates.Base)
+		if err != nil {
+			continue
 		}
+		mag = conv.Amount
 		out = append(out, recurdiscover.Txn{
 			ID: t.ID, Date: t.Date, Payee: resolver.Resolve(t.Payee),
 			AmountMinor: mag, AccountID: t.AccountID, Direction: dir, Currency: rates.Base,

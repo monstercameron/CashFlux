@@ -14,6 +14,1069 @@ Account PDF attachments still bypassed the encrypted local blob store, and the s
 
 The Artifacts screen called PutArtifact directly with full image bytes. That bypassed the encrypted IndexedDB blob store and could make a large image exhaust the durable dataset before cloud sync uploaded its ciphertext. The upload now leaves the FileReader callback, commits the encrypted blob, saves metadata without inline bytes, refreshes usage, and requests persistence. The local three-browser regression checks the encrypted IndexedDB record, exact downloaded bytes, a second-browser edit, and a third-browser restore. Its first run reached the third browser but stalled on the loading shell with three WebAssembly pages open; closing each previous page before the next profile made the rerun pass. Account document attachments still use the inline path and need a separate fix.
 
+## 2026-10-31 - Transactions componentization pass
+
+Worked the remaining audit items for the Transactions page with five parallel workers, each on
+disjoint files, then integrated and tested them together.
+
+Done: toolbar and bulk-bar buttons on `ToolButton`; the period select on `SelectInput`; the scheduled-row
+menu on `OverflowMenu`, with a new optional `Href` on `OverflowMenuItem` so the one item stays a route link;
+the receipt preview on `AccessibleOverlay`; the edit form's draft on `ui.UseForm`, with focus moved to the
+first invalid field; fixed ids on `ui.UseId`; and the payment-link save as one store and appstate write
+(`PutTransactionWithRule`), which validates the rule before writing anything. The brittle class-list and
+absence assertions were rewritten as real checks.
+
+Kept on purpose. The category select stays native: choosing "New category" remounts the element, and
+`SelectInput` cannot express that remount or set the value property the test reads. The grouped-row
+markup is not rendered from any file on this page, so there was nothing to move.
+
+Verified. Native and wasm builds pass. The Transactions wasm run (272 tests) and the app run pass except
+`TestTV7CTransactionPageCalendarToggleShowsLiabilityDueDate`, which depends on the date. The overflow
+menu tests pass in `internal/ui`. In the browser: the period select changes the summary, the edit form's
+empty-amount refusal focuses the amount and marks it invalid, Escape closes the form and returns focus to
+its Edit button, and the bulk bar sits on screen on desktop and above the tab bar on a phone.
+
+Not verified in a browser: the payment-link save, the template chips, the recategorise offer, the receipt
+preview, and the scheduled-row menu. The sample data has no scheduled bill in the months I could reach,
+and no transaction with a receipt. Those paths are covered by wasm tests only.
+
+Open for the user to decide: Save looked greyed out while the amount was empty in the edit form. I have
+not checked whether that predates this pass. Nothing is committed.
+
+## 2026-10-31 - Transactions cleanup follow-up: bulk bar, checked reads, nested controls
+
+The earlier entry below left four items open. This pass closed the ones inside the Transactions page
+and recorded the rest.
+
+The bulk bar was off screen with rows selected. Its host is `position: fixed`, but the page's entrance
+animation used `both` fill, which kept an identity transform after it ended. A transform makes the page
+the containing block for fixed descendants, so the host sized to the whole ledger and the bar sat below
+the viewport. The fix is `backwards` fill on `#cf-page-view.page-enter`. The end state matches the base
+style (opacity 1, no transform), so no page looks different after its entrance, but every page's fixed
+overlays now resolve against the viewport. This is the one change that reaches beyond the Transactions
+page, and it is called out in the CHANGELOG. On a phone the bar spans the screen above the tab bar.
+
+Exclude and delete read the ledger with `TransactionsChecked`. A failed read posts a notice and opens no
+confirm; before, `Transactions()` returned nothing and the confirm opened on an empty view.
+
+The payment-link save wrote the transaction, then the rule. A rule failure used to show the error and
+then a success notice, and close the form. It now says the payment is linked but the rule was not saved,
+and keeps the form open. One atomic write needs the store to batch a rule with a transaction, which is an
+`appstate` and `store` change, so it is not done here.
+
+Template chips put the delete control beside the pick button. The recategorise offer keeps its Apply,
+Always and Dismiss buttons outside the status region, which now wraps only the message.
+
+Accounts, categories, transactions, settings and FX rates on the page are memoised on the data revision.
+The future-schedule count and its bill list are computed once per revision, day and range.
+
+Still open, from the whole-page audit: the grouped-row and row-menu markup on the ledger, `ToolButton`
+and `SelectInput` where the page builds its own, `ui.UseId` for fixed ids, a focus trap on the receipt
+preview, and the test files that assert exact class lists. The audit's stale-test claim
+(`transactions_cstable_wasm_test.go:207`) did not reproduce; that test passed in the filtered run.
+
+## 2026-10-31 - Transactions follows the cleanup checklist
+
+Applied docs/CLEANUP_METHODOLOGY.md to the Transactions page, keeping its layout and the engine ledger.
+The notices that were hand-built `P` and `div` elements (not ready, not found, empty, field error,
+receipt note, categorisation and follow-up messages, the calendar FX error) are now `uiw.Callout`, with
+the tone and live role each one needs. Every test id and role was kept; the new callouts carry the
+old ids. Static inline styles moved into named rules in the Transactions rule files. Dynamic values
+stay as custom properties set on one element: the category share width and the member colour.
+
+Decisions. A notice that holds a button (the no-match states with ghost rows and a Clear action) keeps
+its div, because a Callout live region would put the buttons inside it. The picker hints inside the
+option lists stay plain spans. Disclosures stay controlled: the scope-bar custom period, the
+new-category toggle and the upcoming strip take their open state from the page or from a parent, and
+`uiw.Disclosure` owns its own state, so it cannot drive them. The row menus stay on their overlays.
+The scheduled pill keeps its literal 12px because a styles test enforces the 12/14/17/24px scale on
+Transactions selectors, and that test is the authority here.
+
+Reviews. Four read-only reviewers judged the changes against the checklist. They found three must-fix
+items, which were applied: the draft-hint error had lost its 12px text class, and the follow-up
+`.txnfu-empty` rule was left with no markup. The share-width custom property was kept, because the
+shared `MeterBar` sets a data-driven width inline and that is the precedent.
+
+Open. Browser check: with one row selected, the bulk bar sits at about y 1086 in a 926px viewport, so
+it is off screen. The bar is `position: fixed` inside the widget frame, but the ancestor
+`#cf-page-view.page-enter` keeps a `transform` after its entrance animation ends, because the
+keyframe fills with `both`. A transform makes it the containing block for fixed descendants, so the
+frame is sized to the page's 1087px. That rule is shared by every page, so the fix is a change to
+`rules_gen.go` (fill mode `backwards`) and was not made in this pass. I did not confirm the bar's
+position at HEAD, so that is still open. The no-match pill's literal 12px and the camel-case keys
+the old inline map used are also unverified in a browser.
+
+## 2026-10-30 - Trend spinner and draw-in on the accounts header
+
+The accounts trend waits one settle, so its chart used to appear all at once. The shared trend now takes a pending state that shows a spinner in the trend slot, and the drawn line reveals from left to right with a short rise. Both are CSS keyframes in the headline stylesheet, and both respect prefers-reduced-motion.
+
+## 2026-10-30 - Transactions follows the Accounts order
+
+The Transactions page now opens with its two actions, then the period summary (net, a running-total line, spent and income) built on the shared page headline, then the search and filter bubble above the list. The summary keeps the existing count line as its footer, so its interactive figures and their tests stay put. The running total is a pure helper, txntoolbar.RunningTotal, with table tests.
+
+## 2026-10-30 - Shared page headline for Budgets and Accounts
+
+The Accounts summary was three cards and a strip. Budgets already had a headline (figure, sentence, gauge, attention line) styled under a Budgets-only scope. The shared piece is `ui.PageHeadline`, with `PageHeadlineFigure` and `PageHeadlineFact` for its parts, styled once in `rules_pageheadline.go`. Budgets and Accounts now both build it; the Budgets-only `bud3-headline` rules and the Accounts-only rules are gone. `MeterBar` gained a pace marker and a test id so the Budgets gauge is a shared meter too. The Transactions count line stays its own component: its figures are filter toggles, and moving them onto a display-only headline would change how the filters work. Verified in the browser at phone width; the screens wasm focused run passes. Follow-up: the summary sizes now come from the shared --fs tokens defined on the headline and the transaction count line, the Accounts trend is deferred one settle (as the Dashboard hero is) so it cannot disturb the hero, and the Budgets window label is no longer double-wrapped.
+
+## 2026-10-30 - Dismissable contradiction rows
+
+The "These figures disagree" strip could not be dismissed, so a finding the reader had already handled stayed on screen. Each row now has a Dismiss action, and the strip has a "Bring back" control. The visibility rule is `contradict.Visible`, which is pure and tested. The dismissed keys are stored with SetKV in the dataset, not localStorage, so each dismiss and bring-back is one dataset write that the undo stack captures. The toast Undo reverses it. Dismissal is keyed on the finding, so it holds across amount changes and ends when the contradiction does. Verified in the browser: dismiss, Undo, reload, bring back, Undo, and the all-dismissed line.
+
+## 2026-10-30 - Update balance speaks in the stated convention
+
+The Update balance dialog compared the typed figure with the raw stored balance, so a debt stored positive and one stored negative moved in opposite directions. The dialog now shows the current balance in the stated convention the account card already uses, so a debt reads with a minus sign. `reconcile.ClassifyChange` names the move (debt falls, debt rises, or other), and the dialog explains a debt-to-debt change in plain words. A debt typed without its minus sign gets a gentle "Did you mean" line rather than a block, because a debt can legitimately be paid off into credit. The save path converts the typed figure with `reconcile.Stored` before the checkpoint is posted. The modal copy was then cut to one line for a debt change ("Debt down $1,000.00"), with the sign hint removed. Tests cover the classification and the unsigned-entry rule. Version bumped to 1.19.11.
+
+## 2026-10-21 - Prepare v1.19.10 stability release and end the refactor session
+
+The user authorized a final release today and requested the session end afterward. Current main v1.19.9 protections are integrated. Final native370packages with vet, App263WASM plus the focused Settings regression, Screens1101, UI90, Browserstore61, all five production builds, 46-route/theme smoke, native transition checks and the encrypted three-browser file/edit journey pass. Failed pre-fix navigation evidence is retained. No paid AI calls or user household writes were used. The stability report records exact scopes and remaining architecture/performance gaps; this is not a full componentization completion claim. Publishing uses the existing tag/image/deploy workflow after this version commit.
+
+## 2026-10-21 - Keep deferred Settings redirects on their owning route
+
+The final production browser sweep exposed a stale passive effect: bare Settings captured an empty tab and later redirected from Help or Subscriptions. The registered callback now reads the logical browser path at execution and redirects only while bare Settings is still current. Deterministic ordering cases cover leaving for Help, About, Subscriptions, selecting another tab, unavailable location and valid default controls. The full native370-package suite with vet and focused WASM regression pass. The candidate production build passes; browser route validation is rerunning before publication.
+
+## 2026-10-21 - Integrate published encrypted-sync stability fixes
+
+Merged currentmain before final release preparation so the new dependency build retains v1.19.9 encrypted cross-browser snapshots, attachment backup/migration, owner/bookmark durability and privacy fixes. Resolved startup instrumentation by retaining the referenced-blob migration, reused the canonical asynchronous Import review wait, and moved Admin endpoint validation into the shared native client before cache or HTTP access with rejection/allowed-transport tests. Go1.27.3 native370packages, module verification, all4productionWASMbundles andLinuxAMD64server build pass. Final merged-sourceWASM and browser gates are running; no release is published by this merge.
+
+## 2026-10-21 - Upgrade final GoWebComponents performance patch
+
+Final module lookup foundv7.0.1 after initialv7.0.0 migration. Updated normalmodule requirement and checksums without replacements; tidy and verify pass. Go1.27.3native370package suite, Screens1101test suite and main/services/admin/portalWASM plusLinuxAMD64server builds pass before integrating currentmain. SchemaFluxlatestv2.0.1 is absent from this app dependencygraph; strict decoders are preserved.
+
+## 2026-10-21 - Reconcile componentization source inventory
+
+Updated47staticroute inventory and separate dynamiccustompages, removing stale resolved arithmetic residuals. Source presence is not full completion; injected Settings, Events arithmetic, Reports latency and unproven interaction/cold-start improvements remain explicit. Documentation JSON parses; final merged-source gates follow.
+
+## 2026-10-21 - Bound performance capture waits and retain diagnostics
+
+Asset font/visible-image waits share a5seconddeadline; timed-out captures cannot enter medians. Interaction diagnostics use applied-query/count contracts rather than a transient busy edge. Both scripts pass node--check; earlier failed interaction capture remains failed, and no new latency improvement is claimed. Retained paired route evidence shows8lower medians and a Reports regression, not overall completion.
+
+## 2026-10-21 - Enforce pay-yourself-first duplicate identity at writes
+
+Shared pure classification and route/cadence identity helpers preserve active/off UI messages through a typed duplicate error. Native tests cover disabled duplicates, self updates, no-mutation rejection, ordinary transfers and read failure. Native suite and full Screens suite pass. Separate list/write operations do not claim atomic concurrent duplicate prevention.
+
+## 2026-10-21 - Check subscription trailing calendar months
+
+Prepared the three completed calendar months from the current month start, excluding the partial month and counting only nonempty expense months. Reuses checked transaction snapshot. Native tests cover May31, leapMarch31, local timezone boundaries, source/FX failures and overflow; full native suite and Screens compilation/render suite pass.
+
+## 2026-10-21 - Prepare recurring agenda facts natively
+
+Moved schedule rewind, occurrence merge, settlement and projection adaptation into recurringview. Calendar reuses one prepared span; unknown FX remains unavailable and disables dependent paid actions instead of relabelling source amounts as base currency. Native and full1101 Screens suites pass. Existing projection policy is preserved; this does not certify every source-read boundary.
+
+## 2026-10-21 - Share native payoff comparisons across debt views
+
+Preparation independently requests minimum-only and strategy comparisons, reuses selected plans and computes only the alternate strategy. Removed redundant render-time debt aggregation/planning and an obsolete unused variable found by WASM compilation. Native comparison fixtures retain viable controls. Native suite and full1101 Screens suite pass; static call-count savings are not measured latency evidence.
+
+## 2026-10-21 - Prepare checked retirement facts
+
+Retirement balance aggregation uses a single ledger fold and all-or-nothing conversion. Native projection and drawdown assumptions are preserved; cache includes app/store/UI revisions, exact inputs and FX. All370 native packages and1101 Screens tests passed including missingFX, closed-store and FX-only mounted controls. Unavailable copy uses the translation catalog.
+
+## 2026-10-21 - Prepare checked indexed What changed facts
+
+Removed incomplete cross-render report memoization and reused checked immutable snapshots. Native paired algorithm evidence reduced visits250000 to5000 for50accounts and5000transactions; no browser speed claim. Native suite and all4 mounted host regressions passed in1101-test Screens suite; test wrapper tick forces real v7 rerenders.
+
+## 2026-10-21 - Prepare checked budget pool facts
+
+Native pool preparation preserves method-specific rollover and assignment semantics. The adapter carries actual normalization status and suppresses overflowed allocation basis. All370 native packages and1101 Screens WASM tests passed before final main integration.
+
+## 2026-10-21 - Preserve errors in goal-funded budget details
+
+Budget rows now call SummarizeChecked and retain its error alongside memoized results; overflow in limit comparisons or allocated funding remains visible as unavailable. Native goalfunded tests and the focused v7 rendered row regression passed missing-FX, overflow and valid controls. Existing memo call-count and revision tests passed in the full v7 Screens run. Source-read boundaries outside this slice remain follow-up work.
+
+## 2026-10-21 - Prepare checked budget funding facts outside views
+
+Added native checked category-income and assignment preparation with independent availability, method eligibility and over-assignment results. Budget adapters use checked sources and avoid reconciliation scans when the action is unavailable. Native budgetview tests passed; focused v7 host tests passed funding missing-FX, valid-income and warmed closed-store cases. Full Screens v7 run also covered this slice.
+
+## 2026-10-21 - Move custom-field edit value conversion into native logic
+
+Moved the existing boolean, decimal, string and fallback conversion rules into customfields.FormValuesToStrings; the four form callers keep their thin wrapper. Native conversion, empty-map, round-trip and strict-parser regressions passed with Go 1.27.3; the v7 Screens host binary also compiled the adapter.
+
+## 2026-10-21 - Isolate recovery deduplication test scope
+
+RetainRecovery correctly reused an identical copy already present under the shared journal fixture, so the old test counted zero newly-added copies and failed. The fixture now accepts an explicit workspace while existing callers retain their default. The stale-edit test uses a fresh workspace and exact owner-scoped prefix, checks one retained copy after two calls, requires both calls to return the same scoped key and reads the authenticated payload. It removes no unrelated recovery entries. The combined focused app WASM run passes all six cases including this regression.
+
+## 2026-10-21 - Isolate hosted legacy migration fixtures
+
+The expanded app WASM suite exposed a marker leaked from an encrypted-pull test into a legacy fixture. The fixture now saves, clears and restores the exact storage scope, uses persisted App Lock settings, and verifies actual legacy import/protection metadata. A contradictory production-review assertion now tests the documented SEC6 downgrade rejection and complete unchanged local financial data, with local connection preferences established before the baseline. Production encryption guards are unchanged. Combined focused app WASM run passes six tests, including these pull cases and recovery deduplication (42.7s).
+
+## 2026-10-21 - Upgrade CashFlux to GoWebComponents v7 and Go 1.27.3
+
+Checked upstream module tags: GoWebComponents v7.0.0 and SchemaFlux v2.0.1. CashFlux has no SchemaFlux requirement/import to migrate; existing strict AI decoders remain in use. The framework uses a normal released module with no app replacement directive. Updated imports, typed input-handler boundaries, framework CheckedIf reuse, typed opacity utilities, Markdown engine registration, Docker Go minor and documentation. Rebuilt the local v7 runner from its checksum-verified source because the published trimmed binary cannot resolve its source root; documented the gwc build/nojsonv2 incompatibility with SQLite and the direct Go build path. Regenerated Go 1.27 icon bytes with verified identical decoded pixels. Native370 packages, screen1090 plus corrected Markdown host, shared UI90, browser-store60, production builds of four WASM artifacts, and canonical live/production route/theme smoke pass. The expanded app run found three pre-existing fixture/assertion problems; separate test corrections pass their six-test focus, with a full app rerun pending. A failed interaction capture is retained and not claimed green; independent route/native-transition checks pass. No release or deployment.
+
+## 2026-10-21 - Unmount transaction performance fixtures
+
+The full screens baseline exposed retained mounted fixtures in the three-iteration write profile. Teardown now unmounts, stabilizes, and cleans the fixture even after failure, and restores the performance observer and app globals. The existing derivation-count assertions remain unchanged. Focused Go 1.26.9/v5 baseline: TestTCS2WarmRouteAndWriteProfile3300 passes (1 test, 10.1s).
+
+## 2026-10-21 - Prepare checked Reports totals and presentation facts natively
+
+Native reports and reportview suites pass for checked category/grand totals, safe magnitudes, wide-product ratios, owned result rows, source order, bar truncation and investment return rounding. Custom-field and deductible native services now return arithmetic errors instead of wrapped sums. Prepared display slices are preallocated. Root review caught a rounding mismatch: total return now preserves half-even display ties with integer preparation and exact decimal formatting, covered by positive and negative host examples. Two final WASM tests pass, including three unavailable sections and four valid total-return tie cases; the broader corrected boundary batch also passed eleven tests. No browser Reports latency improvement is claimed; its measured regression remains open.
+
+## 2026-10-21 - Prepare checked monthly funding pools for Goals Compare
+
+goalcompare.PrepareMonthlyPool preserves missing-plan, currency and sum-overflow availability before scheduling. Goal Compare now computes its two goal stats once and reuses them for its table, verdict and order panel. Native goalcompare tests passed; focused WASM tests cover overflowing pool unavailable and known fitting plans retaining the correct no-order-change result. An initial test wrongly expected priority to change dates when the pool already funds both monthly caps; the corrected test asserts the native meaningful result. This preserves valid semantics and removes the prior unchecked addition from the view.
+
+## 2026-10-21 - Prepare Dashboard trend movement and range outside rendering
+
+dashboardview.PrepareTrendFacts owns checked endpoint subtraction, safe absolute magnitude and chart range facts in one validation/range pass. Overflowed movement remains unavailable while valid plotted range remains usable. Native dashboardview tests cover both overflow directions, MinInt64 magnitude, currency mismatch, empty and ordinary series, and live-point range inclusion. Focused WASM trend-host regression passed; the integrated corrected primary-boundary batch passed eleven tests. The view retains chart formatting and consumes the prepared facts. What changed cache/service work is a separate pending slice.
+
+## 2026-10-21 - Keep Accounts net-worth movement checked and explicitly available
+
+Native nwchange and money suites passed, including both endpoint overflow directions and a representable MinInt64 signed delta. Two focused WASM host tests passed: presenter cases cover unknown, known zero, ordinary negative movement and unavailable MinInt64 magnitude; the actual Accounts summary receives valid MinInt64/MaxInt64 endpoints whose difference overflows and renders unavailable instead of no change. The initial integration compile caught a missing props qualifier; corrected wiring passes. Fixtures explicitly unmount before app/global cleanup. This fixes a concrete remaining boundary error and does not claim all Accounts logic or all nine pages complete.
+
+## 2026-10-21 - Isolate frozen browser captures from development reloads
+
+The first new SMART capture timed out before requesting main WASM and retained a startup failure report with no latency results. Added bounded page-error, failed-request, HTTP status and bootstrap state diagnostics for future failures. Benchmark contexts now block loopback WebSocket connections so development reloads cannot replace frozen artifacts; the normal user browser is unaffected. Both scripts pass node --check. The revised navigation script completed matching before/after seven-sample captures with no failures and identical visible route text. Shared-machine load remains uncontrolled; report all raw samples and do not infer cold-start gains.
+
+## 2026-10-21 - Share deterministic SMART results between page surfaces
+
+The Dashboard CPU profile showed strip and peek separately running the same deterministic engine for about 693 ms combined inclusive time in that diagnostic sample. A 16-entry result cache now keys actual prepared input time, app and data revision, week start, page, full settings and language. Store readiness precedes every lookup and callers receive owned result copies. Native deep-copy coverage passed; four focused WASM tests pass for parity, exact invalidation, nine-page retention, closed stores and mounted strip/peek sharing. The mounted edit test publishes the same data revision as production edits and proves one fresh shared pass. Initial UI test failures were an incorrect card tag and missing fixture revision notification; both were repaired. Browser latency evidence remains pending and is recorded separately.
+
+## 2026-10-21 - Strengthen primary-page performance measurement contracts
+
+The navigation benchmark verifies WASM hashes and injects the frozen artifact into isolated sample contexts through the existing gzip fallback. Assistant waits for populated sample content, raw normalized text and hashes retain parity evidence, and missing/failing samples fail the command. The interaction script covers all nine routes without submitting Assistant prompts. The period-fixed artifact passed all nine interaction actions; the navigation script completed seven measured sweeps and a separate diagnostic CPU profile. Both scripts pass node --check. Profiling timings are excluded from performance medians. Historical captures retain their recorded limitations; future comparisons use the stronger contracts documented in PRIMARY_PAGE_PERFORMANCE.md.
+
+## 2026-10-21 - Prepare Allocate display amounts and retain income availability
+
+Native allocateview and i18n suites passed. Allocate host tests cover missing FX, income total overflow, manual entry after unavailable income, valid split and malformed amount rejection, and closed sources. The initial new fixture omitted a required description and used the wrong paragraph selector; corrected fixtures pass. Fixtures explicitly unmount before releasing their app. The shared SMART cache has separate pending validation and is not part of this slice.
+
+## 2026-10-21 - Keep the period pill synchronized with page calculations
+
+An isolated browser smoke exposed a Dashboard mismatch: the body moved to June while the pill stayed July. TopBar now threads the live period through its stable slot, and handlers read the current atom. The focused WASM test passed for stepping, rapid clicks and external updates. The production build and all nine sample browser actions passed.
+
+## 2026-10-21 - Preserve financial caches across unchanged Dashboard remounts
+
+Added an opt-in checked App.PutPlacementsIfChanged path that compares canonical stored placements and writes only changed or new rows; other store write semantics remain unchanged. Dashboard sync includes app identity and preparation readiness, so replacement workspaces and changed layout/configuration still persist. Native tests passed for repeated no-op sync, second app, layout/visibility/config/style/custom changes, invalid JSON retry and closed stores. Seven Dashboard WASM tests passed, including actual remount revision/frame retention and app replacement, and the production WASM build passed. Browser latency effects are being measured against the saved pre-fix artifact.
+
+## 2026-10-21 - Reconcile route component and native-model evidence
+
+Reconciled 47 registered routes and validated all first-nine file references against current source. Removed stale Categories, Rules and Planning calculation-gap claims. Retained verified Allocate income-hint and subtraction gaps, native Events overflow and Sync route injection ambiguity. The completed screen run passed 1075 top-level tests with no runtime panic, released-callback or off-render warnings; appstate native tests and the production WASM build also passed. Paired browser captures are in progress; no all-page latency improvement is claimed.
+
+## 2026-10-21 - Unmount prepared-host fixtures before restoring browser globals
+
+Fixture.Cleanup does not unmount the framework tree. Added explicit empty-root render and stabilization before cleanup, allowing popover event/timer cleanup to run while the browser stubs are still installed. Both budget flex host tests and all five Household prepared-host tests passed; the focused fifteen-case batch also passed without runtime warnings. The full screen suite is rerunning.
+
+## 2026-10-21 - Reuse successful tax preparation across Reports remounts
+
+Added an eight-entry successful preparation cache keyed by app identity, store revision, exact period bounds and tax year. Every render still checks the settings source before a cache hit, so a closed store remains unavailable. Host tests verify lazy first Full preparation, unchanged remount reuse, exact-window/data/FX/app invalidation and recovery from unavailable sources. The fifteen-case focused WASM batch passed; a broad rerun remains pending.
+
+## 2026-10-21 - Cancel deferred Assistant UI work with its component lifecycle
+
+The full screen suite exposed an off-render Go timer and then an uncancelled scroll callback after Assistant teardown. Replaced the rail Go timer and raw deferred scrolling with framework-managed browser timers; streaming text scrolls after its DOM commit and completed Markdown retains the settling delay. A regression checks mounted canvas scrolling and cancellation after mount/update removal. Fifteen focused WASM tests passed, including Assistant availability and lifecycle, Reports cache and Household host paths; production WASM build passed. Assistant fixtures now explicitly unmount before restoring browser stubs. The full screen suite is rerunning.
+
+## 2026-10-21 - Cache checked Settings snapshots with owned values
+
+Added SettingsChecked and a bounded per-App revision snapshot, deep copying mutable settings on every return. Native tests cover ownership, direct store writes, error retry, unchanged revisions and closed warm stores. All appstate tests and vet passed; the production WASM build passed. Five native benchmark samples reduced median allocated bytes by 70% and allocations by 77% for nine reads; local elapsed results and contention caveat are retained in docs/performance/settings-snapshot-2026-10-21. Browser latency effects remain unproven.
+
+## 2026-10-21 - Complete receipt matching memo dependencies
+
+Parsed statement dates remain authoritative. The native helper normalizes an absent-date fallback to the local calendar day at UTC midnight, matching stored date-only transaction identity. The controller samples this date once and includes it in memo invalidation instead of retaining stale candidates across a day change. Focused native importdraft tests and vet pass for candidate cutoff and parsed-date precedence; the full native suite passed before this additive fix.
+
+## 2026-10-21 - Workflow composer delegates native drafts
+
+The route now calls the checked injected-clock draft service, preserving existing feedback and commands. Both actual-host composer cases pass, proving weekly NextRun and dedupe persistence plus same-account rejection. Stable composer selectors distinguish its controls from identically labelled quick-start forms. Native workflow/appstate draft validation was committed separately.
+
+## 2026-10-21 - Native budget income-source preparation
+
+Preserved source ordering, month windows and per-source truncation while composing checked canonical reports. Source failures no longer become zero or no-history claims, and bulk actions preserve manual choices when data is unknown. Fixed income remains independently known. Native budgetview tests and vet pass; both focused actual-host groups pass for source choices, average rounding, FX failure/recovery and exact fixed preview.
+
+## 2026-10-21 - Shared checked auto-budget tuning
+
+Scaling and selected totals now use checked arithmetic; failed rows or aggregate overflow cannot produce pending writes. Native budgeting tests and vet pass; actual-host tuning and save regressions pass, including recovery without remount. Fixture teardown explicitly unmounts before cleanup because framework Cleanup alone releases ownership without unmounting; no production nil guard was added.
+
+## 2026-10-21 - Native artifact vault preparation
+
+Prepared reference counts, kind totals and exact export/storage sizes outside the view. Int64 storage facts reject negative usage and overflow without wasm32 narrowing. Warm renders reuse a snapshot/summary by app revision and blob usage, while fresh source guards detect closed stores and failures are not cached. Native artifactview/artifacts/viewcache tests pass; actual-host checks pass for row facts, warm reuse, reference refresh and unavailable source state.
+
+## 2026-10-21 - Shared Admin data service
+
+Removed duplicate client DTOs/fetch logic while preserving existing probe effective-token versus route configured-token selection and exact200 versus2xx acceptance. Cache identity includes endpoint and token hash, with30second freshness metadata and owned results; failures are not cached. Native client tests and the actual app/probe WASM adapter test pass, including rotation, status and cache behavior. No auth policy or server endpoint changed.
+
+## 2026-10-21 - Native budget window and flex meter facts
+
+Preserved current calendar rounding, degenerate-window behavior, strict meter thresholds and date policy. Checked financial readings remain independently available; CSS and localized labels stay in the view. Native budgeting/budgetview tests and vet pass; both focused Flex actual-host WASM groups pass. This cheap reducer extraction makes no performance claim.
+
+## 2026-10-21 - Shared native bill budget-fit preparation
+
+Removed repeated UpcomingAll and descendant preparation from each displayed bill. Checked native spent, pending, FX and fit arithmetic retain first-budget and half-open-window policies, distinguishing no budget from unavailable facts. Native model tests and vet pass; the focused Bills WASM case passes for missing and refreshed FX. Shared bill-category identity remains available to transaction matching through the native helper.
+
+## 2026-10-21 - Native recurring flow preparation
+
+Preserved paused/scheduled distinctions, window bounds, ordering and management actions. Independent known rows survive missing FX while incomplete totals are unavailable. Native recurringview tests and vet pass; the focused Recurring WASM case passes with refreshed FX. Screen controller and row components consume prepared facts.
+
+## 2026-10-21 - Native Visual Builder live data preparation
+
+Prepared named datasets and net-worth change sources natively, reading each ordered collection once per successful snapshot. Cache identity includes app/store, mutation revision, local day, base and FX. Source errors are explicit and uncached; unavailable net-worth facts do not block unrelated graphs. Native preparation, settings, i18n and architecture tests pass; both focused Builder WASM host cases pass. Updated the architecture test to require canonical nwchange in the native layer, without adding exceptions.
+
+## 2026-10-21 - Native finite settings validation
+
+Extracted FX/APR parsing and guarded the shared rate setter. Existing blank/invalid clearing behavior and write order remain. NaN, infinity and numeric overflow no longer persist as rates. Native settingsinput tests pass; the complete application WASM build passes.
+
+## 2026-10-21 - Native Planning projections
+
+Added checked canonical cashflow/runway/cover and safe-spend seams, composing them in an immutable native planningmodel with explicit reference time and source errors. The controller samples time once and preserves existing policies and recurring authoring. Native models and vet pass; the focused Planning actual-host error/invalid-input case passes.
+
+## 2026-10-21 - Native plan and resilience inputs
+
+Plan now delegates to existing finplan.AssessData instead of float engine values or account-count assumptions. Health resilience preparation retains source/FX errors independently for liquidity and card exposure. Native finplan/healthview tests pass; both actual-route WASM groups pass for known and failed FX inputs.
+
+## 2026-10-21 - Native debt and loan planning facts
+
+Preserved debt strategy and mortgage inclusion policy, kept source failures unavailable, and replaced floating extra-payment parsing with exact minor-unit preparation. Native debtview/loanview tests and vet pass; both focused actual-host WASM groups pass, including overflow and invalid precision. Engine major-unit figures remain a presentation boundary.
+
+## 2026-10-21 - Native allocation preparation
+
+Shared one checked balance fold, retained ranking/distribution policy and independent goal availability, and stopped invalid/source-failed input from producing or saving a plan. Native allocateview/appstate tests pass; both actual-host WASM cases pass. Checked source readers were committed separately.
+
+## 2026-10-21 - Native split form preparation
+
+Preserved blank weight defaults, explicit zero exclusions and existing split distribution policies. Malformed or overflowing input suppresses preview and cannot save. Native table tests and the focused Split route WASM regression pass.
+
+## 2026-10-21 - Native activity feed preparation
+
+Preserved Recent50 selection, fallback synthesis, redaction and stable ordering. Rendered day groups and rows use stable keys. Undo still performs authoritative live preflight at click time. Native model tests and both focused actual-host WASM cases pass.
+
+## 2026-10-21 - Prepared category period and usage facts
+
+Prepared independent counts, income/expense availability, totals and bar shares outside the view, using canonical netted ledger rules. Lifetime usage preserves whole-transaction and primary-budget semantics while delete routing uses the complete canonical reference guard. Added checked income aggregation in reports. Native categoryview/reports/appstate tests pass and the focused missing-FX/usage WASM case passes.
+
+## 2026-10-21 - Complete native Net Worth preparation
+
+Moved remaining model composition into native networthview with independent errors, explicit periods, stable account partitions and mover ordering. Native tests pass and focused WASM adapter checks pass. Corrected the earlier benchmark reference to include the full legacy account-window work; its synthetic results describe only account-window preparation, not browser latency.
+
+## 2026-10-21 - Native investment account preparation
+
+Extracted full investment preparation with independent availability, retaining valid security facts when account reconciliation fails. Removed raw FX and zero fallbacks. Native model/portfolio tests pass; focused WASM scenarios cover missing FX and invalid ledger balances. An initial allocation regression was corrected before wiring. Final synthetic comparison uses 39,232 bytes versus 40,976 for the reference but has more allocations; timings vary and are not an app speed claim.
+
+## 2026-10-21 - Native custom-field form parsing
+
+Extracted supported text/number/date/bool/select parsing, required/choice validation and finite-number checks, preserving optional blank semantics and the existing schema. Account, budget, goal and member forms stop writes on issues. Native customfields/budgetform tests and vet pass; the focused actual member form WASM case verifies malformed boolean rejection and valid false persistence.
+
+## 2026-10-21 - Native checked Credit preparation
+
+Extracted aggregate, factor, advice and hypothetical facts without fake legacy defaults. Summary skips details/history work. Native credithealth/creditview tests pass; all seven focused Credit WASM cases pass. Host testing caught a real editor remount when a payment hint disappeared; the disclosure now has stable account identity and rejects a stale-currency draft without writing. Removed only owned stale Credit hook exceptions. Existing credit heuristic policies remain unchanged.
+
+## 2026-10-21 - Native household preparation and components
+
+Prepared worth, spending and exact income distribution retain independent source/total availability and known individual rows on aggregate overflow. One model is shared across tabs and route reuse, keyed by app instance/store revision/period; redundant local revision notifications were removed. Native tests and vet pass; five focused WASM host cases pass, including cache refresh, closed store, period boundaries and keyed PIN/menu identity. Removed only two stale hook exceptions.
+
+## 2026-10-21 - Checked workflow draft preparation
+
+Native draft preparation copies actions, fills only missing schedule/dedupe values and reuses canonical validation. Persistence and direct execution also validate the workflow. Full native workflow/appstate tests and vet pass; route wiring and composer host verification remain a separate slice.
+
+## 2026-10-21 - Guard category deletion with complete references
+
+The native guard checks split transactions, multi-category budgets, goals, rules, recurring templates, learned tally and widget bindings through checked reads. Existing child reparent behavior remains. Full native appstate tests and vet pass, including reference-specific and child reparent tests. The Categories view migration is a separate slice.
+
+## 2026-10-21 - Retry failed cached source reads
+
+A checked loader error now leaves the prior cache state untouched. The same-revision failure-to-success regression also verifies returned-slice ownership. Full native appstate tests and vet pass. Other appstate category/workflow changes remain separate.
+
+## 2026-10-21 - Checked revision-cached source reads
+
+Added fallible source accessors with revision-cached account/goal/budget reads and a cheap store readiness check before warm reuse. Warm success then closed-store regression coverage passes with native tests and vet. Existing best-effort account/goal convenience methods retain logged-error behavior. Category deletion and workflow validation hunks remain separate pending their own gates.
+
+## 2026-10-21 - Prepare only selected tax category totals
+
+Native ledger/taxgather tests and vet pass, including adversarial unused-category overflow and FX/error parity. Same-fixture captures show about 74% fewer allocations and 24-29% fewer allocated bytes. A 100k-row separate-run timing regression is retained along with a matched diagnostic; no reliable wall-time or browser speedup is claimed. Raw captures and full caveats are tracked in docs/performance/tax-selected-fold-2026-10-21.
+
+## 2026-10-21 - Record app refactor checkpoint and measurements
+
+Documented finished versus remaining boundaries without claiming all-app completion. Retained detector before/after raw captures as text files because generic log files are ignored. Inventory JSON parses with exactly 47 entries. Focused UI tests passed for the committed first batch; second batch integration is ongoing.
+
+## 2026-10-21 - Reuse unusual detector history buffers
+
+Native reference parity and price-policy tests pass, and the unchanged 50ms slice gate passes. Same-fixture five-sample benchmark reduces median allocated volume from 456.7MB to 61.6MB; timing is noisy and not a browser claim. Raw captures and environment caveats are retained under docs/performance/unusual-buffer-reuse-2026-10-21.
+
+## 2026-10-21 - Prepared rule coverage
+
+Moved coverage business logic into a native summary while retaining keyed rule rows and lazy previews. Native tests, vet, host compilation and focused WASM wiring pass. Synthetic prepared-model benchmark reduced repeated matcher preparation; it is not browser latency evidence.
+
+## 2026-10-21 - Native Net Worth account windows
+
+Prepared indexed account windows outside the view, preserving manual balance provenance, ordering, liability signs and independent failures. Native networthview tests and the focused WASM unavailable-state case pass. The initial benchmark reference omitted legacy work and cannot support a speed comparison. Full Net Worth preparation remains a separate slice.
+
+## 2026-10-21 - Native investment growth facts
+
+Extracted current value, signed delta and percentage availability independently. Failed ledger series no longer appear as zero. Native portfolio tests and focused WASM headline coverage pass. Native benchmark is a baseline only; broader investment model migration remains pending.
+
+## 2026-10-21 - Checked Setup input preparation
+
+Income and account input preparation now uses exact minor-unit parsing with explicit currency precision. Blank-input defaults and positive liability balances are preserved; malformed and overflowing input cannot write or advance. Native tests and vet pass; the focused WASM handler case passes.
+
+## 2026-10-21 - Checked subscription financial preparation
+
+Extracted monthly/annual amounts, totals and share availability into a pure native model. Views render prepared facts and expose share percentages on hover. Native tests and vet pass; both focused WASM cases pass. The checked model adds correctness overhead in the small synthetic fixture; no performance improvement claimed.
+
+## 2026-10-21 - Native budget summary preparation
+
+Extracted immutable budget selection and summary facts from the views. Preserved cache invalidation, canonical split/tag matching and independent funding availability. Native budgeting/budgetview tests and vet pass; two focused WASM host groups pass. The synthetic benchmark is a baseline only; no browser speed claim.
+
+## 2026-10-21 - Prepare credit history in a checked native model
+
+Moved latest-eight sorting, currency assumptions, conversion, checked utilization and bounded bar facts into credithealth. The screen uses fresh fallible account/settings/history reads and keeps individual gaps and current-limit/current-FX disclosure. Six native groups, vet, screenlint and three actual-host WASM cases passed. Native large-history comparisons improved, while small cases overlap and add fixed metadata allocations; no page-latency gain is claimed. Aggregate/advice page migration remains separate.
+
+## 2026-10-21 - Prepare tax report net income in a checked native model
+
+Added immutable taxgather.NetIncomeWithLinks with exact windows, checked income/deductible reductions and canonical refund policy. The tax section reads fresh fallible sources and memoizes prepared facts; unavailable sources bypass the legacy estimator instead of supplying zero. Household scope is explicit and hooks are isolated in a keyed child. Native tests/vet and three actual-App WASM cases passed; removed only the stale hook-baseline exception. Estimator policy and the benchmark optimization remain separate follow-ups.
+
+## 2026-10-21 - Check shared household money primitives
+
+Hardened canonical per-member spending magnitudes and reductions, period-income accumulation, equal-member apportionment and fractional owner splits. Added a checked signed Hamilton split using existing money.Allocate; retained the deprecated legacy signature unchanged, with no production callers remaining. Ten new native tests cover MinInt64, large fractions, rounding/ties, FX, overflow, no partial results and immutability. Full reports, allocate and ledger native suites and vet passed. This prepares the shared native household model; no UI change in this feature.
+
+## 2026-10-21 - Reuse category traversal work across selected roots
+
+Preserved empty roots, unknown/dangling IDs, cycles, self-parent policy and caller-owned inputs. Native categorytree suite and parity cases passed. On the same 2047-category/512-overlapping-root synthetic fixture, five-sample medians fell from 484.23ms to0.776ms and 1053689 to2086 allocations per operation. Raw before/after logs and environment caveats are retained; this is a native kernel result, not a measured browser latency gain.
+
+## 2026-10-21 - Record assistant capability and validation evidence
+
+Recorded 77 financial data collections and the 59-tool catalog, native checked calculation paths, approval/Undo and session safeguards, exact test evidence and remaining limits. Full native suite passed 353 package suites; the earlier full screen pass had 1015 tests. Expanded coverage exposed and fixed a New-chat persistence race; the final 23-test assistant gate passed. Validation used disposable stores and mocked providers with no paid calls or real-data writes. No release, tag, main push or deployment.
+
+## 2026-10-21 - Isolate assistant header and conversation thread components
+
+Extracted the Ask header and conversation thread from the large controller. Child components own action hooks and render prepared props; controller state, data and mutations remain outside them. Preserved markup, test IDs, ARIA and latest-turn retry semantics. Three new WASM component cases pass in the final 23-test assistant gate, including edit drafts following turn identity after reordering. No latency improvement is claimed from code movement.
+
+## 2026-10-21 - Protect titles and history across conversation transitions
+
+Bound and injected the title transport; it skips aggregate-only privacy and exhausted budgets, meters returned usage once to the original live store, and rejects stale or manually renamed title writes. A real mounted regression exposed synchronous intermediate persistence during New chat, so a transition guard now protects clearing/switching states and the final selected conversation is persisted explicitly. Final focused WASM gate passed 23 tests including preserved full message IDs, roles and text, late usage, manual rename, approvals and session cancellation.
+
+## 2026-10-21 - Make local assistant answers checked and current
+
+Added optional error-aware native localqa sources and checked net-worth/goal arithmetic. The App adapter reads fresh fallible settings and datasets, uses canonical refund-aware category and budget models, checked FX and reductions, and the app clock. Unsupported category date ranges fall through to provider tools. Native Insights tests and vet pass; all five real-App cases pass in the final 23-test assistant WASM gate, alongside the 353-suite native gate.
+
+## 2026-10-21 - Capture native componentization baselines
+
+Captured five samples each for transaction filter/sort and memo hits, goal funding/indexed sorting, and task snapshot/filter paths. Stored raw logs, medians and exact source/environment metadata. All three native benchmark commands passed. These are existing synthetic algorithm comparisons, not new app before/after gains; the ARM64 host runs the amd64 benchmark target, which must stay consistent for later comparisons.
+
+## 2026-10-21 - Plan the full application component boundary pass
+
+Extended the requested scope from the nine primary pages to all 47 registered routes. Read-only inventories identify existing native models, reusable UI, remaining screen calculations, large controllers, hook identity risks and existing benchmark seams. Recorded the bottom-up implementation order and evidence required for completion. This commit changes documentation only; no behavior or performance gain is claimed.
+
+## 2026-10-21 - Page complete tax record exports
+
+Small results retain the complete inline CSV. Large results return JSON-character chunks with explicit year and snapshot continuation, truthful category and receipt counts, bounded prose, and a 32KiB envelope. CSV identity tracks actual output and the bound dataset, not usage accounting. Added a 900-category reconstruction, stale-data, and malformed-argument regression. Full screen WASM suite passed 1015 tests.
+
+## 2026-10-21 - Bound transaction evidence responses
+
+Kept report totals complete while limiting transport output to 24000 UTF-8 bytes. Whole omitted rows retain exact transaction IDs with query_data and read_record recovery instructions; pathological metadata fails explicitly. Added Unicode-heavy response regression. Full screen WASM suite passed 1015 tests.
+
+## 2026-10-21 - Keep formula pages stable across assistant usage writes
+
+Bound formula snapshots to the dataset, persisted engine inputs, catalog definitions, reference time, base currency and FX. Provider usage and unrelated app writes no longer invalidate continuation tokens; actual financial changes still require restarting. Full screen WASM suite passed 1015 tests and the full native suite passed.
+
+## 2026-10-21 - Bound assistant history and session cleanup
+
+Added native protocol-preserving message and byte limits, a session-owned identity watcher, fresh handlers after uncertain receipts, and usage accounting once against the original still-live dataset. Verified writes alone count as actions. All twelve actual Insights WASM groups passed after correcting a local-QA-intercepted fixture prompt and draining deferred test callbacks; native history tests passed.
+
+## 2026-10-21 - Bound financial calendar preferences
+
+Replaced the global preference getter with the fallible bound-store reader for week start, pay-cycle anchor and budget rollover. Actual list_budgets tests passed for different active workspaces, fresh preference edits and corrupted stored preferences; failures remain explicit.
+
+## 2026-10-21 - Native financial-plan assistant access
+
+The new read-only tool uses bound household records, preferences and the native framework assessment. Unknown answers, APRs, FX and health inputs remain not assessable; USD starter thresholds are converted explicitly. Five native assessment regressions and all three actual-tool host groups passed. Record-level financial-plan access follows the full-detail privacy tier.
+
+## 2026-10-21 - Reject unfinished provider tool calls
+
+The parser checks terminal response status before returning tool calls while retaining usage accounting and legacy providers without a status field. Native AI tests passed, including incomplete and failed replies containing an otherwise valid function call.
+
+## 2026-10-21 - Stable content-bound assistant read pages
+
+Removed global mutation revisions from raw read token identity. Snapshots retain bound App/store identity and hash exact selected content, so real row/settings changes still reject stale pages. Four actual-tool regressions passed for positive provider usage, unrelated writes, off-page edits and distinct stores with identical rows.
+
+## 2026-10-21 - Currency-aware assistant credit calculations
+
+Added a checked rates-aware credit-health API that preserves native card targets and converts aggregate amounts once. Missing balances, FX and overflow make dependent utilization or targets unavailable while age, on-time and weight facts remain independent. Fourteen new groups and full credithealth/engineenv tests plus vet passed. The legacy credit page remains on its existing adapter.
+
+## 2026-10-21 - Independent checked financial health factors
+
+Checked payment and utilization FX, magnitudes, sums, percentages and net-worth trends; every applicable budget must evaluate before adherence is published. The native health model accepts explicit per-factor unavailability. Independent factors remain known and failed factors cannot be refilled by custom molecules. Full engineenv/healthscore tests, vet and seven new regression groups passed.
+
+## 2026-10-21 - Checked net-worth formula availability
+
+Added checked delta and percentage helpers, strict per-bucket FX and checked accumulation. Independent complete buckets remain usable; missing financial inputs cannot be replaced by a custom molecule. Full engineenv and nwchange native suites, vet and the behavioral molecule regression passed.
+
+## 2026-10-21 - Assistant catalog transport compatibility gate
+
+Extended the actual registry test to guard the 64-tool and 32-KiB-per-schema relay contract. The current full-detail catalog contains 58 unique tools with valid object schemas, truthful mutation permissions and previews; the focused WASM gate passed.
+
+## 2026-10-21 - Bound complete assistant record pages
+
+ReadPage sizes complete responses within 24000 bytes, preserves honest continuation, and returns detail-required placeholders for near-limit records. Unfit metadata errors identify the exact collection and record. Native assistantdata tests and full vet passed, including fifty-row Unicode/redaction traversal, stable snapshots and exact detail recovery.
+
+## 2026-10-21 - Exact disposable assistant scenarios
+
+Added current bound settings/account selection, strict amounts and horizons, native clamped calendar-month arithmetic, exact diffs and unavailable labels. Scenarios disclose current-engine ledger semantics, suspend triggers, close their disposable store and never write the household ledger. Full native gates and all five sandbox WASM groups passed.
+
+## 2026-10-21 - Bound transparent assistant memory
+
+Removed global active-dataset redirection from memory tools, surfaced storage and malformed-value errors, and required one matching preview with unchanged stored memory before writing. Existing canonical fact normalization remains shared. All three memory WASM groups passed, covering replacement datasets, changed previews and strict arguments.
+
+## 2026-10-21 - Bound formula catalog responses
+
+The catalog keeps each complete response within 24000 bytes, advances continuation at the first omitted metric, and retains its fixed observation and selector identity. Oversized custom documentation and formulas return an explicit detail-required record reference. All ten formula WASM groups passed, including full traversal and actual read_record recovery.
+
+## 2026-10-21 - Current checked assistant audit evidence
+
+Added checked input and finding currency validation, fallible source reads, separate impact periods and limited empty-verdict wording. Financial estimates no longer become a false clean result after missing FX or storage errors. Nine native audit groups, vet, translation and category-ordering gates, and all three actual-tool WASM groups passed.
+
+## 2026-10-21 - Checked assistant tax record gathering
+
+Reused checked report category folds and explicit refund links, preserving exclusions and disclosing overlapping keyword buckets. Ambiguous partially refunded split allocation fails explicitly. Omitted years use the bound clock and explicit invalid years fail. Six native groups and all three actual-tool WASM groups passed.
+
+## 2026-10-21 - Correct fee-drain currency evidence
+
+SMART-A9 uses the household-base decimal scale for its threshold, strict per-charge FX, checked magnitude and accumulation, and checked annualization. Missing FX or overflow omits that account estimate. Native Smart engine tests and vet passed, including EUR conversion, JPY precision, missing FX and MinInt64 regressions.
+
+## 2026-10-21 - Checked report statistics and formula reductions
+
+Fixed MinInt64 absolute-value panics, median and group-sum overflow, percentage scaling and monthly-burn accumulation in the report-variable path. Counts remain independent; failed financial reducers no longer publish false zero values. Nine new native groups and full reports/engineenv suites plus vet passed.
+
+## 2026-10-21 - Checked entity financial formula facts
+
+Replaced tolerant FX and unchecked arithmetic in entity formula families, preserved independent known fields, and reserved unavailable built-in and generated metric names against custom formula replacement. Saved plans use the checked native evaluation. Full frozen-source engineenv tests, Reports/engineenv vet, and focused missing-FX/overflow regressions passed.
+
+## 2026-10-21 - Assistant data and calculation guidance
+
+The default assistant prompt now describes catalog pagination, record continuation, native financial tools, currency units, formula observation scope, strict IDs and documented defaults. It distinguishes stored evidence from instructions, unavailable from zero, and flag dismissal preferences from transaction changes. This is prompt guidance; enforcement remains in typed tool handlers and the conversation boundary.
+
+## 2026-10-21 - Valid ledger search tool schema
+
+The complete enabled-tool catalog regression check caught a malformed find_transactions schema. Restored its sort property with newest, oldest and largest choices; the complete catalog and list integration gate now passes all eight groups.
+
+## 2026-10-21 - Bounded complete assistant lists
+
+Replaced six captured list handlers with the shared typed reader, explicit ordering and totals, stable snapshots, exact IDs and recorded currency units. Unknown filters and read failures fail explicitly. Duplicate groups preserve complete membership or return an exact recovery query. All seven list WASM groups and the tool-catalog gate passed.
+
+## 2026-10-21 - Complete document search evidence
+
+Removed the silent 200-row corpus cutoff, preserved stable row identity and source counts, centered excerpts around matched text, and disclosed excerpt truncation and record-detail recovery. Search reads fresh bound storage and reports read errors explicitly. Native docqa tests and vet passed; both document-search WASM integration tests passed.
+
+## 2026-10-21 - Complete assistant financial decision inputs
+
+Added fallible bound-store readers for eleven remaining financial configuration and historical evidence collections. Retained expired resolutions and transfer receipts are read without pruning or trigger installation. Native persistence/getter tests passed; all sixteen assistant data WASM test groups passed in integration pass10.
+
+## 2026-10-21 - Byte-bounded assistant record details
+
+ReadRecord sizes the complete JSON envelope, including UTF-8, escaping, redaction metadata and the next cursor, within 24000 bytes. Binary search chooses the largest fitting character prefix; oversized metadata fails explicitly. Native assistantdata tests and vet passed, covering Unicode, escaped controls, stable snapshots and offsets, and exact reconstruction.
+
+## 2026-10-21 - Checked planning projections
+
+Checked APIs share the established forecast and planning algorithms, including monthly ordering, anniversary growth, rounding, and runway interpolation. Tests cover 120 frozen-model parity combinations, invalid assumptions, integer and conversion overflow, and documented work bounds. Native forecast and planning suites and vet passed.
+
+## 2026-10-21 - Checked goal and reservation formula facts
+
+Added checked bill and goal commitment helpers, canonical goal coverage and task progress inputs, checked idle cash arithmetic, and reserved unavailable atom names. Native safespend and engineenv suites and vet passed; independent known facts remain available when related financial calculations fail.
+
+## 2026-10-21 - Checked Assistant subscription evidence
+
+Added checked annual cadence normalization and a native preparation path sharing existing negotiation output/script logic. Active negative schedules and past eligible charges are read afresh; unscheduled cost cadence stays unknown, and nonmonthly or mixed-FX evidence does not support a nominal price-rise claim. Missing FX, ambiguous matches and overflow are explicit. Native recurring/negotiationprep tests and vet passed; all three actual-tool WASM groups passed in integrated pass9 retry.
+
+## 2026-10-21 - Immutable Assistant transaction edits
+
+Added immutable native update previews with atomic expected rows/references, shared canonical paired-transfer edit planning, exact decimal parsing and full split validation. Preview binds resolved IDs, accounts, categories, members, FX and transfer fees; stale or unsupported malformed groups refuse rather than retarget. Existing transfer edit path reuses the same planner. Seven new native groups plus canonical pair tests/vet passed. Seven new actual-tool and four existing update WASM groups passed in integrated pass9 retry; the category read was subsequently routed through the tested fallible ordering seam.
+
+## 2026-10-21 - Localized Assistant capture failure copy
+
+The complete native suite caught one new user-facing literal in the write-result struct. Routed that error through the existing translation catalog while preserving its error detail and English behavior. The unchanged hardcoded-copy ratchet passes; broader native assertions were otherwise green in the first full run.
+
+## 2026-10-21 - Fallible canonical category ordering
+
+Added CategoriesChecked beside the existing cached Categories reader; both share canonical catname ordering. Strict Assistant creation, finance and formula readers now use the fallible seam. The full native suite identified the ordering ratchet violation; targeted ordering, natural-sort/closed-store and screen-copy gates passed after this correction. No lint baseline or gate was weakened.
+
+## 2026-10-21 - Exact Assistant evidence selectors
+
+Aligned citation scopes with the current data, report, planning, account and formula schemas. Structured IDs/filters remain compact exact JSON, decimal numeric lexemes retain full precision, and opaque continuation tokens get a readable marker. Tool-result evidence is retained verbatim. Native toolcite tests and vet passed.
+
+## 2026-10-21 - Checked account and recurring formula facts
+
+Added a checked account-flow reducer sharing the existing legacy fold and reused checked recurring cadence/FX arithmetic. Invalid facts omit only dependent variables; unavailable dynamic names are reserved against custom-molecule shadowing. Account free/overearmarked differences stay in exact minor units before formatting, and essential-month totals use an additive checked emergencyfund Basis API. Native accountflow, engineenv and emergencyfund tests passed exit0 with -work; vet and diff checks passed. Prior ordinary test bodies passed but Windows refused temporary-executable cleanup, so the retained-work run supplied the clean process gate.
+
+## 2026-10-21 - Strict Assistant task and account creation
+
+Added strict typed arguments, complete previews, canonical task/account validation, expected collection/base-currency guards and explicit duplicate no-ops. Account creation preserves shared ownership, supported currency/type/class, liability sign, APR, limits and opening-balance history; task creation discloses full notes, dates and priority. Monetary parsing uses canonical plain-decimal ParseMinor. Focused native tests passed; all eight strict Basic creation WASM groups passed in integrated pass8, and the actual duplicate-approval session test passed with the replacement handler.
+
+## 2026-10-21 - Exact Assistant transaction creation and categorization
+
+Replaced float amounts and ambiguous substring selection with exact decimal parsing, stable IDs or exact unique names, validated effective fields and canonical duplicate checks. Public signed cash flow maps through each account liability convention. Categorization previews every affected ID, excludes transfers, preserves other fields and rejects a changed match set or stale row atomically. Six focused native groups/vet and all seven real-App WASM creation groups passed in integrated pass7.
+
+## 2026-10-21 - Preview-bound account reconciliation and transfers
+
+Added immutable expected-state native APIs for reconciliation and transfers, using shared checkpoint/transfer math and atomic replay. Repeated checkpoints replace against the underlying ledger correctly; returning to that ledger removes old checkpoints without a zero row. Balances and both currency legs are previewed; stale ledger/account/rate context refuses execution. Transfers retain explicit idempotency keys and assistant source. Native provisional/appstate suites and expected retry regression passed; all five actual account-write WASM groups passed in integrated pass8.
+
+## 2026-10-21 - Fresh Assistant tool rounds and honest usage receipts
+
+Rebuild read closures for each provider turn and after an actual approved write, while retaining the previewed write instance until execution. Each response reports its usage once to the captured conversation and bound live store, including interrupted tool loops; budgets are checked before the next provider call. Privacy changes cancel active sessions, and app/store replacement blocks retained approvals and stale callbacks. All ten mocked actual Insights lifecycle groups passed in integrated pass8, including fresh same-response category reads, partial provider errors, exact cap enforcement and dataset replacement.
+
+## 2026-10-21 - Verified Assistant batch undo and capture failures
+
+Changeset apply isolates the household baseline, preserves actor identity, captures each operation including failed partial writes, and records exact undo IDs. Undo All awaits each durable replay in reverse order, stops on mismatches/errors and retains visible partial progress. Direct tool writes use checked capture too, refusing unavailable baselines and disclosing uncertainty after a post-write capture failure. Native changeset/appstate tests passed, two focused Undo sequence WASM groups passed in pass7, and four direct-write receipt groups passed in pass8.
+
+## 2026-10-21 - Assistant financial policy and retained history coverage
+
+Added sixteen fixed-key typed sources for sweep and round-up policies, occurrence payments, standing instructions, templates, tax/retirement/inflation assumptions, notification rules/routes, portfolio targets, benchmark/health history, saved reports/snapshots and debt policy. Shared checked native parsers preserve existing tolerant UI getters. Retained lists are not silently capped or pruned; unit/default provenance and malformed-source errors are explicit. Four native policy parser groups and all twelve actual-App Data WASM groups passed exit0; tests include more than 20,000 benchmark points and full record continuation.
+
+## 2026-10-20 - Canonical Assistant savings goal coaching
+
+Replaced naked minor-unit coaching with the existing checked goal evaluator and contribution plan projection. Savings pace distinguishes explicit planned contributions from required pace, saved funds from reservations, and nonfinancial goals from funding goals. Missing FX and arithmetic failures remain unavailable; paused and recently reviewed goals retain the quiet policy. Fresh fallible Store reads feed each call. Native goalcoach tests/vet and all three actual-tool WASM groups passed in integrated pass7.
+
+## 2026-10-20 - Complete Assistant formula discovery
+
+Replaced the 140-row listing cap with stable paginated metadata for canonical atoms, molecules, entities and custom metrics. Fixed observations retain time, base currency, household scope and month; a bounded shared cache survives per-round handler rebuilds and rejects stale/expired/evicted continuations. Missing/nonfinite variables and corrupt source configurations fail explicitly. All financial configuration and pool inputs read the bound store; calculations still use the existing live engine and formula evaluator. All eight actual-App WASM formula groups and enabled-registry parity passed in integrated pass7.
+
+## 2026-10-20 - Checked smart bill formula inputs
+
+Reused the canonical checked recurring cadence model for income-per-payday and the existing optimizer behind a conservative checked arithmetic envelope. Missing FX, invalid magnitudes and overflow omit dependent bill variables instead of producing zero; known liquid cash remains independently available. Native billsched and engineenv tests/vet passed, and three real-host cache adapter groups passed with the new formula builder adapters.
+
+## 2026-10-20 - Assistant retained notifications and financial policies
+
+Added fresh bound-store readers for retained notification feed/archive, allocation/planning/bill policies and investment pools. Canonical native config parsers are shared with existing UI getters; defaults and malformed data are distinguished. Declared Unix-second timestamps use checked UTC calendar filtering without interpreting numeric money as dates. Native Query7 and FinancialConfig2 tests passed; all eight Data WASM groups plus three cache adapter groups passed exit0 in the combined real-App gate.
+
+## 2026-10-20 - Verified Assistant tax reference values
+
+Checked every existing field for both supported tax years against IRS and SSA primary publications. Fixed four deduction values, preserved the year-specific reference contract, and added verification dates/source URLs plus catch-up and retirement-age qualifications. Native taxref tests (nine groups), vet and diff checks passed; docs/TAX_REFERENCE_SOURCES.md records the source mapping.
+
+## 2026-10-20 - Assistant report calculation fidelity
+
+Reports now read fresh fallible Store data and financial settings, preserve partial-date ranges, reject oversized monthly series, and propagate unavailable FX/arithmetic rather than false zero. Added checked native report adapters and independent full-history investment basis traces. Current balance-sheet reports explicitly differ from selected activity windows; split-linked-refund category ambiguity is disclosed. Native reports tests/vet and twelve selected WASM report and trace regressions passed. Root forwards current Assistant activity scope into the report tools.
+
+## 2026-10-20 - Assistant request lifecycle
+
+Added concurrency-safe session ownership and one-shot approval decisions, immutable conversation accounting identity, guarded late streaming/result callbacks, and cancellation on unmount/switch/new chat. A scheduling-order bug lost blank-chat preferences when message persistence allocated the conversation first; preference transfer now follows identity resolution. Native assistantloop tests and all five actual Insights lifecycle WASM groups passed using a mocked provider, including exact-cap blocking and duplicate approval decisions. Registry parity coverage also passed in the integrated tool gate.
+
+## 2026-10-20 - Assistant permission selectors
+
+Aligned permission scopes with current task, goal, transaction delete/merge, and transaction edit schemas. Numeric JSON lexemes and decimal strings remain exact; optional selectors do not invent affected counts. Native toolperm tests and vet passed. Existing irreversible labels remain conservative.
+
+## 2026-10-20 - Assistant change receipts and exact undo
+
+Added canonical Assistant baseline isolation and exact undo receipts, preserving prior manual edits and avoiding phantom actions for no-op or failed tools. Undo rechecks the published receipt before replay and removes history only after durable success. Native history and action-state tests, two app WASM groups, and three screens receipt groups passed with mocked local fixtures. No release or deployment.
+
+## 2026-10-20 - Assistant trigger-aware workflow variables
+
+Added canonical workflow transaction-variable declarations and App.WorkflowVariableNamesFor(trigger), preserving the general discovery union while gating unavailable per-row names on other triggers. Transaction custom definitions follow their actual runtime types; absent account/category values are explicit empty strings. The authoring compiler and tool share that trigger-aware surface. Native workflow/nlauthor/appstate tests and vet passed, and the two actual-tool WASM regressions passed in integration pass4: the advertised txn_abs threshold executes at the real boundary, while non-transaction and unknown names refuse without writes.
+
+## 2026-10-20 - Assistant atomic transaction removal approvals
+
+Added canonical App expected-before delete/merge operations that reuse the existing deletion/relationship planner and ReplayChangesExpected. Duplicate membership is recomputed and the survivor is computed by dedupe.Merge inside the service; stale edits, changed groups or changed transfer expansion refuse without partial state. New tool handlers strictly parse exact amount/date/identity arguments, show selected record IDs and the survivor, require the matching preview and consume it once. Focused native appstate operations passed; all five real-handler WASM groups passed across integration pass4 and the targeted pass5 fixture correction, including ambiguous/stale/excluded transfer cases and canonical merged metadata. Existing transfers remain outside these two Assistant tools.
+
+## 2026-10-20 - Assistant canonical goal contribution approvals
+
+Replaced the inline first-substring saved-amount update with stable-ID or unique-name resolution, exact decimal parsing in the selected actual currency, full goal/FX approval binding and canonical App.ContributeToGoal. Blank/ambiguous targets, nonpositive/malformed/overprecision amounts, stale/deleted goals, missing rates, unsupported legacy currency mismatch and task/archived state are refused before writing. The same approval cannot double-contribute. All seven real-App WASM groups passed in integration pass4, covering history/undo parity, values above float integer precision, foreign goal currency, atomic failure and role guard.
+
+## 2026-10-20 - Assistant planning continuation and schedule availability
+
+Separated recurring source and schedule availability, so unassigned/deleted accounts no longer erase independently known forward dates. Retained per-definition source/schedule issues and explicit occurrences completeness. Planning continuation requires the returned dataset revision and refuses mixed pages after a store edit; oversized output requests a smaller page instead of silent truncation. Native Planning tests/vet and all nine actual-handler Planning WASM groups passed in integration pass4, including stale page, missing source, month-end cursor and bounded output regressions.
+
+## 2026-10-20 - Assistant formula input and clock freshness
+
+A single snapshot feeds both calculation and cache identity: exact time/zone, week start/pay anchor, idle benchmark, allocation/planning settings, bill settings, pools and Smart counts. Input serialization failure computes uncached rather than colliding with another key. Tests verify unchanged-input reuse, config changes without store/UI revision bumps, exact intraday canonical behavior and nonfinite fingerprint bypass; all three cache WASM tests passed in integration pass5 after replacing an ineffective pace fixture with a real days-left boundary. Exact clock identity reduces whole-map cache hits during unrelated renders; prepared financial facts are a separate optimization, and this commit makes no latency improvement claim.
+
+## 2026-10-20 - Assistant financial preferences and exact filters
+
+Added the 43rd typed collection, financial_preferences, through a strict audited DTO for budget income modes, rollover, pay-cycle, sweep and round-up settings. Provider/server/auth/CSRF fields stay excluded and their exact credential values are used only for local text redaction. Corrupt stored preferences report unavailable rather than valid defaults. Generic scalar filters normalize exact decimal identity with bounded exponent handling, avoiding float conversion or giant exponent expansion. Six native query tests and all four real-App Data WASM groups passed in integration pass4. Notification feed and other financial configuration namespaces are under a separate coverage audit.
+
+## 2026-10-20 - Assistant checked scoped finance tools
+
+Replaced six legacy inline read handlers with thin fresh fallible store adapters and native assistantdata finance facts. Category totals use checked ledger folds over an explicit scope-local refund ledger; net worth is labeled household-wide. Budgets use canonical cadence/rollover/coverage models. Affordability parses exact decimals, uses eligible liquid accounts and checked arithmetic, states its reserve assumptions and never treats total investments/property as spendable cash. Native Finance/reports/afford tests passed; all three real-App Finance WASM groups passed, including split/refund/exclusion/scope/FX/precision/date and healthy-to-closed-store transitions across every handler. Inherited split-linked-refund attribution and legacy report-section readers remain separately identified follow-ups.
+
+## 2026-10-20 - Assistant exact flag dismissal approvals
+
+Replaced malformed-JSON-to-clear-all behavior with strict object/type/null validation and an approval-bound sorted key/title/detail snapshot. Changed or newly matching flags require review again, dataset switches are refused, and repeated execution cannot sweep new flags. The result verifies persisted dismissal preferences and states explicitly that transactions were not changed. All six focused real-App Flags WASM groups passed in integration pass2; approval metadata already reports unknown count/non-reversibility truthfully.
+
+## 2026-10-20 - Assistant workflow and rule approvals
+
+Authoring uses strict typed object validation, live unique category resolution, stable preview-bound IDs and repeat-call no-op checks. Workflow previews identify every ordered task/notification/category/tag/review effect and show full text and resolved IDs. Rule descriptions and receipts truthfully save the rule for future matches without promising existing-transaction backfill. Five actual App-backed WASM groups passed after correcting invalid test fixtures; these cover argument types, ambiguity, preview completeness, stale/retry/write-error behavior. A separately scoped trigger-aware variable-discovery follow-up will make the advertised transaction expression available to txn-added workflows.
+
+## 2026-10-20 - Assistant account and goal planning access
+
+Added native assistantdata planning facts and fresh fallible App/store adapters for get_account_details, project_account, list_goals, goal_funding_plan, list_goal_reservations and list_recurring. Currency and arithmetic availability are explicit; money is returned in exact minor-unit strings with source identity and observation/revision metadata. Native models delegate to canonical account projections, goal evaluation/funding/reservations and forward recurring cadence from saved cursors, preserving month-end dates and bounded windows. Native Planning tests/vet and all seven actual-handler WASM groups passed in integration pass2. Read-only results do not perform transfers or goal contributions; missing-source schedule polish and stricter continuation are next refinements.
+
+## 2026-10-20 - Assistant full financial record access
+
+Added native typed data catalog/query/detail models and three registered read-only tools: data_manifest, query_data and read_record. The catalog includes archived rows, orphan balance history through a dedicated table-only store read, links, custom data, documents, workflows and safe financial settings. Snapshot-bound continuation refuses mixed revisions; exact JSON numbers avoid float precision loss; large content remains reachable in character chunks. Raw credentials, arbitrary KV and binary payloads are excluded, with known credential/text redaction. Native query/history tests passed and all three real-App Data WASM groups passed in integration pass2 after correcting the legacy rules uppercase ID field. Financial preferences remain the next explicit coverage addition.
+
+## 2026-10-20 - Responses tool argument semantics
+
+Followed the official Responses migration documentation to send strict:false for flattened function tools; this avoids implicit strict normalization of intentionally optional app parameters. Existing tool names, descriptions, parameter schemas and call IDs are unchanged. A native request contract verifies the explicit flag and optional properties; the complete internal/ai native package passed. No paid API request or credential was used.
+
+## 2026-10-20 - Canonical Assistant task completion
+
+Replaced the legacy title-substring PutTask path with a preview-bound canonical App.CompleteTask helper. Exact IDs are exposed by list_tasks; exact titles precede unique partial matches, completed retries remain unchanged, and execution refuses edited or removed preview records. Six focused actual-handler WASM test groups passed in the combined Data/CompleteTask run, including recurrence, identity, ambiguity, stale approvals, no-op retry and write-error recovery; the separate Data catalog ID fixture failure was outside this slice.
+
+## 2026-10-20 - Assistant permission and detail catalog
+
+Filled actual create_rule/create_workflow permission gaps, removed obsolete merge ids-based counts, and stopped claiming one reversible flag dismissal for potentially many local dismissal keys. Extended the aggregate-only tool gate to actual document/tax/recurring and planned paginated/planning detail read handlers; full-detail conversations retain access. Focused native toolperm and aicontext tests passed. Registered-tool integration coverage follows once the new helper groups are wired.
+
+## 2026-10-20 - Shared checked goal reservations
+
+Added the canonical goals.BuildAccountReservations snapshot with checked source-currency aggregation before FX, unique goal identities, missing-balance/error metadata and stable warning order. Funding reuses that index; warning consumers avoid building suggestions. Accounts and Goals render the shared reservationNotice with independent action owners and unconditional child hooks, removing two stale hook exceptions. Native goals/goalview tests, vet and screen lint passed; both actual-host WASM regressions passed after the complete projection API migration, covering FX, stale data, unknown recovery, overflow and actions. Legacy payday and sweep consumers are a separate pending migration.
+
+## 2026-10-20 - Checked account projections
+
+Migrated the canonical account projection API and all native/WASM consumers to explicit errors. Balance prefixes, daily flow summaries and debit magnitudes use checked money arithmetic; unavailable projections render translated status instead of wrapped amounts. The untouched starting point remains visible before same-day closing flows. Native acctproject, accountview, appstate and dashboardview tests and vet passed, the production WASM build passed, and both focused Accounts host tests passed. Daily flow summary availability can differ from a valid low/end balance when only the ancillary subtotal overflows.
+
+## 2026-10-20 - Keep Reports read-only during ordinary renders
+
+Removed obsolete render-time period persistence; explicit period actions still own saves. The posture effect skips unchanged writes and preserves the valid stored view. Stable section context/action holders remove changing clock and callback identities, while a native exact open-start/closed-end month index refreshes only Motion at the relevant cutoff. Two new actual-host counter tests and five existing Reports regressions passed: UI-only mode/export/popover renders preserve store revision and six prepared model factories/five Full sections; real period, scope, data, day and nanosecond cutoff changes refresh the appropriate content. Native reportview and stable-hook checks passed. No latency percentage is claimed until a controlled browser comparison.
+
+## 2026-10-20 - Reuse shared keyboard tabs on Goals
+
+Replaced the hand-built Goals tab buttons with the established configurable SegmentedControl Tabs. Existing labels, classes, test IDs, view atom callbacks, sort visibility and uncounted presentation remain intact. The shared component adds ArrowLeft/Right wrapping, Home/End, stable tab IDs, selected ARIA state and roving tab stops. Native segment/stable-hook checks passed. Four focused actual-host WASM tests passed, including keyboard/content/data transitions and existing FX/task-preview regressions. Component inventory now records Goals adoption.
+
+## 2026-10-20 - Use independent account projection horizons
+
+Added native ProjectionInputs.ProjectPair to expand recurring occurrences once through the longer horizon and filter each exact timestamp boundary before calendar-day normalization. This fixes the forward chart previously receiving only 30 days of drivers. The 30-day summary remains separate; a flow one hour beyond its endpoint cannot leak in from the longer window. Native accountview tests and vet passed, including independent App.ProjectAccount parity, exact boundaries, later flows, reversed/zero horizons and unknown cadence fallback. The actual lazy Accounts host test passed, showing a debit after day 30 affects the 90-day warning but not the near-term driver list. Single-window projection avoids redundant filtering.
+
+## 2026-10-20 - Load the report scope once per mounted reader
+
+UseActiveScope memoizes its mounted seed by app identity before reading the existing fixed atom and capturing its setter. The original scope loader, legacy active-member migration, persistence and outside-render setter remain unchanged. Three new WASM tests passed, covering real-loader counts, live and persisted updates, late/remounted readers, migration/deletion and invalid/default cases, pre-capture no-op and fresh-runtime workspace changes. Four existing Dashboard/Accounts host regressions also passed under Go 1.26.9, including institution ambiguity, scope availability/disclosure and compact/detail lifecycle.
+
+## 2026-10-20 - Remove the obsolete budget selector
+
+Confirmed useBudgetHealth had no callers anywhere in internal Go source. Removed the dead private helper and imports; it retained obsolete parameters and a second budgeting path beside the canonical native view model. Corrected selector comments to acknowledge that persisted UI settings also advance the store revision. The WASM screen package compiled successfully after removal. No new tests or runtime behavior changes were needed for this dead-code cleanup.
+
+## 2026-10-20 - Avoid the duplicate transaction-link read during hydration
+
+Removed one duplicate SyncTxnLinkNetting call after durable dataset import. Both the prepared checkpoint and replay/fallback import paths already synchronize the report overlay through ImportParsedDataset, so hydration no longer reads and decodes the same transaction links again. The focused WASM regression passed under Go 1.26.9 in 6.1 seconds, explicitly proving which recovery branch was taken and checking the linked refund leaves March expense at80 dollars and April income/expense atzero. Its cleanup restores the prior global netting overlay. A broader hydration lane was stopped after two minutes and is not claimed as a pass. This change removes redundant work without a new latency claim.
+
+## 2026-10-20 - Keep budget tasks open when spending is unavailable
+
+Added a native typed budget observation that preserves independently known limits while omitting unavailable spending-derived variables. Existing formula conditions now fail closed instead of treating unknown overspending as zero. Budget variable discovery and duplicate-name identities remain stable, and persisted molecules cannot replace reserved unavailable atoms. Full engineenv/taskresolve/tasksuggest native suites, focused appstate task-resolution/routing regressions and vet passed under Go 1.26.9. Tests cover missing/invalid FX, sum/magnitude overflow, known zero, successful numeric parity, discovery, molecule collisions and production posting of the existing generated condition. Restoring rates while still overspent keeps the task open; actual linked-refund recovery completes it once. No formula or transaction commit-flow semantics changed.
+
+## 2026-10-20 - Correct the transaction benchmark target metadata
+
+Rechecked the original transaction-filter benchmark header, which records goos windows and goarch amd64. Corrected the documentation that had described the ARM64 host as the benchmark target. Raw observations, fixtures and measured results are unchanged; no new benchmark run was needed.
+
+## 2026-10-20 - Initialize each transaction filter reader once
+
+UseTxFilter memoizes its mounted seed by app identity while retaining the established fixed atom, CurrentTxFilter, persistence and rolling-date resolution. The shared hook has 40 production call sites, including notification rows and transaction category controls; this removes warm per-reader work, not all initial subscriber loads. Five focused WASM uistate tests passed, covering actual loader counters, live/store revision writes, late mounts, remounts, legacy date migration, invalid defaults and fresh workspace runtimes. An actual Notification Center to Transactions host test passed after fixing fixture DOM stubs and canonical date-only timestamps; it verifies the latest account/date/sort selection, merchant action, read flag and exact destination rows.
+
+## 2026-10-20 - Record pass-seven page verification and timing
+
+Full native integration and 845 WASM screen tests passed. Three sample-only browser cases verified notification keyboard tabs, To-do view parity and all 47 routes. One warm-up and seven measured nine-page sweeps completed without failure; local and served artifact hashes matched throughout. Dataset counts matched earlier captures, while Assistant DOM content grew. Observed settled medians were slower than the previous capture under different uncontrolled machine load, so no causal page-latency improvement is claimed. PRIMARY_PAGE_PERFORMANCE records all medians, nested startup schema 2 details and exact evidence paths. Broader latency verification remains ongoing.
+
+## 2026-10-20 - Restore the live reload server after concurrent websocket writes
+
+The local dev server exited on a Gorilla WebSocket concurrent-writer panic during overlapping build/status delivery. In the ignored pinned framework tool worktree, all three data-frame paths now share a dedicated writer mutex; no app module or external framework checkout was changed. The concurrent large-frame broadcast regression passed thirteen focused native runs; race testing was unavailable without cgo. Restarted scripts/dev.ps1 hidden on port8080 with the pruned watcher. Status reports a successful full-reload build and Transactions, Notifications and Budgets routes return200. The full native app suite and845 WASM screen tests passed before browser capture. No release or main push was performed.
+
+## 2026-10-20 - Prepare source-order rows for account history series
+
+Native account series now prepare eligible account-to-row indices once, retaining source order and deferring checked arithmetic to the canonical per-account accumulator. It preserves strict/unsorted/repeated cutoffs, duplicate IDs with separate opening balances and currencies, fail-fast account order, intermediate overflows and FX/liability handling. Eighteen adversarial cases and400 seeded scenarios under both selection policies match the frozen prior implementation including exact errors and wrapped sentinels; affected five native packages, ledger vet and diff check passed. Three-sample CPU1 native benchmarks and allocation-count tradeoffs are recorded in PRIMARY_PAGE_PERFORMANCE; elapsed observations are qualified for Windows AMD64 target on ARM64 host with concurrent development, not page-latency claims.
+
+## 2026-10-20 - Load layout and widget settings once per mounted reader
+
+UseLayoutItems and UseWidgetConfigs now memoize each mounted hook seed by app identity before reading the existing fixed atom. Loaders, legacy placement migration, Focus subsets, reconciliation and persistence remain unchanged. Native dashlayout/widgetcfg tests passed. Four focused WASM hook tests with eleven storage-format cases covered warm parent and live-atom rerenders, late readers, remounts, fallback settings and fresh-runtime workspace A-to-B-to-A. Three existing actual Dashboard host regressions also passed. Same-runtime replacement of the App pointer is not added as a workspace switching contract.
+
+## 2026-10-20 - Prune generated trees from live service watch
+
+Extracted shared source discovery for the foreground script and background job. The single-pass directory stack skips .tools, web, node_modules, .git and reparse-point directories before descent, preserves other actual source roots, and includes go.mod/go.sum timestamps. A pre-build stamp avoids recompiling unchanged services immediately after startup while retaining detection of edits during the initial build. Windows PowerShell 5.1 parsing and deterministic fixtures passed, including source roots, ignored trees, a junction, module stamps and empty roots. An optional single paired repository probe removed2562 ignored tool files from each poll; elapsed302.5ms versus135.8ms is a local wall-time observation, not CPU or sustained benchmark evidence. The max-timestamp polling contract is retained.
+
+## 2026-10-20 - Constrain WASM validator fixture cleanup
+
+The isolated artifact-validator test now resolves its temporary directory and confirms strict containment under the system temporary root plus the expected GUID basename before removal. Windows PowerShell 5.1 validation passed. This keeps cleanup limited to the fixture it created.
+
+## 2026-10-20 - Prepare typed snapshot row keys once per collection
+
+The snapshot converter resolves direct unique exported string keys once per collection, preserving the wire-JSON fallback for custom encoders, embedded fields, ambiguous tags and case variants. Transaction encoding is narrowly audited to preserve ID. Full native snapshot parity and adversarial key tests passed from a compiled binary; explicit package vet passed. Six actual app-host snapshot cache tests passed before the conservative resolver tightening. A three-sample CPU1 native benchmark of 3000 transactions reduced allocations from about45187 to24229 and bytes from6.90MB to6.14MB relative to the previous typed path; timing and its Windows AMD64 target/ARM64 host limitations are documented. SQLite reads and browser latency are outside this benchmark.
+
+## 2026-10-20 - Reject invalid WASM test artifacts at compile time
+
+Disk pressure produced an empty test artifact despite a successful Go compiler exit. Compile-TestBinary now verifies the expected output exists and reads only its eight-byte WebAssembly magic and version header, with package and path in errors. Both fresh and rerun compiles use the guard. Isolated AST-loaded validation passed under Windows PowerShell 5.1 for missing, empty, truncated, invalid version, invalid magic, exclusively locked and valid artifacts; it does not execute runner environment setup or invoke Go.
+
+## 2026-10-20 - Keep net-worth account selection consistent
+
+Added one native account eligibility predicate and shared checked total accumulation for strict and explained household values. Balance-sheet and attribution account selection now use it, while explicit investment portfolio series retain excluded holdings through a separate AccountNetValueSeries entry point. Native selection, overflow, fail-fast and duplicate-account tests passed across six packages with vet; the actual account editor WASM regression passed after adding required fixture descriptions. It toggles the setting and back and checks both headlines, deltas, trend SVG and exclusion disclosure. Report cash-flow transaction scope and archived-account behavior are preserved.
+
+## 2026-10-20 - Wait for transaction focus timers in WASM tests
+
+The integrated screen run exposed a scheduling race in two tests that assumed a 20 ms sleep always dispatched the JavaScript focus callback. Both now poll the observable outcome with a bounded three-second deadline, keeping the callback alive until it has run. The two focused transaction tests passed after the change; a separate net-worth fixture failed validation and is being corrected. Production focus behavior is unchanged.
+
+## 2026-10-20 - Carry net-worth availability through primary pages
+
+Added native networthview.Snapshot and shared revision/scope/rate-aware preparation so fatal errors cannot appear as 0.00, partial figures disclose omitted currencies, and incomplete totals cannot support affordability advice or net-worth milestone wins. Accounts reuses exact balances rather than folding the ledger again; Assistant shared context contains aggregate counts/currencies without account names. Checked liability magnitudes now return overflow instead of panicking at MinInt64. Native ledger/model/notification suites and full native integration passed. Five actual-host WASM regressions passed across two focused runs, covering live rate/scope/fatal/zero transitions, memo separation, actual share controls, composer safety, independent wins and Dashboard KPI/household disclosure. Chosen-exclusion trend parity is separately being corrected.
+
+## 2026-10-20 - Reuse the native To-do page during selection changes
+
+Added one typed component-local memo at a stable hook position before mode returns, keyed by the filtered task set, data revision, complete filter, sort, page/size and immutable collapse set. Native paging remains the source of row order, with no callbacks stored in the cache. Three actual-host WASM cases and native paging/filter/hook lint passed: counters verify warm reuse for row/bulk selection and errors, refresh for each input change, no List work in Board/Calendar, native order parity and working callbacks after mode transitions.
+
+## 2026-10-20 - Share typed dataset snapshots between undo and persistence
+
+Added a native typed snapshot converter with exact RawMessage parity against export-plus-parse, including every Dataset field, nil/empty semantics, receipt pruning, raw graph values, store-aligned keys and key redaction. A bounded app/revision/cursor cache serves deep independent copies to undo and the mutable writer mirror, reuses a matching export memo, and rejects or retries changing revisions without publishing stale snapshots. Six cache WASM tests and six selected persistence/undo/recovery cases passed, including the two-app compaction race. Native parity tests passed. The synthetic 3000-row conversion benchmark measured 31.01 ms/9.22 MB versus 21.29 ms/6.91 MB, with more typed-path allocations; it excludes database snapshot cost and is not a browser latency claim.
+
+## 2026-10-20 - Read only the goal needed for a contribution
+
+Replaced storedContributionGoal ListGoals scanning with SQLiteStore.GetGoal by ID, preserving current-store freshness, missing-goal rejection and wrapped load errors. This removes whole-goal-table decoding from contribution, remaining-amount and Undo actions without changing their financial behavior. The focused native contribution, rollback, retry, Undo and remaining-amount regressions passed with exit zero.
+
+## 2026-10-20 - Initialize persisted notification feed once per mounted hook
+
+UseNotifyFeed now memoizes its persisted seed per mounted hook and app identity, then keeps the existing fixed shared atom and out-of-render catch-up capture. No global cache or framework change was added. Three real-hook counter/lifecycle cases prove zero warm initializer reads, live updates across late subscribers/remounts, and supported workspace reloads with runtime reset. Five Notifications host cases passed, covering read/catch-up/history/remount/dismiss/Undo plus existing group/member/shared-tab transitions.
+
+## 2026-10-20 - Project the completed month once for budget wins
+
+The native preparation preserves row order, netted semantics and canonical Spent calls while changing date-filter work from B*N to N+B*K. Parity tests cover date bounds/time zones, owners/splits/tags, saving transfers, duplicate budgets/categories, report exclusions, FX rounding, invalid-amount isolation and cross-month refunds. Native tests and vet passed. Three same-binary synthetic 60k-row/180-budget benchmark samples measured medians 155.9 ms versus 12.56 ms with identical 180 wins and 10.8M versus 150k candidate date checks. The projection adds 515552 bytes and ten allocations per operation; concurrent functional work and Windows amd64 target on the arm64 tool host mean these are local native phase observations, not browser speed claims.
+
+## 2026-10-20 - Record pass-five integration evidence and native contracts
+
+Updated shared component guidance from current production contracts and recorded exact evidence for native integration, 835 screen WASM cases, focused canonical history, 17 recovery checks and six frozen sample browser cases over 47 routes. Recorded the matching local/served artifact hash and explicitly separated these correctness checks from latency measurements and subsequent in-progress changes. No code changed in this documentation commit.
+
+## 2026-10-20 - Check goal history and use the canonical monthly plan
+
+Added SeriesChecked, SummarizeChecked, ShortfallChecked and PercentOfPeak so mixed currencies, invalid records, duplicate-month totals and overflow cannot draw wrapped or mislabeled history. The card passes its canonical evaluated assignment and current rates rather than recomputing a rate-less plan and dropping errors in markup. Compatibility APIs remain documented; financial rendering uses checked results. Native tests and the full 835-screen rerun passed; six focused history/compact-card cases then passed, including the additional FX-adjusted deadline-plan regression. The six frozen browser cases also passed against the corresponding production source.
+
+## 2026-10-20 - Wait for visible Smart import review in tests
+
+The complete screen run exposed another test that inspected controller state immediately after resolving a fake fetch. PDF, image and receipt responses were still processing on separate scheduler turns, and test teardown could then race that response. Replaced the timing assumption with a bounded three-second wait for draft-review-page, retaining the existing row/account assertions. The full rerun passed all 835 screen WASM tests; production import behavior is unchanged.
+
+## 2026-10-20 - Distinguish unavailable period totals from genuine zero
+
+Added native periodview.Totals with known money versus independent percentage availability, preserved all-or-nothing FX semantics and changed MinInt64 expense absolute values from panic to checked error. Shared selectors now carry availability through Dashboard render context, hero, KPI/gauge and Assistant context; unsupported affordability renders an explanation rather than a zero-income result. Wide int64 gauge text no longer narrows to wasm int, while width remains clamped and truncation preserves 0% rather than -0%. Native periodview/ledger/i18n/screenlint and all native integration passed. Five focused actual-host/selector/gauge WASM cases and the final signed gauge parity case passed; full screens and sample browser integration are running separately.
+
+## 2026-10-20 - Keep all named and surface-scoped undo records
+
+Snapshot extraction previously required id for every collection, rejecting named molecule records and collapsing placements with the same id on different surfaces. Collection-aware keys now match SQLite molecule names and surface/id placement keys; other collections still require nonempty ids. Duplicate snapshot keys return an error rather than silently losing a row. Native round-trip tests cover populated molecules, multiple surfaces, missing fields and duplicate keys. Existing user-undo placement exclusions remain in place; snapshot/recovery fingerprints retain every placement.
+
+## 2026-10-20 - Commit contribution progress and ledger changes atomically
+
+Replaced independent goal/ledger writes with checked expected-before-image replay batches. Monthly log preflight runs before any write, and extracted transaction/goal/delete effects run after commit so observers see consistent data. Ledger errors no longer save memo progress and leave the form open for a duplicate retry. Undo removes progress, log, debit and relationships in one batch; missing debit remains tolerated. Native rollback/capture, conflict, event order, task/bill/workflow regressions and vet passed. Six actual app-host WASM cases passed, covering corrected retry once, global Undo/Redo including workflow effects and conflict retention. Browser durability remains a separate contract; no durable acknowledgement is claimed here.
+
+## 2026-10-20 - Avoid repeated normalization of prepared imports
+
+Added store.PreparedDataset, constructed only by full Import, and LoadPrepared sharing the existing persistence body while ordinary Load keeps its existing migration/backfill behavior. Appstate retains the opaque prepared value and supplies the device credential separately. Current and legacy fixtures prove full snapshot parity and nonempty exact journal-capture parity; token reuse preserves original data across device keys, and invalid handles leave existing rows, revision and cursor unchanged. Focused native store and appstate tests passed. This removes repeated CPU passes on parsed imports without claiming a measured browser latency improvement.
+
+## 2026-10-20 - Prepare Goal card details only after disclosure
+
+Moved the compact return ahead of expanded-only metadata, quick funding, task previews, notes, menus and detail preparation while keeping hook registration stable. Shared detail preparation delegates to the existing tested native calculations. Actual Goals host counters prove zero detail preparations across nine compact cards, only the opened goal prepares, collapsed revisions remain cold, and expanded output refreshes correctly after settings and contribution changes. Also replaced a byte-length separator slice with UTF-8-safe TrimPrefix for nonfinancial due labels. Screenlint and four focused WASM cases passed.
+
+## 2026-10-20 - Check contribution history rollup arithmetic
+
+Added RecordContributionChecked with copy-on-write detailed logs and monthly history, checked money addition and portable count bounds, retaining chronological caps and the documented currency-mismatch policy. The legacy wrapper preserves source compatibility without returning wrapped amounts. Boundary, multiple-aged-entry rollback, aged currency mismatch, cap and nonmutation cases passed via go test -work on the domain package. Appstate preflight and atomic goal/ledger orchestration follow separately.
+
+## 2026-10-20 - Restore the live development workflow on 8080
+
+Stopped the CashFlux test servers on 8142/8143 and restarted scripts/dev.ps1 on loopback 8080. Rebuilt the ignored gwc runner from a persistent v5.0.1 tool worktree matching the module, fixed boolean forwarding/full reload classification and extensionless SPA routing in that local tool installation. Verified an actual main.go timestamp change caused a successful full reload and /transactions returned HTTP 200. Documented these local ignored repairs explicitly so future tool replacement does not silently lose them; no application framework dependency or release changed.
+
+## 2026-10-20 - Document shared preparation and cache boundaries
+
+Read current implementations to document ownership, immutable cache data, complete invalidation identities, bounded cache behavior, compact versus expanded preparation and save-time state revalidation. These contracts guide reuse without moving money arithmetic back into markup or weakening financial freshness. Documentation-only change; native and 827 screen integration checks were already green for the described source.
+
+## 2026-10-20 - Share native Dashboard transaction counts
+
+Extracted period transaction counts into dashboardview with half-open date boundaries, reporting exclusions, transfer/sign semantics, and currency-independent row counting. The controller memo uses app revision, full scope and exact bounds. Native predicate and immutability tests plus an actual Dashboard host regression passed; integration passed all native packages and 827 screen WASM tests. Existing visible KPI captions already followed reporting exclusions, so this removes duplicate inconsistent context logic rather than claiming a new caption repair.
+
+## 2026-10-20 - Revalidate contribution writes and canonical completion
+
+Contribution orchestration resolves the latest goal by ID, preserves external metadata and account edits, rejects deleted or currency-conflicting forms, and preflights amounts/custom fields before ledger writes. Native result fields now own saved milestones and known coverage transitions; the form no longer computes percentages. Seven new native cases and three actual app-host WASM cases passed. Full native integration and all 827 screen WASM tests passed. Legacy memo-only fallback on ledger failure and independent goal/ledger writes remain follow-up work.
+
+## 2026-10-20 - Share prepared Dashboard frames and layouts
+
+Dashboard placements previously rebuilt the same scoped source context and reran source pipelines on unrelated parent renders. Typed native frame contexts now share immutable input and bounded copied pipeline results with complete app/data, scope, FX, period, preferences and clock identities. A separate two-configuration layout cache freezes actual reference fields, preserves published cards and validates/serializes only changed configurations. A stable wrapper supports nil/loaded transitions and removes one obsolete hook exception. Native parity, mutation, invalidation and retention tests pass; native screenlint and vet pass, two actual Dashboard host tests pass and a main WASM preflight builds. The unrelated excluded-transaction count mismatch remains a separate follow-up.
+
+## 2026-10-20 - Preserve and validate manual goal earmarks
+
+Opening and saving legacy foreign reservations previously relabeled raw amounts as target currency. A native allocation draft now preserves untouched records exactly, including archived/deleted sources, and treats explicit amount edits separately. It indexes balances and other-goal reservations, checks aggregate FX rounding carry and totals, and marks unavailable headroom explicitly. Submit rebuilds from current goal, balances and rates, preserves external metadata and unedited changes, and rejects stale currency text or newly excessive reservations. Proper boolean DisabledIf controls replace empty-string disabled properties. Native draft tests, goals/goalview vet, screenlint, four actual editor WASM regressions and a main WASM preflight pass; a separate read-only review found no model or live-save defect.
+
+## 2026-10-20 - Keep goal splits exact at integer limits
+
+Proportional goal splits previously summed capacities and multiplied total by capacity in signed int64; overflow could produce invalid shares and an extremely long per-unit remainder loop. The common path now uses wide quotient/remainder arithmetic and one bounded stable remainder pass, with an exact big-integer fallback when aggregate capacity exceeds uint64. Native tests verify caps, exact totals and deterministic order at MaxInt64 and beyond uint64 aggregate capacity, plus 300 reference-checked random cases. Goals native tests and vet pass; the manual allocation screen using this helper passes four focused WASM tests.
+
+## 2026-10-20 - Measure native transaction-filter preparation
+
+Ran three 25-iteration samples at one benchmark CPU for 1k/10k synthetic rows. At 10k rows median widened preset counting fell from 25.170 ms to 6.044 ms and allocations from 230066 to 30096; plain and multi-facet cases also reduced allocations, while numeric search reduced elapsed work with unchanged allocations. Saved raw results and exact command, documented synthetic/native scope and concurrent-development timing caveats. These numbers do not claim browser or end-to-end typing latency improvements.
+
+## 2026-10-20 - Defer Accounts history and projection work until disclosure
+
+Compact account rows no longer compute cash flow, three history windows or a projection. An opened detail panel builds only its selected series from an immutable chronological index, while projection inputs reuse captured recurring rows and exact snapshot balances. Bounded caches include app/data identity, currency/rates, exact occurrence time and local history boundaries; invalid ledger balances show unavailable status without a plausible curve or zero-start projection. Native parity tests pass for history windows, intraday recurring cutoffs and invalid data; all three actual Accounts-host/cache regressions pass, related native gates pass and a main WASM preflight builds.
+
+## 2026-10-20 - Prepare transaction filter predicates once
+
+The existing compiled filter still reparsed search amounts and split selected CSV values for every transaction and widened preset. Prepared invocation-owned sets and numeric criteria now remove that repeated work without a retained cache. Frozen legacy-reference tests compare complete results, ordering, conversion issues and callback order across all sort directions, numeric/plain/invalid searches, split and OR scopes, bill-linked accounts, owner/tag cases and preset widening; raw inputs remain unchanged. Native txnfilter/txntoolbar tests and vet pass, related native screen gates pass and the main WASM preflight builds. Benchmark source was added for later measurement; it has not been run.
+
+## 2026-10-20 - Separate startup phase details without recording data
+
+The broad hydration and pre-mount intervals could not identify which path dominated fresh-sample versus saved-data startup. Schema version 2 retains existing disjoint phases and adds nested timing details for app-state initialization, workspace preparation, artifact storage, hydration, legacy unlock waiting, undo baseline and audit restoration. All original calls execute inline exactly once with unchanged errors and ordering. Six isolated WASM timer tests pass, including fixed-name bounds, detail accumulation, non-additive totals and execution with disabled timers; a main WASM preflight build passes. A read-only review found no data capture or boot-order changes.
+
+## 2026-10-20 - Document shared goal and lazy Reports component contracts
+
+Updated the component guide with one-pass task summaries, immutable row facts, raw-domain mutation boundaries, invalidation requirements and stable lazy Report section hooks. Documented checked per-hundred math APIs and the final 817-screen/native/browser verification with exact artifact provenance, without treating functional checks as latency measurements. Browser cases passed on isolated sample data with external DNS blocked.
+
+## 2026-10-20 - Wait for the Import review transition in tests
+
+The first complete screen run exposed an existing timing assumption: a 10 ms fetch-promise drain did not always finish the separate Review render on a busy machine. The regression now polls the visible review panel with a bounded three-second deadline and preserves all subsequent placement/footer/save assertions. Product code is unchanged. The complete 817-test WASM screen rerun passes; no paid calls occur because extraction is stubbed.
+
+## 2026-10-20 - Prepare sample payoff balances in one pass
+
+Fresh-sample startup does not use the saved-checkpoint reuse path. A separate audit found the sample payoff baseline scanned every transaction once per included liability. Reused ledger.Balances for one shared traversal while preserving account filters, per-account balance-error skipping, sample USD assumptions and ordinary truncation. Checked magnitudes, totals and wide scaling omit an unrepresentable baseline safely. Focused native store tests pass for parity against the old implementation at three sample dates, invalid accounts and arithmetic boundaries. No startup percentage claim is made for this source change.
+
+## 2026-10-20 - Mount full Reports sections only when requested
+
+Reports now keeps controller hooks and local state stable while five typed child sections own money flow, motion, categories/tags, payees/lists and appendix content. Explicit revision, scope, currency, language, theme, window and preference identities refresh prepared output reliably. Section deep links open Full before scrolling; appendix export callbacks are isolated in components. Goal tallies and rows use canonical FX facts, and checked per-hundred helpers expose unavailable arithmetic. Removed three obsolete hook exceptions without adding any. Five focused render regressions and the complete 817-test screen suite pass; the full native suite, including hook-order checks, passes.
+
+## 2026-10-20 - Share checked goal facts across budget and dashboard consumers
+
+Consumers now distinguish known completion from unavailable goal coverage and preserve original stored amounts. Budget savings cannot offer Sync or funded status for unknown coverage; linked targets and sinking funds derive converted remaining needs. A rate-aware annual-projection entry point preserves explicit plans while exposing unavailable inferred assignments. Dashboard featured goals and lifecycle counts share one indexed native model; Assistant starter questions skip confirmed completed goals. Native budgetplan, budgetview, dashboardview and assistantview tests pass, and all three new actual-screen currency regressions pass within the complete 817-test WASM screen suite.
+
+## 2026-10-20 - Keep goal wins consistent with checked coverage
+
+Recent wins now requires known canonical goal completion, preventing celebrations from unconvertible or overflowed saved and reserved amounts. Existing milestone names and seen keys remain unchanged. Native notificationview tests cover foreign reservations, saved currency, missing rates, canonical parity, Unicode names and rate-only transitions; the actual Notifications tile/store regression and full 817-test screen suite pass.
+
+## 2026-10-20 - Render Goals from shared native row facts
+
+The Goals view now builds one native row model per visible goal from a single linked-task index. Sorting, sections, health, retargeting, card figures, trajectory and contribution planners share the same converted facts while edit callbacks retain original stored currencies. Separate figures and task-preview components isolate hooks and avoid rebuilding task lists for every row. Unknown coverage has explicit unavailable presentation and suppresses unsafe financial actions. Native goalview tests and vet pass; the complete 817-test WASM screen suite passes, including actual-host rate revisions, inline target edits preserving currencies, and task-toggle refresh.
+
+## 2026-10-20 - Unify checked goal coverage and lifecycle facts
+
+Goals previously added saved and earmarked values without reconciling currencies, so financial completion and pace could disagree across views. The native evaluator groups reservations by stored currency, converts totals once, checks arithmetic, and marks missing FX or overflow as unknown without false completion, missed status or pace. Saved progress remains distinct from backed coverage. An indexed task summary provides checklist counts and three stable open-first previews in one pass; planner helpers use known converted coverage and preserve original domain objects. Native goals tests and vet pass, including conversion rounding, missing rates, overflow, exact pause boundaries, task previews and planning limits. Rate-less compatibility helpers remain conservative when facts cannot be known.
+
+## 2026-10-20 - Reuse the validated hydration checkpoint
+
+The dominant measured startup phase validated an unchanged checkpoint with store.Import and then parsed it again during app import. Added an opaque appstate parsed-dataset handle and shared import ingress, preserving migrations, device credentials, store loading and transaction-link synchronization. Recovery retains that handle only for unchanged checkpoint bytes and discards it whenever journal replay produces a result. Native ingress equivalence, invalid input and credential tests pass; all 17 JRNL WASM tests pass, including unchanged live/backup and replay-discard regressions. The optimization removes a duplicate parse; no new boot-speed claim is made without another measurement.
+
+## 2026-10-20 - Check report per-hundred arithmetic
+
+The annual money-flow table multiplied minor units by 1,000 before division, and pooled categories used unchecked addition. Added wide-intermediate share calculations, checked magnitudes and totals, safe legacy fallback, and a native savings-share helper for the screen. Native reports tests cover representable large inputs, minimum signed values, pooled overflow, net overflow and ordinary savings.
+
+## 2026-10-20 - Record second-pass page measurements
+
+Verified seven measured sweeps after one warm-up on each fixed artifact against the saved JSON. Content and DOM counts matched with zero route failures. Eight route medians favored the current artifact, but unrelated browser work changed machine load, so the report qualifies the results and records Notifications as slightly slower. Startup phases identify hydration as the largest measured segment; the default Needs you notification count is distinguished from the complete feed.
+
+## 2026-10-20 - Browser contracts for shared controls
+
+Updated obsolete test IDs, calendar classes and generic date-summary expectations to the current accessible controls. Async alerts and goal sort now wait for the actual condition; Dashboard focus checks durable selected/layout state rather than a toast displaced by reminders. Added Todo mode and notification keyboard-tab journeys. The focused final five-case run passed on the new artifact; the other affected routes passed focused checks, including the isolated budget Escape case. Added a passing actual-toolbar WASM Escape-after-sort regression without a speculative product handler. The all-routes smoke sweep passed earlier; this does not claim the entire browser suite was run.
+
+## 2026-10-20 - Reusable report activity and row models
+
+Moved expensive ledger/subscription/position preparation into explicit native Activity and row models. Deposit grouping uses a structured-key pass; tag/category ratios and remainder totals are checked. Household position uses checked debt/card/interest accumulation and the shared vitals/payoff errors, with visible unavailable or incomplete states instead of false zeros. Reports controls use the shared strip. Native parity/boundary tests and the 805-screen WASM lane passed after fixing a leftover screen-local burn reference; the app build and saved-report browser journey passed. New matched route timings remain descriptive and are recorded in the performance guide.
+
+## 2026-10-20 - Checked dashboard cash forecasts
+
+Each account projection is converted once per horizon and checked before accumulation. A failed financial calculation returns no partial headline; the tile shows an unavailable state, while rate omissions retain an explanatory note. Added shared calculation copy for forecast/report consumers. Native boundary tests, the 805-screen gate and the rebuilt application passed. Latest browser measurements are being captured separately against the previous release baseline.
+
+## 2026-10-20 - Shared goal reservation and funding index
+
+Replaced repeated per-card ledger scans with one bounded revision index reused by summary, rows and Earmarks. Missing reservation FX blocks unsafe suggestions and is disclosed; fund headline totals use converted checked amounts. Own-foreign-allocation review found a gap/merge mismatch, now covered by checked per-currency aggregation and a matching headroom simulation. Native tests cover FX rounding, stable account choice, missing rates and overflow; the full 805-screen gate plus focused actual-host regression passed. Three WASM cases cover stale click safety, FX revision/removal and fund exclusions; the browser Earmarks journey passed on the second-pass snapshot.
+
+## 2026-10-20 - Goal sorting across default sections
+
+Added native OrderedOpen over a copied visible set and wired explicit sorts into one open-goal list. Tests prove cross-section order without mutating the cached default view. The real Goals host WASM regression passes without parent atom subscriptions. Browser name sorting passes with a web-first order assertion; the previous 300ms snapshot captured an intermediate render although its later artifact was correctly ordered. Kept existing host keys and component state boundaries.
+
+## 2026-10-20 - Checked report rollups and wide runway
+
+Added checked ancestor totals and matching rolled-up monthly category series, with cycle/unknown-category parity tests. Runway day fractions use wide multiplication and Months remains int64 rather than narrowing on wasm32. The native boundary test enforces that field type at compile time. Focused reports tests and the native integration suite passed for the calculations; the final wasm integration verifies their screen callers.
+
+## 2026-10-20 - Shared component usage guide
+
+Updated the existing inventory with current first-nine-page adoption, configuration examples and stable-ID/read-only-model requirements. Kept the distinction between rich FilterToolbar, lightweight ControlStrip, styled radio Segmented and configurable pressed/tab SegmentedControl. The guide also records why Transactions preserves its specialized placement memo and why composed Dashboard/Report grids remain page-owned. These are documentation/comment changes; diff checks pass and the referenced APIs have passed their integration lanes.
+
+## 2026-10-20 - Memoized transaction calendar projection
+
+Registered the projection memo at a stable hook position. Cache regressions cover reuse, distinct account lenses, filter/month/date-format changes, FX omission warnings and browser revisions. The existing calendar math remains native; selection and overflow interaction behavior are unchanged. The full screen lane passed 805 tests, including the new calendar memo regression.
+
+## 2026-10-20 - Native milestone preparation and roster refresh
+
+Moved reached-goal, prior-month kept-budget and no-spend milestone inputs into notificationview, preserving raw/netted ledger distinctions and existing seen identities. The page reuses the shared net-worth snapshot. Direct revision subscriptions refresh summary/list roster values even with stable app props. Native parity tests cover goal kinds, budget/FX/period edges and streaks; the 805-screen gate passed roster changes, tab transitions and day/data invalidation. The split snapshot regression file also passed its focused rerun.
+
+## 2026-10-20 - Shared task lookup snapshot
+
+Removed repeated task counting and per-row entity/member linear searches. The native snapshot preserves first matching entity names, last matching task IDs, missing-link behavior and original records without retaining unrelated entity arrays. Native parity tests and the 805-screen gate passed; five focused task/notification snapshot tests passed again after splitting their test files. Switch tests verify pressed states, view actions and pagination reset. A local microbenchmark isolates lookup work rather than claiming a browser-wide speedup.
+
+## 2026-10-20 - Consistent startup fallback clock origin
+
+A nonfinite performance reading previously fell back from a relative timestamp to an epoch timestamp, which could inflate a diagnostic duration. Both clocks now measure elapsed time from construction. A regression switches from a valid performance clock to fallback and back, requiring five milliseconds for the phase and nine for the total. All four focused startup WASM tests pass; boot behavior is unchanged.
+
+## 2026-10-20 - Native Assistant spending habits
+
+Moved the 120-day income/spending series and habit facts into assistantview. Missing FX remains excluded by contract; invalid expense magnitudes or overflowing daily sums return unavailable facts. The spendpattern mean uses quotient/remainder accumulation so valid cross-day totals do not wrap. Native parity/edge tests and the full screen WASM gate passed; the page reuses its existing revision/day memo.
+
+## 2026-10-20 - Memoized annual budget projection
+
+The annual grid keeps a stable native build pointer and registers its projection memo before early returns. Dependencies cover recurring/goal slices and lengths, data revisions, FX, date and open state; a closed or failed grid projects nothing. A WASM regression checks scenario/window reuse and invalidation after recurring edits, FX changes and reopening. The 805-screen gate passed.
+
+## 2026-10-20 - Native budget savings and cash-age facts
+
+Extracted savings account ownership, linked-goal choice, FX and projection arithmetic into budgetview; ceil division avoids overflowing a valid remaining balance and preserves int64 month horizons on WASM. A native transaction-to-FIFO adapter feeds a revision/base cache shared across budget scopes. UI retains formatting and a distinct overflow caption. Native parity and boundary tests passed; the 805-screen WASM gate passed savings-width, cache refresh and unavailable-state regressions.
+
+## 2026-10-20 - Shared account totals and liquidity facts
+
+Removed repeated ledger scans from account summary/liquidity rendering. Native tests cover liability signs, ownership, lock expiry, invalid balances, missing conversion and overflow. The account menu fixture checks the existing management actions through the real toolbar. The complete native suite and 805-screen WASM gate passed with the integration, and source formatting/diff checks are clean.
+
+## 2026-10-20 - Measured startup phases
+
+Added timings for protected storage, hydration, session restoration, recurring covers, mounting and post-mount maintenance. Disjoint phases accumulate repeated intervals and use a consistent clock fallback; no data or identity fields are recorded. The total begins at Go Run, excluding WASM fetch/decode/compile, and async notification timing describes scheduling only. Three focused app WASM tests passed, the complete screen lane passed 805 tests, and the app build passed. The new measurements guide subsequent cold-start work rather than claiming an unmeasured improvement.
+
+## 2026-10-20 - Checked household position arithmetic
+
+Added EvaluateChecked and an Error result while retaining Evaluate for existing callers. The native model checks aggregate debts/minimums, annualization, fund targets, available credit and wasm-sized integer conversions, and uses the checked payoff simulation. Failed evaluations retain no partial measured figures. Native regression tables cover int64 boundaries and finite large rates alongside the existing normal-case suite; the complete native gate passed.
+
+## 2026-10-20 - Checked payoff simulation
+
+Added BuildPlanChecked while preserving the existing BuildPlan signature and nonviable-plan boolean. Checked arithmetic runs inside the existing simulation instead of duplicating a preflight plan. Errors return no partial plan, and the compatibility wrapper keeps ok=false. Native cases cover finite large APR, opening balances, monthly payments and cumulative interest. The full native suite passed; this seam supports the checked household position model.
+
+## 2026-10-20 - Exact age-of-money intermediates
+
+The ordinary FIFO path retains small integer arithmetic; weighted products and sums promote to big integers only when needed. Unsigned expense magnitude handles MinInt64 while still consuming the correct income lots. Overflow is scoped to the reported trailing window, so old large history does not poison a later valid window. Native boundary tests cover products, sums, exact half rounding, trailing windows and caps. The full native suite passed; UI integration has its own revision and unavailable-state checks.
+
+## 2026-10-20 - Shared keyed segmented controls
+
+The shared component preserves page-owned state and styles. Tabs support wrapped arrow navigation, Home/End, disabled skipping, stable focus IDs and roving tab stops; ordinary choices retain aria-pressed semantics. Native navigation tables and WASM tests cover counts, empty/reordered choices, handler identity and focus. The complete shared UI lane passed 90 tests after correcting a fixture text-joining assumption in the zero-count assertion. Page adoptions are committed with their own integration slices.
+
+## 2026-10-20 - Repeatable primary-page browser measurements
+
+The harness measures an already-built loopback app in a fresh sample context and blocks non-loopback traffic. One warmup plus seven sweeps were captured twice for baseline/current. Repeat medians suggest gains on several routes, while Dashboard, Transactions and Reports remain inconclusive; empty notifications and lower Assistant DOM count limit comparison. Source provenance now identifies the dirty-built WASM by SHA256 instead of treating its then-current HEAD as the complete build. Node syntax/help checks passed; all four captures completed without route failures. This is descriptive evidence, not a timing gate.
+
+## 2026-10-20 - Native task projections and suggestion freshness
+
+Moved task selection and calendar preparation out of browser markup. Native tests compare 216 filter combinations and cover date-zone boundaries and immutable inputs; the preserved benchmark compares scan cost without asserting machine timings. The suggestion handler is registered before empty returns, and memo keys include exact same-day freshness state. Full native and 790-screen WASM gates passed, including list/board/calendar and keyed expansion transitions. Removed the obsolete suggestion hook exception.
+
+## 2026-10-20 - Native notification feed preparation
+
+Extracted feed preparation and streak arithmetic into notificationview, kept collapsed groups lazy, and fixed variable hook positions across empty and populated states. History previously rendered blank for records with only Message; it now explicitly uses that legacy fallback. WASM tests exercise final-dismiss Undo, keyed expansion, shared/member lenses, archive search and wins transitions. Native and full screen suites passed. Removed the obsolete history/list/wins hook exceptions; browser journeys remain a separate gate.
+
+## 2026-10-20 - Native dashboard frame inputs
+
+Moved financial frame calculations into dashboardview and kept the canonical net-worth change definition. The hero now applies the same resolved account scope as dashboard tiles, including unambiguous institution IDs. Its stable wrapper subscribes before the readiness branch; the conditional child owns its hooks. Native model tests and the full screen lane passed, including unavailable-to-empty-to-populated transitions and colliding institution-name cases. Removed the obsolete hero hook exception.
+
+## 2026-10-20 - Report series and position models
+
+Replaced repeated per-month scans with reusable buckets while retaining repeated/nonascending-bound fallback semantics. Report position arithmetic and adherence moved from markup into native models. Household vitals use household flows even when activity is scoped; debt interest converts to base, and failed budget evaluations no longer count as clean. Native parity tests cover splits, refunds, transfers, exclusions, window order, missing FX and overflow. The native suite and 790-screen WASM suite passed. Browser latency results are recorded separately and do not imply every report interaction improved.
+
+## 2026-10-20 - Native Assistant facts and scoped memoization
+
+Extracted briefing/trend/question facts and anomaly purchase attribution from screen markup, using checked money comparisons and explicit FX handling. Shared anomaly caching now takes the actual app and an unambiguous account scope; nil apps bypass caching and callers receive defensive copies. Dashboard callers pass their context explicitly. Native edge/parity tests and WASM app/FX/scope/calendar invalidation tests passed in the full native and 790-screen suites.
+
+## 2026-10-20 - Transaction description and selector reuse
+
+Removed the duplicate screen description rule that could call a nil payee resolver. A native regression checks sort order, fallback labels and input immutability. The transaction surface memo now uses the complete revision context shared with other pages. The complete native and screen WASM suites passed; the existing transaction placement memo remains in place.
+
+## 2026-10-20 - Native budget allocation picture
+
+Moved the allocation model and its existing tests out of the WASM screen package. Pool, assigned funds, remaining income, overshoot and the shared spending axis retain the same checked integer contract. The native suite now exercises these cases directly, and the 790-screen WASM gate passed. Budget tiles also use the shared keyed surface without changing their method attribute.
+
+## 2026-10-20 - Native goal summaries and ordering
+
+Extracted goal partitioning, sorting, health and headline arithmetic into goalview. Indexed task progress avoids repeated scans while sorting. Checked allocation sums report overflow, and overall progress uses converted values instead of adding unlike currencies. Tests cover ownership, stale cache contexts, sorting, rounding, missing rates and transition clocks. Native tests and the full screen WASM lane passed, including the rendered summary changing after a browser data revision.
+
+## 2026-10-20 - Indexed account page projections
+
+Moved account partitioning, risk ordering and group arithmetic into the native accountview package. The snapshot reuses the app transaction index and is invalidated by app/data revisions. Native parity and edge tests cover balance errors, ownership, liability signs, stable order and FX omissions; WASM regressions cover snapshot refresh and the visible exclusion note. The complete native suite and 790-screen WASM suite passed with these changes. Browser journeys and matched latency measurements remain in progress.
+
+## 2026-10-20 - Reusable page presentation primitives
+
+Added ControlStrip with named control/action slots, accessible group labeling and existing class defaults. Added surfaceTiles to centralize keyed bento placement dispatch while preserving context and unavailable-tile handling. Children retain their own event hooks. Fixture tests verify classes/attributes, optional slots, context propagation, tile order and state following stable IDs after reordering. The shared UI lane passed 85 tests and the screen lane passed 790; browser journeys remain the integration step.
+
+## 2026-10-20 - Calculation seam regression guards
+
+The source ratchets now accept either the original direct call or an explicit screen-to-native-model-to-canonical-calculation chain. They still require net-worth windows and goal health to use their shared domain definitions. The calendar test now requires its existing unavailable-amount fallback for rejected FX overflow instead of characterizing the previous unchecked result. Full native tests and the focused screenlint/calendar gates passed after these updates.
+
+## 2026-10-20 - Bounded shared derived-view caching
+
+Added a tested native LRU cache and stable app-instance identity. Store revisions are global, so revision alone cannot isolate two apps. Shared page selectors now include instance and browser data revisions, and account-set signatures encode IDs unambiguously. Heavy Smart input/findings caches keep one context; anomaly and next-action sections reuse one engine pass while applying current dismissals separately. Native cache/identity tests and the combined 790-screen WASM run passed, including app-switch, browser-revision, scope and clock cache regressions.
+
+## 2026-10-20 - Checked currency conversion boundaries
+
+NaN/infinite rates and overflowing conversions could silently become the minimum signed amount. Conversion now returns explicit invalid-rate or wrapped money-overflow errors. A rare exact rational path preserves valid int64 boundary amounts and finite results whose float intermediate overflowed or underflowed. Normal conversions keep the existing rounding path and zero allocations; paired local benchmarks showed roughly six nanoseconds of validation overhead. Currency and six related native package tests and focused vet passed.
+
+## 2026-10-20 - Shared ledger balance correctness and cost
+
+The primary-page cleanup found that a bulk balance calculation kept an account after a currency mismatch or overflow, even though the single-account calculation rejected it. Bulk reads now omit the invalid account and preserve unaffected balances. NetWorthExplained builds eligible balances in one ledger pass and retains the original error and duplicate-ID paths. Native ledger tests cover the edge cases; the preserved 100-account/10,000-transaction benchmark measured about 10.08 ms before and 0.467 ms after on this machine. This is calculation evidence, not a browser latency claim.
 ## 2026-10-21 - Prepare v1.19.9 for encrypted sync rollout
 
 Bumped the single product version source to 1.19.9 after the local three-browser encrypted file roundtrip and all PR checks passed. The release keeps server connection credentials on each device and restores the exact attachment bytes and later edits across browsers. Production rollout and an authenticated live roundtrip still need verification after merge.

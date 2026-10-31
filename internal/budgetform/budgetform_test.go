@@ -218,9 +218,9 @@ func TestPrepareBuild(t *testing.T) {
 	d.Also = map[string]bool{"food": true, "pay": true, "child": true}
 	d.Tags = "#A, a, B"
 	d.VarName = " handle "
-	d.Custom = map[string]string{"number": "2.5", "invalid": "bad", "flag": "true", "text": " text "}
+	d.Custom = map[string]string{"number": "2.5", "invalid": "3.75", "flag": "true", "text": " text "}
 	p := Prepare(d, categories(), nil, defs, "b", "new")
-	if p.ProblemKey != "" || p.Category == nil || p.CreatedName != "New" || p.Budget.Name != "Name" || p.Budget.Scope != domain.ScopeIndividual || p.Budget.Methodology != "" || p.Budget.VarName != "handle" || p.Budget.Direction != domain.DirectionSave || len(p.Budget.CategoryIDs) != 4 || len(p.Budget.TrackedTags) != 2 || p.Budget.Custom["number"] != 2.5 || p.Budget.Custom["invalid"] != "bad" || p.Budget.Custom["flag"] != true || p.Budget.Custom["text"] != "text" {
+	if p.ProblemKey != "" || len(p.CustomIssues) > 0 || p.Category == nil || p.CreatedName != "New" || p.Budget.Name != "Name" || p.Budget.Scope != domain.ScopeIndividual || p.Budget.Methodology != "" || p.Budget.VarName != "handle" || p.Budget.Direction != domain.DirectionSave || len(p.Budget.CategoryIDs) != 4 || len(p.Budget.TrackedTags) != 2 || p.Budget.Custom["number"] != 2.5 || p.Budget.Custom["invalid"] != 3.75 || p.Budget.Custom["flag"] != true || p.Budget.Custom["text"] != "text" {
 		t.Fatal(p, p.Budget)
 	}
 	for _, tc := range []struct {
@@ -252,6 +252,25 @@ func TestPrepareBuild(t *testing.T) {
 	p = Prepare(d, categories(), nil, nil, "b", "c")
 	if p.Budget.Methodology != d.Methodology || p.Budget.CategoryIDs != nil || p.Budget.Scope != domain.ScopeShared {
 		t.Fatal(p)
+	}
+}
+
+func TestPrepareRejectsMalformedCustomValuesWithoutPartialPlan(t *testing.T) {
+	defs := []customfields.Def{
+		{Key: "amount", Label: "Amount", Type: customfields.TypeNumber},
+		{Key: "enabled", Label: "Enabled", Type: customfields.TypeBool},
+	}
+	for _, values := range []map[string]string{
+		{"amount": "NaN", "enabled": "true"},
+		{"amount": "12.5", "enabled": "yes"},
+	} {
+		d := valid()
+		d.CreateCategory = true
+		d.Custom = values
+		p := Prepare(d, categories(), nil, defs, "budget", "category")
+		if p.Budget.ID != "" || p.Category != nil || len(p.CustomIssues) == 0 {
+			t.Fatalf("malformed custom values produced partial plan: %+v", p)
+		}
 	}
 }
 func TestCopyAndFormat(t *testing.T) {

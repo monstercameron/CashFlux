@@ -7,7 +7,6 @@ package styles
 // Migrated from the original stylesheet; now the canonical source, edit as Go.
 
 func webkitAppearance(v string) decl        { return decl{"-webkit-appearance", v} }
-func webkitBackdropFilter(v string) decl    { return decl{"-webkit-backdrop-filter", v} }
 func webkitFontSmoothing(v string) decl     { return decl{"-webkit-font-smoothing", v} }
 func webkitOverflowScrolling(v string) decl { return decl{"-webkit-overflow-scrolling", v} }
 func accentColor(v string) decl             { return decl{"accent-color", v} }

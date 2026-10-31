@@ -19,9 +19,21 @@
 package goalhistory
 
 import (
+	"errors"
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
+
+var (
+	// ErrInvalidHistory reports malformed stored contribution history.
+	ErrInvalidHistory = errors.New("goalhistory: invalid contribution history")
+	// ErrCurrencyMismatch reports history whose amounts cannot be shown in the
+	// goal's current target currency without an explicit conversion rate.
+	ErrCurrencyMismatch = errors.New("goalhistory: contribution currency mismatch")
 )
 
 // MonthKey formats a time as the calendar-month key the series and the stored
@@ -53,16 +65,27 @@ type Point struct {
 // no plan is trivially met — there was nothing to fall short of.
 func (p Point) Met() bool { return p.PlannedMinor <= 0 || p.ActualMinor >= p.PlannedMinor }
 
-// ShortfallMinor is how far under plan the month came, or 0 when it met or beat
-// it. Never negative: an overshoot is not a negative shortfall, and callers that
-// sum shortfalls must not have a good month cancel a bad one.
+// ShortfallMinor is the compatibility wrapper for ShortfallChecked. It returns
+// zero if the shortfall cannot fit; financial readers should use the checked
+// method when that distinction matters.
 func (p Point) ShortfallMinor() int64 {
-	if p.PlannedMinor <= 0 || p.ActualMinor >= p.PlannedMinor {
-		return 0
-	}
-	return p.PlannedMinor - p.ActualMinor
+	v, _ := p.ShortfallChecked()
+	return v
 }
 
+// ShortfallChecked returns the positive gap between plan and actual, or an
+// overflow error when that gap cannot fit in int64.
+func (p Point) ShortfallChecked() (int64, error) {
+	if p.PlannedMinor <= 0 || p.ActualMinor >= p.PlannedMinor {
+		return 0, nil
+	}
+	return money.Sub(p.PlannedMinor, p.ActualMinor)
+}
+
+// Series is the compatibility wrapper for SeriesChecked. It returns nil when
+// stored history is invalid or its sums overflow; financial readers should use
+// SeriesChecked to distinguish unavailable history from an empty one.
+//
 // Series returns the last months calendar months ending with the month
 // containing now, oldest first, with no gaps — a month in which nothing was
 // contributed is a zero point, not an absent one, because the gap IS the finding
@@ -76,35 +99,77 @@ func (p Point) ShortfallMinor() int64 {
 //
 // A months of zero or less returns nil.
 func Series(g domain.Goal, plannedMinor int64, months int, now time.Time) []Point {
-	if months <= 0 {
+	pts, err := SeriesChecked(g, plannedMinor, months, now)
+	if err != nil {
 		return nil
+	}
+	return pts
+}
+
+// SeriesChecked is Series with explicit validation and overflow errors. It
+// returns no partial series. Contributions in the displayed window must use
+// the goal's target currency because this read model has no FX table.
+func SeriesChecked(g domain.Goal, plannedMinor int64, months int, now time.Time) ([]Point, error) {
+	if months <= 0 {
+		return nil, nil
 	}
 	type bucket struct {
 		amount   int64
 		count    int
 		detailed bool
 	}
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -(months - 1), 0)
+	end := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location())
+	inWindow := func(key string) bool { return key >= start.Format("2006-01") && key < end.Format("2006-01") }
 	buckets := map[string]*bucket{}
+	expectedCurrency := g.TargetAmount.Currency
+	add := func(key, currency string, amount int64, count int, detailed bool) error {
+		if _, err := time.Parse("2006-01", key); err != nil {
+			return fmt.Errorf("%w: goal %q has invalid month %q", ErrInvalidHistory, g.ID, key)
+		}
+		if !inWindow(key) {
+			return nil
+		}
+		if currency == "" {
+			return fmt.Errorf("%w: goal %q month %s has no currency", ErrInvalidHistory, g.ID, key)
+		}
+		if expectedCurrency == "" {
+			expectedCurrency = currency // legacy test/import records may omit the goal target currency
+		}
+		if currency != expectedCurrency {
+			return fmt.Errorf("%w: goal %q month %s has %s, expected %s", ErrCurrencyMismatch, g.ID, key, currency, expectedCurrency)
+		}
+		if amount < 0 || count < 0 {
+			return fmt.Errorf("%w: goal %q month %s has negative amount or count", ErrInvalidHistory, g.ID, key)
+		}
+		b := buckets[key]
+		if b == nil {
+			b = &bucket{}
+			buckets[key] = b
+		}
+		total, err := money.Add(b.amount, amount)
+		if err != nil {
+			return fmt.Errorf("goalhistory: goal %q month %s amount: %w", g.ID, key, err)
+		}
+		if count > math.MaxInt-b.count {
+			return fmt.Errorf("goalhistory: goal %q month %s count: %w", g.ID, key, money.ErrOverflow)
+		}
+		b.amount, b.count, b.detailed = total, b.count+count, b.detailed || detailed
+		return nil
+	}
 	// Roll-ups first; the itemized entries add on top.
 	for _, h := range g.ContributionHistory {
-		buckets[h.Month] = &bucket{amount: h.Amount.Amount, count: h.Count}
+		if err := add(h.Month, h.Amount.Currency, h.Amount.Amount, h.Count, false); err != nil {
+			return nil, err
+		}
 	}
 	for _, c := range g.Contributions {
 		k := MonthKey(c.At)
-		b, ok := buckets[k]
-		if !ok {
-			b = &bucket{}
-			buckets[k] = b
+		if err := add(k, c.Amount.Currency, c.Amount.Amount, 1, true); err != nil {
+			return nil, err
 		}
-		// Adds to whatever the roll-up already holds for this month. The month the
-		// log filled up has some entries rolled up and some still itemized, and
-		// only the sum is that month's real funding.
-		b.amount += c.Amount.Amount
-		b.count++
-		b.detailed = true
 	}
 
-	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -(months - 1), 0)
 	out := make([]Point, 0, months)
 	for i := range months {
 		m := start.AddDate(0, i, 0)
@@ -115,7 +180,7 @@ func Series(g domain.Goal, plannedMinor int64, months int, now time.Time) []Poin
 		}
 		out = append(out, p)
 	}
-	return out
+	return out, nil
 }
 
 // Summary is the read over a whole series — the sentence the panel needs so a
@@ -140,12 +205,28 @@ type Summary struct {
 // OnPlan reports whether every month with a plan met it.
 func (s Summary) OnPlan() bool { return s.MissedMonths == 0 }
 
-// Summarize reduces a series to its totals.
+// Summarize is the compatibility wrapper for SummarizeChecked. It returns an
+// empty summary on overflow; financial readers should use SummarizeChecked to
+// distinguish unavailable totals from valid zeroes.
 func Summarize(pts []Point) Summary {
+	s, _ := SummarizeChecked(pts)
+	return s
+}
+
+// SummarizeChecked reduces a series to checked totals. On error it returns an
+// empty summary rather than a partial or wrapped financial total.
+func SummarizeChecked(pts []Point) (Summary, error) {
 	s := Summary{Months: len(pts)}
 	for _, p := range pts {
-		s.ActualMinor += p.ActualMinor
-		s.PlannedMinor += p.PlannedMinor
+		var err error
+		s.ActualMinor, err = money.Add(s.ActualMinor, p.ActualMinor)
+		if err != nil {
+			return Summary{}, fmt.Errorf("goalhistory: actual total: %w", err)
+		}
+		s.PlannedMinor, err = money.Add(s.PlannedMinor, p.PlannedMinor)
+		if err != nil {
+			return Summary{}, fmt.Errorf("goalhistory: planned total: %w", err)
+		}
 		if p.PlannedMinor <= 0 {
 			continue
 		}
@@ -153,10 +234,33 @@ func Summarize(pts []Point) Summary {
 			s.FundedMonths++
 		} else {
 			s.MissedMonths++
-			s.ShortfallMinor += p.ShortfallMinor()
+			shortfall, err := p.ShortfallChecked()
+			if err != nil {
+				return Summary{}, fmt.Errorf("goalhistory: monthly shortfall: %w", err)
+			}
+			s.ShortfallMinor, err = money.Add(s.ShortfallMinor, shortfall)
+			if err != nil {
+				return Summary{}, fmt.Errorf("goalhistory: shortfall total: %w", err)
+			}
 		}
 	}
-	return s
+	return s, nil
+}
+
+// PercentOfPeak returns value as an integer percentage of peak, using a wide
+// intermediate so chart widths remain correct near int64 limits.
+func PercentOfPeak(value, peak int64) (int, error) {
+	if value < 0 || peak < 0 {
+		return 0, fmt.Errorf("%w: negative chart amount", ErrInvalidHistory)
+	}
+	if value == 0 || peak == 0 {
+		return 0, nil
+	}
+	pct, err := money.MulDiv(value, 100, peak, money.RoundTowardZero)
+	if err != nil {
+		return 0, fmt.Errorf("goalhistory: chart percentage: %w", err)
+	}
+	return int(min(pct, 100)), nil
 }
 
 // PeakMinor is the largest of the actual and planned values across the series —

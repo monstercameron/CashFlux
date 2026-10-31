@@ -6,9 +6,10 @@ package uistate
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 // UseRoundUpConfigOpen returns the shared atom controlling whether the "Round-ups"
@@ -21,70 +22,18 @@ func UseRoundUpConfigOpen() state.Atom[bool] {
 const (
 	roundUpConfigKey      = "cashflux:goals:roundupconfig"
 	roundUpPromptStateKey = "cashflux:goals:rounduprompt"
-	RoundUpCadenceWeekly  = "weekly"
-	RoundUpCadenceMonthly = "monthly"
 )
-
-// RoundUpConfig is the persisted virtual round-up policy (TX11): whether the
-// round-up jar is on, the goal the jar sweeps into, the sweep cadence, which
-// accounts participate, and the timestamp of the last approved sweep (the
-// accrual window starts there). Stored as config so the ritual is data, not code.
-type RoundUpConfig struct {
-	// Enabled turns the round-up jar + sweep card on.
-	Enabled bool `json:"enabled"`
-	// TargetGoalID is the goal the swept jar is earmarked toward.
-	TargetGoalID string `json:"targetGoalId"`
-	// Cadence is RoundUpCadenceWeekly or RoundUpCadenceMonthly.
-	Cadence string `json:"cadence"`
-	// AccountIDs are the participating accounts; empty means every account.
-	AccountIDs []string `json:"accountIds"`
-	// LastSweepStamp is the RFC3339 time the jar was last swept, the exclusive
-	// lower bound of the next accrual window. Empty means never swept.
-	LastSweepStamp string `json:"lastSweepStamp"`
-}
-
-// EffectiveCadence returns the cadence, defaulting to weekly.
-func (c RoundUpConfig) EffectiveCadence() string {
-	if c.Cadence == RoundUpCadenceMonthly {
-		return RoundUpCadenceMonthly
-	}
-	return RoundUpCadenceWeekly
-}
-
-// SinceOr returns the accrual window's start: the parsed LastSweepStamp, or the
-// supplied fallback when no sweep has been recorded yet.
-func (c RoundUpConfig) SinceOr(fallback time.Time) time.Time {
-	if c.LastSweepStamp == "" {
-		return fallback
-	}
-	t, err := time.Parse(time.RFC3339, c.LastSweepStamp)
-	if err != nil {
-		return fallback
-	}
-	return t
-}
-
-// ParticipatingSet returns the account-id set (empty map when all participate).
-func (c RoundUpConfig) ParticipatingSet() map[string]bool {
-	if len(c.AccountIDs) == 0 {
-		return nil
-	}
-	m := make(map[string]bool, len(c.AccountIDs))
-	for _, id := range c.AccountIDs {
-		m[id] = true
-	}
-	return m
-}
 
 // RoundUpConfigGet returns the effective round-up config: the persisted override,
 // or a disabled default (weekly cadence) when nothing is stored yet.
 func RoundUpConfigGet() RoundUpConfig {
 	raw := kvGet(roundUpConfigKey)
-	if raw == "" {
-		return RoundUpConfig{Cadence: RoundUpCadenceWeekly}
+	// Legacy JSON null decoded into the zero config; retain that UI contract.
+	if strings.TrimSpace(raw) == "null" {
+		return RoundUpConfig{}
 	}
-	var cfg RoundUpConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+	cfg, err := ParseRoundUpConfig(raw)
+	if err != nil {
 		return RoundUpConfig{Cadence: RoundUpCadenceWeekly}
 	}
 	return cfg

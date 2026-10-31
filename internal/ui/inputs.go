@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TextFieldProps configures TextInput / NumberInput / TextAreaInput.
@@ -85,6 +85,14 @@ type MoneyInputProps struct {
 	AriaLabel string
 	OnInput   func(string)
 	Disabled  bool
+	// TestID is the data-testid of the input. Empty adds none.
+	TestID string
+	// Placeholder is the input's placeholder text. Empty adds none.
+	Placeholder string
+	// ID is the element id of the input, so a Field label can name it in its for attribute.
+	ID string
+	// Extra are further attributes added to the input, such as a min or an autocomplete.
+	Extra []any
 }
 
 // MoneyInput renders a currency-aware amount field: a number input whose step
@@ -105,6 +113,16 @@ func MoneyInput(p MoneyInputProps) uic.Node {
 	if p.Disabled {
 		inArgs = append(inArgs, Attr("disabled", "true"))
 	}
+	if p.ID != "" {
+		inArgs = append(inArgs, Attr("id", p.ID))
+	}
+	if p.TestID != "" {
+		inArgs = append(inArgs, Attr("data-testid", p.TestID))
+	}
+	if p.Placeholder != "" {
+		inArgs = append(inArgs, Placeholder(p.Placeholder))
+	}
+	inArgs = append(inArgs, p.Extra...)
 	sym := currency.Symbol(p.Currency)
 	if sym == "" {
 		sym = p.Currency

@@ -16,13 +16,17 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/networthview"
+	"github.com/monstercameron/CashFlux/internal/periodview"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -45,50 +49,126 @@ import (
 // agRptCtx is everything a report section computes against, resolved once per
 // tool call: the window, the data, and the formatting.
 type agRptCtx struct {
-	app       *appstate.App
-	txns      []domain.Transaction
-	cats      []domain.Category
-	accounts  []domain.Account
-	members   []domain.Member
-	rates     currency.Rates
-	base      string
-	fmtM      func(int64) string
-	start     time.Time
-	end       time.Time // exclusive
-	prevStart time.Time
-	prevEnd   time.Time
-	label     string
-	now       time.Time
-	nameOf    func(categoryID string) string
-	memberOf  func(memberID string) string
-	field     string // the custom field key, for the by-custom-field section
+	app                  *appstate.App
+	txns                 []domain.Transaction
+	rawTxns              []domain.Transaction
+	activity             budgeting.NettedLedger
+	definitions          []customfields.Def
+	scopeLabel           string
+	cats                 []domain.Category
+	accounts             []domain.Account
+	activityAccounts     []domain.Account
+	members              []domain.Member
+	rates                currency.Rates
+	base                 string
+	fmtM                 func(int64) string
+	start                time.Time
+	end                  time.Time // exclusive
+	prevStart            time.Time
+	prevEnd              time.Time
+	label                string
+	now                  time.Time
+	nameOf               func(categoryID string) string
+	memberOf             func(memberID string) string
+	field                string // the custom field key, for the by-custom-field section
+	refundSplitAmbiguous bool
+}
+
+var agReportNow = time.Now
+
+type agReportReadError struct {
+	Collection string
+	Err        error
+}
+
+func (e *agReportReadError) Error() string {
+	return fmt.Sprintf("read report %s: %v", e.Collection, e.Err)
+}
+func (e *agReportReadError) Unwrap() error { return e.Err }
+func agReadReportRows[T any](name string, read func() ([]T, error)) ([]T, error) {
+	rows, err := read()
+	if err != nil {
+		return nil, &agReportReadError{Collection: name, Err: err}
+	}
+	return rows, nil
+}
+
+func agReportUnavailable(err error) string {
+	return "Report unavailable: " + err.Error() + ". The figure is unknown, not zero."
+}
+
+func (c agRptCtx) metadata() string {
+	start := "beginning of recorded history"
+	if !c.start.IsZero() {
+		start = c.start.Format(dateutil.Layout)
+	}
+	text := fmt.Sprintf("Requested window [%s, %s); activity scope: %s; base currency %s; reference time %s. Net-worth sections use the current household balance sheet. Investment performance and its traces use full recorded history for selected accounts, independently of the requested activity window.\n", start, c.end.Format(dateutil.Layout), c.scopeLabel, c.base, c.now.Format(time.RFC3339))
+	if c.refundSplitAmbiguous {
+		text += "A linked refund belongs to a split purchase. The existing native ledger adjusts its parent amount without allocating the refund across split categories; category attribution is ambiguous.\n"
+	}
+	return text
+}
+
+// Validate only facts the chosen section consumes. Counts of no-spend days do
+// not need FX; income-only reports do not depend on unrelated foreign expenses.
+func (c agRptCtx) validateActivity(section string) error {
+	// Checked native models validate their own exact inputs. Nonmonetary day
+	// counts and current balance-sheet models do not depend on period FX.
+	switch section {
+	case "net_worth", "investment_performance", "no_spend_days", "overview", "monthly_flow", "savings_rate", "spending_by_category", "category_trends", "top_movers", "cost_of_money":
+		return nil
+	}
+	var relevant budgeting.NettedLedger
+	deductible := map[string]bool{}
+	for _, cat := range c.cats {
+		if cat.Deductible {
+			deductible[cat.ID] = true
+		}
+	}
+	for _, txn := range c.activity {
+		switch section {
+		case "income_by_category", "largest_income":
+			if txn.IsIncome() {
+				relevant = append(relevant, txn)
+			}
+		case "money_flow", "year_tax":
+			relevant = append(relevant, txn)
+		case "deductible_totals":
+			if txn.IsExpense() && deductible[txn.CategoryID] {
+				relevant = append(relevant, txn)
+			}
+		case "spending_by_tag":
+			if txn.IsExpense() && len(txn.Tags) > 0 {
+				relevant = append(relevant, txn)
+			}
+		default:
+			if txn.IsExpense() {
+				relevant = append(relevant, txn)
+			}
+		}
+	}
+	splitIncome := section == "income_by_category" || section == "money_flow"
+	if err := reports.ValidateActivityAmounts(relevant, c.start, c.end, c.rates, splitIncome); err != nil {
+		return err
+	}
+	if section == "spending_by_tag" && !c.prevStart.IsZero() {
+		return reports.ValidateActivityAmounts(relevant, c.prevStart, c.prevEnd, c.rates, false)
+	}
+	return nil
 }
 
 // bounds returns monthly bucket edges spanning the window, oldest first, for
 // the series reports (trends, savings rate, monthly flow). A window shorter
-// than a month still yields one bucket; very long windows are capped so a
-// tool result stays readable.
-func (c agRptCtx) bounds() []time.Time {
-	const maxBuckets = 36
-	start := dateutil.MonthStart(c.start)
-	if c.start.IsZero() {
-		start = dateutil.MonthStart(c.earliest())
-	}
-	var out []time.Time
-	for t := start; t.Before(c.end) && len(out) <= maxBuckets; t = dateutil.AddMonths(t, 1) {
-		out = append(out, t)
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return append(out, dateutil.AddMonths(out[len(out)-1], 1))
+// than a month still yields one bucket; windows over 36 buckets return an explicit narrower-range error.
+func (c agRptCtx) bounds() ([]time.Time, error) {
+	return reports.MonthlyBoundsChecked(reports.AskedWindow{Start: c.start, End: c.end}, c.earliest(), 36)
 }
 
 // earliest is the date of the oldest transaction, for an "all time" window.
 func (c agRptCtx) earliest() time.Time {
 	out := c.now
 	for _, t := range c.txns {
-		if t.Date.Before(out) && !t.Date.IsZero() {
+		if t.CountsInReports() && t.Date.Before(out) && !t.Date.IsZero() {
 			out = t.Date
 		}
 	}
@@ -124,7 +204,7 @@ type agReportSection struct {
 	// it. Nil when the section has no row-shaped detail to open (a runway
 	// estimate is a projection, not a group of records). The returned string
 	// says what was matched, for the tool's header line.
-	Trace func(c agRptCtx, row string) ([]domain.Transaction, string)
+	Trace func(c agRptCtx, row string) ([]domain.Transaction, string, error)
 	// RowHint tells the model what to pass as `row` for this section.
 	RowHint string
 	// Detail marks a section that names individual merchants or charges rather
@@ -333,11 +413,80 @@ func agSectionIDs() string {
 const agPeriodEnum = `"period":{"type":"string","enum":["this_month","last_month","this_quarter","last_quarter","this_year","last_year","year_to_date","last_12_months","all"],"description":"named window; ignored when from/to are given"},"from":{"type":"string","description":"start date YYYY-MM-DD (inclusive)"},"to":{"type":"string","description":"end date YYYY-MM-DD (inclusive)"}`
 
 // agBuildRptCtx resolves the shared context one report tool call runs against.
-func agBuildRptCtx(app *appstate.App, base string, rates currency.Rates, preset, from, to, field string) agRptCtx {
-	now := time.Now()
-	w := reports.ResolveWindow(preset, from, to, now)
-	cats := app.Categories()
-	members := app.Members()
+func agBuildRptCtx(app *appstate.App, base string, rates currency.Rates, preset, from, to, field string, currentScope ...func() scope.ReportScope) (agRptCtx, error) {
+	if app == nil || app.Store() == nil {
+		return agRptCtx{}, &agReportReadError{Collection: "dataset", Err: fmt.Errorf("local dataset is unavailable")}
+	}
+	s := app.Store()
+	settings, err := s.GetSettings()
+	if err != nil {
+		return agRptCtx{}, &agReportReadError{Collection: "settings", Err: err}
+	}
+	if settings.BaseCurrency != "" {
+		base = settings.BaseCurrency
+	}
+	if base == "" {
+		base = "USD"
+	}
+	rates = currency.Rates{Base: base, Rates: settings.FXRates}
+	now := agReportNow()
+	w, err := reports.ResolveWindowChecked(preset, from, to, now)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	accounts, err := agReadReportRows("accounts", s.ListAccounts)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	rawTxns, err := agReadReportRows("transactions", s.ListTransactions)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	cats, err := agReadReportRows("categories", s.ListCategories)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	members, err := agReadReportRows("members", s.ListMembers)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	definitions, err := agReadReportRows("custom-field definitions", s.ListCustomFieldDefs)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	links, err := agReadReportRows("transaction links", s.ListTxnLinks)
+	if err != nil {
+		return agRptCtx{}, err
+	}
+	sc := scope.ReportScope{}
+	if len(currentScope) > 0 && currentScope[0] != nil {
+		sc = currentScope[0]()
+	}
+	ids := scope.ResolveScope(accounts, sc, func(a domain.Account) string { return a.Institution })
+	txns := scope.ApplyScopeToTxns(rawTxns, ids)
+	netted := budgeting.NewNettedLedger(txns, links)
+	activity := make(budgeting.NettedLedger, 0, len(netted))
+	for _, txn := range netted {
+		if txn.CountsInReports() {
+			activity = append(activity, txn)
+		}
+	}
+	scopeLabel := "all active accounts"
+	if !sc.IsAll() {
+		scopeLabel = fmt.Sprintf("selected active-account scope (%d accounts; account IDs %s)", len(ids), strings.Join(ids, ", "))
+	}
+	splitIDs := map[string]bool{}
+	for _, txn := range txns {
+		if txn.HasSplits() {
+			splitIDs[txn.ID] = true
+		}
+	}
+	ambiguous := false
+	for _, link := range links {
+		if link.Kind == domain.TxnLinkRefundPair && len(link.TxnIDs) == 2 && splitIDs[link.TxnIDs[0]] {
+			ambiguous = true
+		}
+	}
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name
@@ -347,21 +496,27 @@ func agBuildRptCtx(app *appstate.App, base string, rates currency.Rates, preset,
 		memberName[m.ID] = m.Name
 	}
 	return agRptCtx{
-		app:       app,
-		txns:      app.Transactions(),
-		cats:      cats,
-		accounts:  app.Accounts(),
-		members:   members,
-		rates:     rates,
-		base:      base,
-		fmtM:      func(v int64) string { return fmtMoney(money.New(v, base)) },
-		start:     w.Start,
-		end:       w.End,
-		prevStart: w.PrevStart,
-		prevEnd:   w.PrevEnd,
-		label:     w.Label,
-		now:       now,
-		field:     field,
+		app:                  app,
+		txns:                 txns,
+		rawTxns:              rawTxns,
+		activity:             activity,
+		definitions:          definitions,
+		scopeLabel:           scopeLabel,
+		cats:                 cats,
+		accounts:             accounts,
+		activityAccounts:     scope.ApplyScopeToAccounts(accounts, ids),
+		members:              members,
+		rates:                rates,
+		base:                 base,
+		fmtM:                 func(v int64) string { return fmtMoney(money.New(v, base)) },
+		start:                w.Start,
+		end:                  w.End,
+		prevStart:            w.PrevStart,
+		prevEnd:              w.PrevEnd,
+		label:                w.Label,
+		now:                  now,
+		field:                field,
+		refundSplitAmbiguous: ambiguous,
 		nameOf: func(id string) string {
 			if n := catName[id]; n != "" {
 				return n
@@ -374,7 +529,7 @@ func agBuildRptCtx(app *appstate.App, base string, rates currency.Rates, preset,
 			}
 			return "Unassigned"
 		},
-	}
+	}, nil
 }
 
 // agResolveCatID maps a category name (or "uncategorized") to its id.
@@ -402,46 +557,80 @@ func (c agRptCtx) resolveCatID(name string) (string, bool) {
 // ── Section renderers ────────────────────────────────────────────────────────
 
 func agRptOverview(c agRptCtx) string {
-	flow, _ := reports.IncomeVsExpense(c.txns, c.start, c.end, c.rates)
-	prior, _ := reports.IncomeVsExpense(c.txns, c.prevStart, c.prevEnd, c.rates)
-	net, assets, liab, _ := ledger.NetWorth(c.accounts, c.txns, c.rates)
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s — income %s, spending %s, net %s, savings rate %d%%.\n",
-		c.label, c.fmtM(flow.Income), c.fmtM(flow.Expense), c.fmtM(flow.Net()), flow.SavingsRate())
-	if !c.prevStart.IsZero() && (prior.Income != 0 || prior.Expense != 0) {
-		fmt.Fprintf(&b, "Previous window: income %s, spending %s, net %s.\n",
-			c.fmtM(prior.Income), c.fmtM(prior.Expense), c.fmtM(prior.Net()))
+	flow := periodview.BuildTotals(c.activity, c.start, c.end, c.rates)
+	if !flow.Known {
+		return agReportUnavailable(flow.Error)
 	}
-	fmt.Fprintf(&b, "Net worth now %s (assets %s, liabilities %s).",
-		c.fmtM(net.Amount), c.fmtM(assets.Amount), c.fmtM(liab.Amount))
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s — income %s, spending %s, net %s, savings rate %s.\n", c.label, c.fmtM(flow.Income.Amount), c.fmtM(flow.Expense.Amount), c.fmtM(flow.Net.Amount), agSavingsText(flow))
+	if !c.prevStart.IsZero() {
+		prior := periodview.BuildTotals(c.activity, c.prevStart, c.prevEnd, c.rates)
+		if !prior.Known {
+			return agReportUnavailable(prior.Error)
+		}
+		if prior.Income.Amount != 0 || prior.Expense.Amount != 0 {
+			fmt.Fprintf(&b, "Previous window: income %s, spending %s, net %s.\n", c.fmtM(prior.Income.Amount), c.fmtM(prior.Expense.Amount), c.fmtM(prior.Net.Amount))
+		}
+	}
+	b.WriteString(agNetWorthHeadline(c, networthview.Build(c.accounts, c.rawTxns, c.rates)))
 	return b.String()
 }
+func agSavingsText(t periodview.Totals) string {
+	if !t.SavingsKnown() {
+		return "unavailable (" + t.SavingsError.Error() + ")"
+	}
+	if t.Income.Amount == 0 {
+		return "undefined (no income)"
+	}
+	return fmt.Sprintf("%d%%", t.SavingsPercent)
+}
+func agNetWorthHeadline(c agRptCtx, nw networthview.Snapshot) string {
+	if !nw.Known {
+		return agReportUnavailable(nw.Err)
+	}
+	label := "Household net worth now"
+	note := ""
+	if nw.Partial {
+		label = "Known household net-worth subtotal"
+		note = " Incomplete: missing exchange rates for " + strings.Join(nw.MissingCurrencies, ", ") + "; omitted accounts: " + strings.Join(nw.ExcludedAccounts, ", ") + "."
+	}
+	if len(nw.ExcludedByChoice) > 0 {
+		note += " Excluded by account preference: " + strings.Join(nw.ExcludedByChoice, ", ") + "."
+	}
+	return fmt.Sprintf("%s %s (assets %s, liabilities %s).%s", label, c.fmtM(nw.Net.Amount), c.fmtM(nw.Assets.Amount), c.fmtM(nw.Liabilities.Amount), note)
+}
 
-// agMoneyFlow builds the diagram the Annual Review draws, over this window.
-func agMoneyFlow(c agRptCtx) reports.MoneyFlowDiagram {
-	spend, _ := reports.SpendingByCategory(c.txns, c.start, c.end, false, time.Time{}, time.Time{}, c.rates)
-	income, _ := reports.IncomeByCategory(c.txns, c.start, c.end, c.rates)
-	flow, _ := reports.IncomeVsExpense(c.txns, c.start, c.end, c.rates)
-	return reports.BuildMoneyFlow(reports.MoneyFlowInputs{
-		Income:   income,
-		Spending: spend,
-		Net:      flow.Net(),
-		Name:     c.nameOf,
-		Labels: reports.MoneyFlowLabels{
-			Income:         uistate.T("rpta.nodeIncome"),
-			OtherIncome:    uistate.T("rpta.nodeOtherIncome"),
-			EverythingElse: uistate.T("rpta.nodeEverythingElse"),
-			Savings:        uistate.T("rpta.nodeSavings"),
-			FromSavings:    uistate.T("rpta.nodeFromSavings"),
-			Disambiguate:   func(n string) string { return uistate.T("rpta.nodeCatDisamb", n) },
-		},
-		TopSources:  rptaFlowTopSources,
-		TopSpending: rptaFlowTopCategories,
+func agMoneyFlow(c agRptCtx) (reports.MoneyFlowDiagram, error) {
+	spend, err := reports.SpendingByCategoryChecked(c.activity, c.start, c.end, c.rates)
+	if err != nil {
+		return reports.MoneyFlowDiagram{}, err
+	}
+	income, err := reports.IncomeByCategory(c.activity, c.start, c.end, c.rates)
+	if err != nil {
+		return reports.MoneyFlowDiagram{}, err
+	}
+	if _, err = reports.TotalChecked(spend); err != nil {
+		return reports.MoneyFlowDiagram{}, err
+	}
+	if _, err = reports.TotalChecked(income); err != nil {
+		return reports.MoneyFlowDiagram{}, err
+	}
+	flow := periodview.BuildTotals(c.activity, c.start, c.end, c.rates)
+	if !flow.Known {
+		return reports.MoneyFlowDiagram{}, flow.Error
+	}
+	return reports.BuildMoneyFlowChecked(reports.MoneyFlowInputs{
+		Income: income, Spending: spend, Net: flow.Net.Amount, Name: c.nameOf,
+		Labels:     reports.MoneyFlowLabels{Income: uistate.T("rpta.nodeIncome"), OtherIncome: uistate.T("rpta.nodeOtherIncome"), EverythingElse: uistate.T("rpta.nodeEverythingElse"), Savings: uistate.T("rpta.nodeSavings"), FromSavings: uistate.T("rpta.nodeFromSavings"), Disambiguate: func(n string) string { return uistate.T("rpta.nodeCatDisamb", n) }},
+		TopSources: rptaFlowTopSources, TopSpending: rptaFlowTopCategories,
 	})
 }
 
 func agRptMoneyFlow(c agRptCtx) string {
-	d := agMoneyFlow(c)
+	d, err := agMoneyFlow(c)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
 	if len(d.Edges) == 0 {
 		return "No money flowed in " + c.label + " — nothing to diagram."
 	}
@@ -449,7 +638,11 @@ func agRptMoneyFlow(c agRptCtx) string {
 		if d.IncomeTotal <= 0 {
 			return ""
 		}
-		return fmt.Sprintf(" (%d%% of income)", v*100/d.IncomeTotal)
+		share, err := money.MulDiv(v, 100, d.IncomeTotal, money.RoundTowardZero)
+		if err != nil {
+			return " (share unavailable: " + err.Error() + ")"
+		}
+		return fmt.Sprintf(" (%d%% of income)", share)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Money flow for %s — %s in, %s out, %s %s.\n",
@@ -491,12 +684,19 @@ func agPooledNote(c agRptCtx, e reports.MoneyFlowEdge) string {
 
 func agRptSpendingByCategory(c agRptCtx) string {
 	compare := !c.prevStart.IsZero()
-	rows, err := reports.SpendingByCategory(c.txns, c.start, c.end, compare, c.prevStart, c.prevEnd, c.rates)
-	if err != nil || len(rows) == 0 {
+	rows, err := reports.CategoryComparisonChecked(c.activity, c.start, c.end, compare, c.prevStart, c.prevEnd, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return "No spending in " + c.label + "."
 	}
+	total, err := reports.TotalChecked(rows)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Spending by category, %s (total %s):\n", c.label, c.fmtM(reports.Total(rows)))
+	fmt.Fprintf(&b, "Spending by category, %s (total %s):\n", c.label, c.fmtM(total))
 	for _, r := range rows {
 		fmt.Fprintf(&b, "  %s: %s%s\n", c.nameOf(r.CategoryID), c.fmtM(r.Amount), agDelta(r))
 	}
@@ -515,12 +715,19 @@ func agDelta(r reports.CategorySpend) string {
 }
 
 func agRptIncomeByCategory(c agRptCtx) string {
-	rows, err := reports.IncomeByCategory(c.txns, c.start, c.end, c.rates)
-	if err != nil || len(rows) == 0 {
+	rows, err := reports.IncomeByCategory(c.activity, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return "No income in " + c.label + "."
 	}
+	total, err := reports.TotalChecked(rows)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Income by category, %s (total %s):\n", c.label, c.fmtM(reports.Total(rows)))
+	fmt.Fprintf(&b, "Income by category, %s (total %s):\n", c.label, c.fmtM(total))
 	for _, r := range rows {
 		fmt.Fprintf(&b, "  %s: %s\n", c.nameOf(r.CategoryID), c.fmtM(r.Amount))
 	}
@@ -531,9 +738,9 @@ func agRptTopMovers(c agRptCtx) string {
 	if c.prevStart.IsZero() {
 		return "Top movers needs a previous window to compare against; ask for a named period rather than \"all\"."
 	}
-	rows, err := reports.SpendingByCategory(c.txns, c.start, c.end, true, c.prevStart, c.prevEnd, c.rates)
+	rows, err := reports.CategoryComparisonChecked(c.activity, c.start, c.end, true, c.prevStart, c.prevEnd, c.rates)
 	if err != nil {
-		return "Couldn't compute the movers."
+		return agReportUnavailable(err)
 	}
 	movers := reports.TopMovers(rows, 10)
 	if len(movers) == 0 {
@@ -548,9 +755,15 @@ func agRptTopMovers(c agRptCtx) string {
 }
 
 func agRptCategoryTrends(c agRptCtx) string {
-	bounds := c.bounds()
-	trends, err := reports.CategoryTrends(c.txns, bounds, c.rates)
-	if err != nil || len(trends) == 0 {
+	bounds, err := c.bounds()
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	trends, err := reports.CategoryTrendsChecked(c.activity, bounds, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(trends) == 0 {
 		return "Not enough history in " + c.label + " to trend categories."
 	}
 	var b strings.Builder
@@ -586,8 +799,11 @@ func agBucketLabels(bounds []time.Time) string {
 }
 
 func agRptLargestExpenses(c agRptCtx) string {
-	items, err := reports.LargestExpenses(c.txns, c.start, c.end, c.rates, 15)
-	if err != nil || len(items) == 0 {
+	items, err := reports.LargestExpenses(c.activity, c.start, c.end, c.rates, 15)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(items) == 0 {
 		return "No expenses in " + c.label + "."
 	}
 	var b strings.Builder
@@ -599,8 +815,11 @@ func agRptLargestExpenses(c agRptCtx) string {
 }
 
 func agRptLargestIncome(c agRptCtx) string {
-	items, err := reports.LargestIncome(c.txns, c.start, c.end, c.rates, 15)
-	if err != nil || len(items) == 0 {
+	items, err := reports.LargestIncome(c.activity, c.start, c.end, c.rates, 15)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(items) == 0 {
 		return "No income in " + c.label + "."
 	}
 	var b strings.Builder
@@ -612,8 +831,11 @@ func agRptLargestIncome(c agRptCtx) string {
 }
 
 func agRptTopPayees(c agRptCtx) string {
-	rows, err := reports.TopPayees(c.txns, c.start, c.end, c.rates, 15)
-	if err != nil || len(rows) == 0 {
+	rows, err := reports.TopPayees(c.activity, c.start, c.end, c.rates, 15)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return "No payees in " + c.label + "."
 	}
 	var b strings.Builder
@@ -625,9 +847,15 @@ func agRptTopPayees(c agRptCtx) string {
 }
 
 func agRptPayeeTrends(c agRptCtx) string {
-	bounds := c.bounds()
-	rows, err := reports.PayeeTrends(c.txns, bounds, c.rates, 10)
-	if err != nil || len(rows) == 0 {
+	bounds, err := c.bounds()
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	rows, err := reports.PayeeTrends(c.activity, bounds, c.rates, 10)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return "Not enough history in " + c.label + " to trend payees."
 	}
 	var b strings.Builder
@@ -643,8 +871,11 @@ func agRptPayeeTrends(c agRptCtx) string {
 }
 
 func agRptSpendingByTag(c agRptCtx) string {
-	rows, err := reports.SpendingByTag(c.txns, c.start, c.end, !c.prevStart.IsZero(), c.prevStart, c.prevEnd, c.rates)
-	if err != nil || len(rows) == 0 {
+	rows, err := reports.SpendingByTagFromLedger(c.activity, c.start, c.end, !c.prevStart.IsZero(), c.prevStart, c.prevEnd, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return "No tagged spending in " + c.label + "."
 	}
 	var b strings.Builder
@@ -660,8 +891,11 @@ func agRptSpendingByTag(c agRptCtx) string {
 }
 
 func agRptSpendingByMember(c agRptCtx) string {
-	rows, err := reports.SpendingByMember(c.txns, c.start, c.end, c.rates)
-	if err != nil || len(rows) == 0 {
+	rows, err := reports.SpendingByMember(c.activity, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return "No spending attributed to household members in " + c.label + "."
 	}
 	var b strings.Builder
@@ -673,9 +907,9 @@ func agRptSpendingByMember(c agRptCtx) string {
 }
 
 func agRptSpendingByWeekday(c agRptCtx) string {
-	totals, err := reports.SpendingByWeekday(c.txns, c.start, c.end, c.rates)
+	totals, err := reports.SpendingByWeekday(c.activity, c.start, c.end, c.rates)
 	if err != nil {
-		return "Couldn't compute the weekday split."
+		return agReportUnavailable(err)
 	}
 	var any bool
 	var b strings.Builder
@@ -698,7 +932,12 @@ func agRptSpendingByWeekday(c agRptCtx) string {
 // agCustomFieldDef resolves the custom field a by-field section groups on: the
 // one the model named, or the first defined.
 func agCustomFieldDef(c agRptCtx) (customfields.Def, bool) {
-	defs := c.app.CustomFieldDefsFor("transaction")
+	var defs []customfields.Def
+	for _, def := range c.definitions {
+		if def.EntityType == "transaction" {
+			defs = append(defs, def)
+		}
+	}
 	if len(defs) == 0 {
 		return customfields.Def{}, false
 	}
@@ -724,8 +963,11 @@ func agRptSpendingByCustomField(c agRptCtx) string {
 	if !ok {
 		return "No custom fields are defined on transactions, so there is nothing to group by."
 	}
-	rows, err := reports.ByCustomField(c.txns, def.Key, c.start, c.end, c.rates)
-	if err != nil || len(rows) == 0 {
+	rows, err := reports.ByCustomField(c.activity, def.Key, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(rows) == 0 {
 		return fmt.Sprintf("No spending carries the %q field in %s.", def.Label, c.label)
 	}
 	var b strings.Builder
@@ -741,41 +983,51 @@ func agRptSpendingByCustomField(c agRptCtx) string {
 }
 
 func agRptMonthlyFlow(c agRptCtx) string {
-	bounds := c.bounds()
-	flows, err := reports.IncomeExpenseSeries(c.txns, bounds, c.rates)
-	if err != nil || len(flows) == 0 {
-		return "Not enough history in " + c.label + " for a month-by-month table."
+	bounds, err := c.bounds()
+	if err != nil {
+		return agReportUnavailable(err)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Month by month, %s:\n", c.label)
-	for i, f := range flows {
-		fmt.Fprintf(&b, "  %s: income %s, spending %s, net %s (%d%% kept)\n",
-			bounds[i].Format("2006-01"), c.fmtM(f.Income), c.fmtM(f.Expense), c.fmtM(f.Net()), f.SavingsRate())
+	fmt.Fprintf(&b, "Month by month, %s (exact buckets: %s):\n", c.label, agBucketLabels(bounds))
+	for i := 0; i < len(bounds)-1; i++ {
+		f := periodview.BuildTotals(c.activity, bounds[i], bounds[i+1], c.rates)
+		if !f.Known {
+			return agReportUnavailable(f.Error)
+		}
+		fmt.Fprintf(&b, "  [%s, %s): income %s, spending %s, net %s (%s kept)\n", bounds[i].Format(dateutil.Layout), bounds[i+1].Format(dateutil.Layout), c.fmtM(f.Income.Amount), c.fmtM(f.Expense.Amount), c.fmtM(f.Net.Amount), agSavingsText(f))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
 func agRptSavingsRate(c agRptCtx) string {
-	bounds := c.bounds()
-	rates, err := reports.SavingsRateSeries(c.txns, bounds, c.rates)
-	flow, _ := reports.IncomeVsExpense(c.txns, c.start, c.end, c.rates)
-	var b strings.Builder
-	fmt.Fprintf(&b, "Savings rate for %s as a whole: %d%% (kept %s of %s).\n",
-		c.label, flow.SavingsRate(), c.fmtM(flow.Net()), c.fmtM(flow.Income))
-	if err == nil && len(rates) > 0 {
-		b.WriteString("By month: ")
-		parts := make([]string, 0, len(rates))
-		for i, r := range rates {
-			parts = append(parts, fmt.Sprintf("%s %d%%", bounds[i].Format("2006-01"), r))
-		}
-		b.WriteString(strings.Join(parts, ", "))
+	bounds, err := c.bounds()
+	if err != nil {
+		return agReportUnavailable(err)
 	}
-	return strings.TrimRight(b.String(), "\n")
+	flow := periodview.BuildTotals(c.activity, c.start, c.end, c.rates)
+	if !flow.Known {
+		return agReportUnavailable(flow.Error)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Savings rate for %s as a whole: %s (kept %s of %s).\n", c.label, agSavingsText(flow), c.fmtM(flow.Net.Amount), c.fmtM(flow.Income.Amount))
+	parts := make([]string, 0, len(bounds)-1)
+	for i := 0; i < len(bounds)-1; i++ {
+		f := periodview.BuildTotals(c.activity, bounds[i], bounds[i+1], c.rates)
+		if !f.Known {
+			return agReportUnavailable(f.Error)
+		}
+		parts = append(parts, fmt.Sprintf("[%s, %s) %s", bounds[i].Format(dateutil.Layout), bounds[i+1].Format(dateutil.Layout), agSavingsText(f)))
+	}
+	b.WriteString("By exact monthly bucket: " + strings.Join(parts, ", "))
+	return b.String()
 }
 
 func agRptSpendingStats(c agRptCtx) string {
-	s, err := reports.SpendingStats(c.txns, c.start, c.end, c.rates)
-	if err != nil || s.Count == 0 {
+	s, err := reports.SpendingStats(c.activity, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if s.Count == 0 {
 		return "No expenses in " + c.label + "."
 	}
 	return fmt.Sprintf("%s in %s totalling %s — average %s, median %s.",
@@ -783,31 +1035,57 @@ func agRptSpendingStats(c agRptCtx) string {
 }
 
 func agRptNoSpendDays(c agRptCtx) string {
-	n := reports.NoSpendDays(c.txns, c.start, c.end, c.now)
+	start := c.start
+	if start.IsZero() {
+		start = c.earliest()
+	}
+	n := reports.NoSpendDays(c.activity, start, c.end, c.now)
 	return fmt.Sprintf("%s with no spending at all in %s.", plural(n, "day"), c.label)
 }
 
 func agRptRunway(c agRptCtx) string {
-	liquid, _ := ledger.LiquidBalance(c.accounts, c.txns, c.rates)
-	flows, _ := reports.IncomeExpenseSeries(c.txns, c.bounds(), c.rates)
-	burn := reports.AverageMonthlyExpense(flows)
+	bounds, err := c.bounds()
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if reports.HasPartialMonths(bounds) {
+		return agReportUnavailable(fmt.Errorf("monthly runway requires complete calendar months; the requested partial window is not extrapolated"))
+	}
+	liquid, err := ledger.LiquidBalance(c.activityAccounts, c.rawTxns, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	flows, err := reports.IncomeExpenseSeriesFromLedger(c.activity, bounds, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	_, burn, _, err := reports.MonthlyAveragesChecked(flows)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
 	r := reports.EstimateRunway(liquid.Amount, burn)
 	if burn <= 0 {
 		return fmt.Sprintf("Liquid cash %s; no spending in %s to burn against, so there is no runway to estimate.", c.fmtM(liquid.Amount), c.label)
 	}
-	return fmt.Sprintf("Liquid cash %s against an average monthly burn of %s (%s) — about %d months of runway.",
-		c.fmtM(liquid.Amount), c.fmtM(burn), c.label, r.Months)
+	return fmt.Sprintf("Scoped liquid cash %s against an average monthly burn of %s (%s) — about %d months of runway.", c.fmtM(liquid.Amount), c.fmtM(burn), c.label, r.Months)
 }
 
 func agRptCostOfMoney(c agRptCtx) string {
-	mc, err := reports.CostOfMoney(c.txns, c.cats, c.start, c.end, c.rates)
-	if err != nil || (mc.FeeCount == 0 && mc.InterestCount == 0) {
+	mc, err := reports.CostOfMoneyFromLedger(c.activity, c.cats, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if mc.FeeCount == 0 && mc.InterestCount == 0 {
 		return "No interest or fees found in " + c.label + "."
+	}
+	total, err := money.Add(mc.InterestTotal, mc.FeeTotal)
+	if err != nil {
+		return agReportUnavailable(err)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Cost of money, %s: interest %s across %s, fees %s across %s (total %s).\n",
 		c.label, c.fmtM(mc.InterestTotal), plural(mc.InterestCount, "charge"),
-		c.fmtM(mc.FeeTotal), plural(mc.FeeCount, "charge"), c.fmtM(mc.InterestTotal+mc.FeeTotal))
+		c.fmtM(mc.FeeTotal), plural(mc.FeeCount, "charge"), c.fmtM(total))
 	for i, it := range mc.Items {
 		if i >= 15 {
 			fmt.Fprintf(&b, "  …and %d more.\n", len(mc.Items)-i)
@@ -823,20 +1101,19 @@ func agRptCostOfMoney(c agRptCtx) string {
 }
 
 func agRptNetWorth(c agRptCtx) string {
-	net, assets, liab, err := ledger.NetWorth(c.accounts, c.txns, c.rates)
-	if err != nil {
-		return "Couldn't compute net worth."
+	nw := networthview.Build(c.accounts, c.rawTxns, c.rates)
+	if !nw.Known {
+		return agReportUnavailable(nw.Err)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Net worth %s — assets %s, liabilities %s. By account:\n",
-		c.fmtM(net.Amount), c.fmtM(assets.Amount), c.fmtM(liab.Amount))
+	b.WriteString(agNetWorthHeadline(c, nw) + " By household account:\n")
 	for _, a := range c.accounts {
 		if a.Archived {
 			continue
 		}
-		bal, err := ledger.Balance(a, c.txns)
+		bal, err := ledger.Balance(a, c.rawTxns)
 		if err != nil {
-			continue
+			return agReportUnavailable(err)
 		}
 		fmt.Fprintf(&b, "  %s (%s): %s\n", a.Name, a.Type, fmtMoney(bal))
 	}
@@ -844,8 +1121,11 @@ func agRptNetWorth(c agRptCtx) string {
 }
 
 func agRptInvestmentPerformance(c agRptCtx) string {
-	perf, err := reports.InvestmentPerformance(c.accounts, c.txns, c.rates)
-	if err != nil || len(perf) == 0 {
+	perf, err := reports.InvestmentPerformanceChecked(c.activityAccounts, c.rawTxns, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(perf) == 0 {
 		return "No investment, retirement or crypto accounts to report on."
 	}
 	var b strings.Builder
@@ -861,8 +1141,11 @@ func agRptInvestmentPerformance(c agRptCtx) string {
 }
 
 func agRptDeductible(c agRptCtx) string {
-	s, err := reports.DeductibleTotals(c.txns, c.cats, c.start, c.end, c.rates)
-	if err != nil || len(s.Rows) == 0 {
+	s, err := reports.DeductibleTotals(c.activity, c.cats, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(s.Rows) == 0 {
 		return "No categories are flagged deductible, so there is nothing to total."
 	}
 	var b strings.Builder
@@ -878,8 +1161,11 @@ func agRptYearTax(c agRptCtx) string {
 	if !c.start.IsZero() {
 		year = c.start.Year()
 	}
-	s, err := reports.YearTax(c.txns, year, c.start, c.end, c.rates)
-	if err != nil || len(s.Rows) == 0 {
+	s, err := reports.YearTax(c.activity, year, c.start, c.end, c.rates)
+	if err != nil {
+		return agReportUnavailable(err)
+	}
+	if len(s.Rows) == 0 {
 		return "Nothing to roll up for " + c.label + "."
 	}
 	var b strings.Builder
@@ -918,34 +1204,46 @@ func agCollect(c agRptCtx, keep func(domain.Transaction) bool) []domain.Transact
 	return out
 }
 
-func agRptTraceCategory(c agRptCtx, row string) ([]domain.Transaction, string) {
-	id, ok := c.resolveCatID(row)
-	if !ok {
-		return nil, ""
+func agTxnHasCategory(t domain.Transaction, id string, income bool) bool {
+	if !t.HasSplits() {
+		return t.CategoryID == id
 	}
-	return agCollect(c, func(t domain.Transaction) bool {
-		return t.IsExpense() && t.CategoryID == id
-	}), "spending in " + c.nameOf(id)
+	for _, line := range t.Splits {
+		if line.CategoryID == id && ((income && line.Amount.Amount > 0) || (!income && line.Amount.Amount < 0)) {
+			return true
+		}
+	}
+	return false
 }
 
-func agRptTraceIncomeCategory(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceCategory(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	id, ok := c.resolveCatID(row)
 	if !ok {
-		return nil, ""
+		return nil, "", nil
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
-		return t.IsIncome() && t.CategoryID == id
-	}), "income in " + c.nameOf(id)
+		return t.IsExpense() && agTxnHasCategory(t, id, false)
+	}), "spending in " + c.nameOf(id), nil
 }
 
-func agRptTraceTaxCategory(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceIncomeCategory(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	id, ok := c.resolveCatID(row)
 	if !ok {
-		return nil, ""
+		return nil, "", nil
+	}
+	return agCollect(c, func(t domain.Transaction) bool {
+		return t.IsIncome() && agTxnHasCategory(t, id, true)
+	}), "income in " + c.nameOf(id), nil
+}
+
+func agRptTraceTaxCategory(c agRptCtx, row string) ([]domain.Transaction, string, error) {
+	id, ok := c.resolveCatID(row)
+	if !ok {
+		return nil, "", nil
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
 		return (t.IsExpense() || t.IsIncome()) && t.CategoryID == id
-	}), "income and spending in " + c.nameOf(id)
+	}), "income and spending in " + c.nameOf(id), nil
 }
 
 // agRowMatchesName reports whether a transaction is one of the rows a
@@ -966,30 +1264,30 @@ func agRowMatchesName(t domain.Transaction, q string) bool {
 	return (desc != "" && strings.Contains(desc, q)) || (payee != "" && strings.Contains(payee, q))
 }
 
-func agRptTracePayee(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTracePayee(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	q := strings.ToLower(strings.TrimSpace(row))
 	if q == "" {
-		return nil, ""
+		return nil, "", nil
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
 		return t.IsExpense() && agRowMatchesName(t, q)
-	}), "spending on " + strings.TrimSpace(row)
+	}), "spending on " + strings.TrimSpace(row), nil
 }
 
-func agRptTraceIncomePayee(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceIncomePayee(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	q := strings.ToLower(strings.TrimSpace(row))
 	if q == "" {
-		return nil, ""
+		return nil, "", nil
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
 		return t.IsIncome() && agRowMatchesName(t, q)
-	}), "income from " + strings.TrimSpace(row)
+	}), "income from " + strings.TrimSpace(row), nil
 }
 
-func agRptTraceTag(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceTag(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	q := strings.ToLower(strings.TrimSpace(row))
 	if q == "" {
-		return nil, ""
+		return nil, "", nil
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
 		if !t.IsExpense() {
@@ -1001,10 +1299,10 @@ func agRptTraceTag(c agRptCtx, row string) ([]domain.Transaction, string) {
 			}
 		}
 		return false
-	}), "spending tagged " + strings.TrimSpace(row)
+	}), "spending tagged " + strings.TrimSpace(row), nil
 }
 
-func agRptTraceMember(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceMember(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	q := strings.ToLower(strings.TrimSpace(row))
 	var id string
 	found := q == "unassigned"
@@ -1015,58 +1313,68 @@ func agRptTraceMember(c agRptCtx, row string) ([]domain.Transaction, string) {
 		}
 	}
 	if !found {
-		return nil, ""
+		return nil, "", nil
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
 		return t.IsExpense() && t.HasOwner(id)
-	}), "spending by " + c.memberOf(id)
+	}), "spending by " + c.memberOf(id), nil
 }
 
-func agRptTraceWeekday(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceWeekday(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	q := strings.ToLower(strings.TrimSpace(row))
 	for d := time.Sunday; d <= time.Saturday; d++ {
 		name := strings.ToLower(d.String())
 		if name == q || (len(q) >= 3 && strings.HasPrefix(name, q)) {
 			return agCollect(c, func(t domain.Transaction) bool {
 				return t.IsExpense() && t.Date.Weekday() == d
-			}), "spending on " + d.String() + "s"
+			}), "spending on " + d.String() + "s", nil
 		}
 	}
-	return nil, ""
+	return nil, "", nil
 }
 
-func agRptTraceMonth(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceMonth(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	month, ok := reports.ParseMonth(row, c.now)
 	if !ok {
-		return nil, ""
+		return nil, "", nil
 	}
 	next := dateutil.AddMonths(month, 1)
 	return agCollect(c, func(t domain.Transaction) bool {
 		return !t.IsTransfer() && dateutil.InRange(t.Date, month, next)
-	}), "income and spending in " + month.Format("January 2006")
+	}), "income and spending in " + month.Format("January 2006"), nil
 }
 
-func agRptTraceAccount(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceAccount(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	q := strings.ToLower(strings.TrimSpace(row))
 	var id, name string
-	for _, a := range c.accounts {
+	for _, a := range c.activityAccounts {
 		if strings.ToLower(a.Name) == q || (q != "" && strings.Contains(strings.ToLower(a.Name), q)) {
 			id, name = a.ID, a.Name
 			break
 		}
 	}
 	if id == "" {
-		return nil, ""
+		return nil, "", nil
 	}
-	return agCollect(c, func(t domain.Transaction) bool {
-		return t.AccountID == id || t.TransferAccountID == id
-	}), "activity in " + name
+	var rows []domain.Transaction
+	for _, txn := range c.rawTxns {
+		if txn.AccountID == id {
+			rows = append(rows, txn)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if !rows[i].Date.Equal(rows[j].Date) {
+			return rows[i].Date.After(rows[j].Date)
+		}
+		return rows[i].ID < rows[j].ID
+	})
+	return rows, "full recorded account history in " + name + " (including transfers and report-excluded value updates)", nil
 }
 
-func agRptTraceCostOfMoney(c agRptCtx, row string) ([]domain.Transaction, string) {
-	mc, err := reports.CostOfMoney(c.txns, c.cats, c.start, c.end, c.rates)
+func agRptTraceCostOfMoney(c agRptCtx, row string) ([]domain.Transaction, string, error) {
+	mc, err := reports.CostOfMoneyFromLedger(c.activity, c.cats, c.start, c.end, c.rates)
 	if err != nil {
-		return nil, ""
+		return nil, "", err
 	}
 	q := strings.ToLower(strings.TrimSpace(row))
 	wantInterest, wantFee := q == "interest", q == "fee" || q == "fees"
@@ -1080,7 +1388,7 @@ func agRptTraceCostOfMoney(c agRptCtx, row string) ([]domain.Transaction, string
 		}
 	}
 	if len(keep) == 0 {
-		return nil, ""
+		return nil, "", nil
 	}
 	what := "the matching charges"
 	switch {
@@ -1091,13 +1399,13 @@ func agRptTraceCostOfMoney(c agRptCtx, row string) ([]domain.Transaction, string
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
 		return t.IsExpense() && keep[strings.ToLower(strings.TrimSpace(t.Desc))]
-	}), what
+	}), what, nil
 }
 
-func agRptTraceCustomField(c agRptCtx, row string) ([]domain.Transaction, string) {
+func agRptTraceCustomField(c agRptCtx, row string) ([]domain.Transaction, string, error) {
 	def, ok := agCustomFieldDef(c)
 	if !ok {
-		return nil, ""
+		return nil, "", nil
 	}
 	q := strings.ToLower(strings.TrimSpace(row))
 	wantEmpty := q == "" || q == "(no value)" || q == "no value"
@@ -1114,14 +1422,17 @@ func agRptTraceCustomField(c agRptCtx, row string) ([]domain.Transaction, string
 			return got == ""
 		}
 		return got == q
-	}), fmt.Sprintf("spending where %s is %q", def.Label, row)
+	}), fmt.Sprintf("spending where %s is %q", def.Label, row), nil
 }
 
 // agRptTraceMoneyFlow opens one node or ribbon of the money-flow diagram. A
 // pooled node ("Everything else") resolves to every category inside it, which
 // is the whole reason the diagram carries its category ids.
-func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string) {
-	d := agMoneyFlow(c)
+func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string, error) {
+	d, err := agMoneyFlow(c)
+	if err != nil {
+		return nil, "", err
+	}
 	q := strings.ToLower(strings.TrimSpace(row))
 	var node reports.MoneyFlowNode
 	var found bool
@@ -1140,16 +1451,16 @@ func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string) 
 		}
 	}
 	if !found {
-		return nil, ""
+		return nil, "", nil
 	}
 	switch node.Kind {
 	case reports.FlowIncomeHub:
-		return agCollect(c, func(t domain.Transaction) bool { return t.IsIncome() }), "every deposit that fed the period"
+		return agCollect(c, func(t domain.Transaction) bool { return t.IsIncome() }), "every deposit that fed the period", nil
 	case reports.FlowSavings, reports.FlowFromSavings:
 		// Neither is a group of records — one is income minus expense, the
 		// other the gap that opened. Say so rather than returning a plausible
 		// but wrong set of rows.
-		return nil, ""
+		return nil, "", nil
 	}
 	ids := map[string]bool{}
 	for _, id := range node.CategoryIDs {
@@ -1157,7 +1468,14 @@ func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string) 
 	}
 	income := node.Kind == reports.FlowIncomeSource || node.Kind == reports.FlowOtherIncome
 	rows := agCollect(c, func(t domain.Transaction) bool {
-		if !ids[t.CategoryID] {
+		matched := false
+		for id := range ids {
+			if agTxnHasCategory(t, id, income) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			return false
 		}
 		if income {
@@ -1169,7 +1487,7 @@ func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string) 
 	if node.Kind.Pooled() {
 		what = fmt.Sprintf("the %s ribbon (%s pooled)", node.Label, plural(len(node.CategoryIDs), "category"))
 	}
-	return rows, what
+	return rows, what, nil
 }
 
 // ── Rendering transactions for the model ─────────────────────────────────────
@@ -1179,6 +1497,8 @@ func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string) 
 // and a 8-hex prefix is unambiguous in a household ledger — update_transaction
 // re-resolves it and refuses rather than guessing if two ever collide.
 const agTxnShortID = 8
+
+const agTxnToolOutputLimit = 24000
 
 func agShortID(id string) string {
 	if len(id) <= agTxnShortID {
@@ -1195,18 +1515,25 @@ func agRenderTxns(c agRptCtx, rows []domain.Transaction, header string, limit in
 	}
 	var total int64
 	for _, t := range rows {
-		if conv, err := c.rates.Convert(t.Amount.Abs(), c.base); err == nil {
-			total += conv.Amount
+		converted, err := c.rates.Convert(t.Amount, c.base)
+		if err != nil {
+			return agReportUnavailable(err)
+		}
+		magnitude, err := converted.AbsChecked()
+		if err != nil {
+			return agReportUnavailable(err)
+		}
+		total, err = money.Add(total, magnitude.Amount)
+		if err != nil {
+			return agReportUnavailable(err)
 		}
 	}
-	shown := rows
-	if limit > 0 && len(shown) > limit {
-		shown = shown[:limit]
+	shownCount := len(rows)
+	if limit > 0 && shownCount > limit {
+		shownCount = limit
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s behind %s, %s — %s totalling %s:\n",
-		plural(len(rows), "transaction"), header, c.label, plural(len(rows), "row"), c.fmtM(total))
-	for _, t := range shown {
+	lines := make([]string, shownCount)
+	for i, t := range rows[:shownCount] {
 		label := strings.TrimSpace(t.Payee)
 		if label == "" {
 			label = strings.TrimSpace(t.Desc)
@@ -1219,20 +1546,44 @@ func agRenderTxns(c agRptCtx, rows []domain.Transaction, header string, limit in
 		if len(t.Tags) > 0 {
 			line += " #" + strings.Join(t.Tags, " #")
 		}
-		b.WriteString(line + "\n")
+		lines[i] = line + "\n"
 	}
-	if len(shown) < len(rows) {
-		fmt.Fprintf(&b, "…%d more not shown; raise `limit` or narrow the window to see them.\n", len(rows)-len(shown))
+	prefix := fmt.Sprintf("%s behind %s, %s — %s totalling %s:\n",
+		plural(len(rows), "transaction"), header, c.label, plural(len(rows), "row"), c.fmtM(total)) +
+		"These are original ledger receipt magnitudes, before split attribution and linked-refund netting; their gross total can differ from the report row.\n"
+	const suffix = "The first column is the transaction id — pass it to update_transaction to edit one.\n"
+	omitted := append([]domain.Transaction(nil), rows[shownCount:]...)
+	var output string
+	for {
+		body := prefix + strings.Join(lines[:shownCount], "")
+		if len(omitted) > 0 {
+			ids := make([]string, len(omitted))
+			for i := range omitted {
+				ids[i] = omitted[i].ID
+			}
+			encodedIDs, _ := json.Marshal(ids)
+			body += fmt.Sprintf("%d matching transactions omitted from this response. Omitted transaction IDs: %s. Recover exact rows with query_data (collection `transactions`, these IDs); use read_record for any record too large to return inline.\n", len(omitted), encodedIDs)
+		}
+		output = body + suffix
+		if len(output) <= agTxnToolOutputLimit {
+			break
+		}
+		if shownCount == 0 {
+			// Pathological IDs or a caller-supplied header can itself exceed the
+			// response budget. Never return a partial list as if it were complete.
+			return "Transaction result exceeds the 24000-byte response limit. Recover rows with query_data (collection `transactions`) using the original filters, then use read_record for exact records."
+		}
+		shownCount--
+		omitted = append([]domain.Transaction(nil), rows[shownCount:]...)
 	}
-	b.WriteString("The first column is the transaction id — pass it to update_transaction to edit one.")
-	return b.String()
+	return output
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
 // agToolsReports exposes the Reports surface: what sections exist, what each one
 // says over a window, and the transactions behind any row of them.
-func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier aicontext.ConversationTier) []chatTool {
+func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier aicontext.ConversationTier, currentScope ...func() scope.ReportScope) []chatTool {
 	// AG17: the sections that name individual merchants are withheld under the
 	// aggregates-only tier, exactly as the transaction-level read tools are.
 	// Filtering here means the model is never offered the section rather than
@@ -1256,7 +1607,7 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 					}
 					b.WriteString(line + "\n")
 				}
-				b.WriteString("Every section takes a window: period (this_month, last_month, this_quarter, last_quarter, this_year, last_year, year_to_date, last_12_months, all) or explicit from/to dates.")
+				b.WriteString("Date windows preserve exact requested days (to is inclusive; computation is [from, next day after to)). Monthly series support at most 36 buckets; request a narrower from/to range for longer history. Partial months are not extrapolated for runway. Activity follows the selected active-account scope; net worth is the current household balance sheet. Every section takes a window: period (this_month, last_month, this_quarter, last_quarter, this_year, last_year, year_to_date, last_12_months, all) or explicit from/to dates.")
 				return b.String()
 			},
 		},
@@ -1272,7 +1623,9 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 					To      string `json:"to"`
 					Field   string `json:"field"`
 				}
-				_ = json.Unmarshal(raw, &a)
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return agReportUnavailable(fmt.Errorf("invalid report arguments: %w", err))
+				}
 				sec, ok := agFindSection(a.Section)
 				if !ok {
 					return fmt.Sprintf("No report section called %q. Available: %s.", a.Section, agSectionIDs())
@@ -1280,8 +1633,14 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 				if aggregatesOnly && sec.Detail {
 					return fmt.Sprintf("The %s section names individual merchants, and this is an aggregates-only conversation. Switch the privacy level to full detail to read it, or ask for a category-level section instead.", sec.ID)
 				}
-				c := agBuildRptCtx(app, base, rates, a.Period, a.From, a.To, a.Field)
-				return sec.Render(c)
+				c, err := agBuildRptCtx(app, base, rates, a.Period, a.From, a.To, a.Field, currentScope...)
+				if err != nil {
+					return agReportUnavailable(err)
+				}
+				if err = c.validateActivity(sec.ID); err != nil {
+					return agReportUnavailable(err)
+				}
+				return c.metadata() + sec.Render(c)
 			},
 		},
 		{
@@ -1298,7 +1657,9 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 					Field   string `json:"field"`
 					Limit   int    `json:"limit"`
 				}
-				_ = json.Unmarshal(raw, &a)
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return agReportUnavailable(fmt.Errorf("invalid report arguments: %w", err))
+				}
 				sec, ok := agFindSection(a.Section)
 				if !ok {
 					return fmt.Sprintf("No report section called %q. Available: %s.", a.Section, agSectionIDs())
@@ -1306,8 +1667,17 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 				if sec.Trace == nil {
 					return fmt.Sprintf("The %s section is a computed figure, not a group of records, so there are no transactions to open. Read it with report_section instead.", sec.ID)
 				}
-				c := agBuildRptCtx(app, base, rates, a.Period, a.From, a.To, a.Field)
-				rows, what := sec.Trace(c, a.Row)
+				c, err := agBuildRptCtx(app, base, rates, a.Period, a.From, a.To, a.Field, currentScope...)
+				if err != nil {
+					return agReportUnavailable(err)
+				}
+				if err = c.validateActivity(sec.ID); err != nil {
+					return agReportUnavailable(err)
+				}
+				rows, what, err := sec.Trace(c, a.Row)
+				if err != nil {
+					return agReportUnavailable(err)
+				}
 				if what == "" {
 					// Two different things land here and the message has to cover
 					// both honestly: no row goes by that name, OR the row is a
@@ -1324,7 +1694,11 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 				if limit > 100 {
 					limit = 100
 				}
-				return agRenderTxns(c, rows, what, limit)
+				metadata := c.metadata()
+				if sec.ID == "investment_performance" {
+					c.label = "full recorded history; the requested period does not restrict investment basis"
+				}
+				return metadata + agRenderTxns(c, rows, what, limit)
 			},
 		},
 	}, agToolsLedgerEdit(app, base, rates)...)

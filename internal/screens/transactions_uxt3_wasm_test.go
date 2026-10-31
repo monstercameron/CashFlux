@@ -10,9 +10,9 @@ import (
 
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestUXT3TransactionRowCarriesResponsiveColumnHooks(t *testing.T) {
@@ -69,7 +69,7 @@ func TestUXT3ToolbarHasPrimaryAndActionsRows(t *testing.T) {
 		OnSearch: func(string) {},
 		Actions: []ui.Node{
 			shorthand.Div(shorthand.ClassStr("txn-period-control")),
-			shorthand.Div(shorthand.ClassStr("txn-view-toggle")),
+			shorthand.Div(shorthand.ClassStr("radio-group")),
 			shorthand.Div(shorthand.ClassStr("txn-toolbar-add")),
 		},
 	})
@@ -102,7 +102,7 @@ func TestUXT3ToolbarHasPrimaryAndActionsRows(t *testing.T) {
 		t.Fatal("toolbar is missing its responsive layout scope")
 	}
 	if len(actions.Children()) != 3 || !hasClass(actions.Children()[0].Attr("class"), "txn-period-control") ||
-		!hasClass(actions.Children()[1].Attr("class"), "txn-view-toggle") ||
+		!hasClass(actions.Children()[1].Attr("class"), "radio-group") ||
 		!hasClass(actions.Children()[2].Attr("class"), "txn-toolbar-add") {
 		t.Fatalf("period, view, and Add are not together in the actions row: %#v", actions.Children())
 	}

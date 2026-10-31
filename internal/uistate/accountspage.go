@@ -14,9 +14,10 @@
 package uistate
 
 import (
+	"slices"
 	"strings"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 	acctTransferAtomID = "accounts:transferOpen"
 	acctFormulasAtomID = "accounts:showFormulas"
 	acctEditAtomID     = "accounts:edit"
+	acctCredsAtomID    = "accounts:credentials"
 	acctClassStore     = "cashflux:accounts-class"
 )
 
@@ -36,22 +38,21 @@ type AccountEdit struct {
 
 // The account editor modes the shell-mounted host can render.
 const (
-	AcctEditModeEdit      = "edit"      // full inline-edit form
-	AcctEditModeSetBal    = "setbal"    // update balance / value (reconcile-to-target)
-	AcctEditModeReconcile = "reconcile" // reconcile to statement
+	AcctEditModeEdit      = "edit"      // the account's details form
+	AcctEditModeSetBal    = "setbal"    // update the balance or value
+	AcctEditModeReconcile = "reconcile" // reconcile to a statement
 	AcctEditModeTransfer  = "transfer"  // transfer between accounts
 )
 
-// AccountsFilter is the cross-tile filter the toolbar writes and the asset/archived
-// list tiles read. It is intentionally small: a free-text name search, an optional
-// account-type narrow, and whether archived accounts are shown. Owner scoping is
-// already handled by the top-bar active scope, so it is deliberately not duplicated
-// here.
+// AccountsFilter is the cross-tile filter the toolbar writes and the asset and archived
+// list tiles read. It holds a free-text name search, the account types to show, the
+// asset or liability view, and whether archived accounts are shown. Owner scoping is
+// already handled by the top-bar scope, so it is not repeated here.
 type AccountsFilter struct {
-	Search       string // case-insensitive substring match on the account name
-	Type         string // domain.AccountType string; "" = all types
-	Class        string // domain.AccountClass string ("asset"/"liability"); "" = both
-	ShowArchived bool   // reveal the archived-accounts tile
+	Search       string   // case-insensitive substring match on the account name
+	Types        []string // domain.AccountType strings; empty = all types
+	Class        string   // domain.AccountClass string ("asset"/"liability"); "" = both
+	ShowArchived bool     // reveal the archived-accounts tile
 }
 
 // Normalize trims the search text so a stray space never reads as an active filter.
@@ -63,14 +64,14 @@ func (f AccountsFilter) Normalize() AccountsFilter {
 // HasNarrowing reports whether a name/type narrow is active (archived visibility is
 // a view toggle, not a narrowing of the matched set, so it is excluded).
 func (f AccountsFilter) HasNarrowing() bool {
-	return f.Search != "" || f.Type != ""
+	return f.Search != "" || len(f.Types) > 0
 }
 
 // Matches reports whether an account name + type passes the active name/type narrow.
 // Archived visibility is handled by the host (which tile an account lands in), not
 // here.
 func (f AccountsFilter) Matches(name, accType string) bool {
-	if f.Type != "" && accType != f.Type {
+	if len(f.Types) > 0 && !slices.Contains(f.Types, accType) {
 		return false
 	}
 	if s := strings.TrimSpace(f.Search); s != "" {
@@ -82,22 +83,34 @@ func (f AccountsFilter) Matches(name, accType string) bool {
 }
 
 // Without returns a copy with the named field cleared, for chip removal. Keys are
-// the stable chip ids the toolbar emits ("search", "type").
+// the stable chip ids the toolbar emits ("search", "type" for all types, or "type:<value>" for one).
 func (f AccountsFilter) Without(field string) AccountsFilter {
-	switch field {
-	case "search":
+	switch {
+	case field == "search":
 		f.Search = ""
-	case "type":
-		f.Type = ""
+	case field == "type":
+		f.Types = nil
+	case strings.HasPrefix(field, "type:"):
+		f.Types = slices.DeleteFunc(slices.Clone(f.Types), func(t string) bool { return t == strings.TrimPrefix(field, "type:") })
 	}
 	return f
 }
 
+// ToggleType returns a copy with the account type added to the narrow, or removed
+// when it is already chosen. Several types may be chosen at once; none means all.
+func (f AccountsFilter) ToggleType(accType string) AccountsFilter {
+	if slices.Contains(f.Types, accType) {
+		return f.Without("type:" + accType)
+	}
+	f.Types = append(slices.Clone(f.Types), accType)
+	return f
+}
+
 // UseAccountsFilter returns the shared atom holding the accounts list filter. The
-// toolbar tile writes it; the asset-list and archived-list tiles read it to narrow
-// the rows they show. The name/type search and archived toggle are ephemeral
-// (transient actions), but the class view (All/Assets/Liabilities) is seeded from
-// localStorage so the toggle survives reloads (see PersistAcctClass).
+// toolbar tile writes it; the asset-list and archived-list tiles read it to narrow the
+// rows they show. The search, type and archived settings reset on reload. The class
+// view (All, Assets or Liabilities) starts from the saved preference, so it survives a
+// reload (see PersistAcctClass).
 func UseAccountsFilter() state.Atom[AccountsFilter] {
 	return state.UseAtom(acctFilterAtomID, AccountsFilter{Class: loadAcctClass()})
 }
@@ -106,11 +119,11 @@ func UseAccountsFilter() state.Atom[AccountsFilter] {
 // "liability") so the All/Assets/Liabilities toggle survives reloads. Call it
 // alongside setting the filter atom's Class (the atom itself is otherwise
 // ephemeral).
-func PersistAcctClass(class string) { kvSet(acctClassStore, class) }
+func PersistAcctClass(class string) { chromePreferenceSet(acctClassStore, class) }
 
 // loadAcctClass reads the saved accounts class view, defaulting to "" (All) when
 // absent.
-func loadAcctClass() string { return kvGet(acctClassStore) }
+func loadAcctClass() string { return chromePreferenceGet(acctClassStore) }
 
 // UseAcctTransferOpen returns the shared atom selecting whether the page-level
 // transfer form sub-view is open. The toolbar's "Transfer money" action sets it; the
@@ -125,11 +138,11 @@ func UseAcctTransferOpen() state.Atom[bool] { return state.UseAtom(acctTransferA
 // aggregates (and number-typed custom fields, which surface as cf_acct_* variables).
 func UseAcctShowFormulas() state.Atom[bool] { return state.UseAtom(acctFormulasAtomID, false) }
 
-// UseAccountEdit returns the shared atom selecting which account editor modal is open
-// (the row's action buttons set it; the shell-mounted AccountEditHost reads it and
-// renders the matching form inside a flip modal). It is a shell-root modal — rather
-// than an in-row overlay — so it centers on the viewport regardless of the transformed
-// bento/tile ancestors a row lives under. A zero value closes the modal.
+// UseAccountEdit returns the shared atom selecting which account editor modal is open.
+// The row's action buttons set it, and the shell-mounted AccountEditHost reads it and
+// renders the matching form in a flip modal. The modal sits at the shell root, not in
+// the row, so it centres on the viewport whatever transformed tile ancestors the row
+// has. A zero value closes the modal.
 func UseAccountEdit() state.Atom[AccountEdit] {
 	a := state.UseAtom(acctEditAtomID, AccountEdit{})
 	capturedAcctEdit = a
@@ -153,13 +166,10 @@ func SetAccountEdit(e AccountEdit) {
 // CloseAccountEdit clears the account editor atom (closes any open modal).
 func CloseAccountEdit() { SetAccountEdit(AccountEdit{}) }
 
-const acctCredsAtomID = "accounts:credentials"
-
 // UseAccountCredentials returns the shared atom holding the id of the account whose
 // encrypted-credential modal is open ("" = closed). The row's "Login & credentials"
-// action sets it; the shell-root CredentialVaultHost reads it. Kept separate from the
-// editor atom because the credential modal owns the encrypted vault (crypto lives in
-// the app package, not screens).
+// action sets it, and the shell-root CredentialVaultHost reads it. It is separate from
+// the editor atom because the vault lives in the app package with the encryption code.
 func UseAccountCredentials() state.Atom[string] {
 	a := state.UseAtom(acctCredsAtomID, "")
 	capturedAcctCreds = a

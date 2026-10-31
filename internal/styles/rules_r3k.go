@@ -44,9 +44,6 @@ func registerR3K() {
 	rule(".txn-bulkbar-overlay .bulk-owner-actions",
 		display("flex"), alignItems("center"), gap("0.5rem"), flex("0 1 auto"), whiteSpace("nowrap"),
 	)
-	rule(".txn-bulkbar-overlay .cf-multipicker-trigger",
-		prop("max-width", "12rem"), prop("overflow", "hidden"), prop("text-overflow", "ellipsis"),
-	)
 	// The shell mirrors the live rail state onto html.cf-rail-c. Deriving the
 	// overlay's left edge and available width from that state keeps its center
 	// aligned with #main without relying on a transformed tile or container query.

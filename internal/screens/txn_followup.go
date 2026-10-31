@@ -19,9 +19,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // followUpItem is one linked to-do, shown in a transaction's follow-up hover popover.
@@ -284,7 +284,7 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 		}
 		switch {
 		case props.Open == 0:
-			kids = append(kids, Div(css.Class("txnfu-empty"), uistate.T("transactions.followUpsAllDone")))
+			kids = append(kids, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutOK, Body: Span(uistate.T("transactions.followUpsAllDone"))}))
 		case props.Open > shown:
 			kids = append(kids, Div(css.Class("txnfu-more"), uistate.T("transactions.followUpsMore", props.Open-shown)))
 		}

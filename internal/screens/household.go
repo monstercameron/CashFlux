@@ -7,19 +7,15 @@ package screens
 import (
 	"fmt"
 
-	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/householdview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // ── HouseholdHub ─────────────────────────────────────────────────────────────
@@ -28,114 +24,44 @@ import (
 // hooks and does not need call-site configuration.
 type householdHubProps struct{}
 
-// hhFigures bundles the household-level figures the hero and the per-person
-// panels share: net worth per owner, spending per member, and income splits,
-// all in the base currency over the active period window.
-type hhFigures struct {
-	Base       string
-	Members    []domain.Member
-	ByOwner    map[string]money.Money
-	SpendByID  map[string]int64
-	SpendTotal int64
-	Income     []allocate.MemberIncomeSplit
-	IncomeOK   bool
-}
-
-// ownerWorth returns the owner's net worth, zero-valued in base when unset.
-func (f hhFigures) ownerWorth(ownerID string) money.Money {
-	v := f.ByOwner[ownerID]
-	if v.Currency == "" {
-		return money.New(0, f.Base)
-	}
-	return v
-}
-
-// totalWorth sums every owner's net (members + shared) into one household figure.
-func (f hhFigures) totalWorth() money.Money {
-	var total int64
-	for _, v := range f.ByOwner {
-		total += v.Amount
-	}
-	return money.New(total, f.Base)
-}
-
-// hhFiguresNow computes the shared household figures for the active period
-// window. It reads the shared period atom, so callers must invoke it at a
-// stable hook position.
-func hhFiguresNow(app *appstate.App, members []domain.Member) hhFigures {
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	byOwner, _ := ledger.NetByOwner(app.Accounts(), app.Transactions(), rates)
-
-	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
-	memberSpend, _ := reports.SpendingByMember(app.Transactions(), periodStart, periodEnd, rates)
-	spendByID := make(map[string]int64, len(memberSpend))
-	var spendTotal int64
-	for _, s := range memberSpend {
-		spendByID[s.MemberID] = s.Amount
-		spendTotal += s.Amount
-	}
-
-	splits, err := allocate.SplitPeriodIncome(app.Transactions(), members, periodStart, periodEnd, base, rates)
-	return hhFigures{
-		Base: base, Members: members, ByOwner: byOwner,
-		SpendByID: spendByID, SpendTotal: spendTotal,
-		Income: splits, IncomeOK: err == nil && len(splits) > 0,
-	}
-}
-
 // hhTakeaway builds the hero's one-sentence read: who holds the largest share
-// of the household's worth, and who did the spending this period.
-func hhTakeaway(f hhFigures) string {
-	// Largest holder by absolute net worth (shared pot counts as "everything shared").
-	var topName string
-	var topAbs, memberAbs int64
-	for _, m := range f.Members {
-		v := f.ownerWorth(m.ID).Amount
-		a := v
-		if a < 0 {
-			a = -a
-		}
-		memberAbs += a
-		if a > topAbs {
-			topAbs, topName = a, m.Name
-		}
-	}
-	grpAbs := f.ownerWorth(domain.GroupOwnerID).Amount
-	if grpAbs < 0 {
-		grpAbs = -grpAbs
-	}
-	lead := ""
-	switch {
-	case grpAbs > 0 && grpAbs >= memberAbs:
-		lead = uistate.T("hh.holderAll")
-	case topName != "":
-		lead = uistate.T("hh.holderLead", topName)
-	}
-
-	// Spending clause: shared vs the top spender.
-	spendClause := uistate.T("hh.spendClauseNone")
-	if f.SpendTotal > 0 {
-		var topSpendName string
-		var topSpend int64
-		for _, m := range f.Members {
-			if s := f.SpendByID[m.ID]; s > topSpend {
-				topSpend, topSpendName = s, m.Name
+// of the household's worth, and who did the spending this period. All decisions
+// are native prepared facts; unavailable clauses make no financial claim.
+func hhTakeaway(f *householdview.Model) string {
+	name := func(id string) string {
+		for _, member := range f.Members {
+			if member.ID == id {
+				return member.Name
 			}
 		}
-		if unattr := f.SpendByID[""]; unattr >= f.SpendTotal-unattr {
-			spendClause = uistate.T("hh.spendClauseShared")
-		} else if topSpendName != "" {
-			spendClause = uistate.T("hh.spendClauseTop", topSpendName)
+		return ""
+	}
+	lead, spending := "", ""
+	if f.Holder.Err == nil {
+		switch f.Holder.Kind {
+		case householdview.LeaderShared:
+			lead = uistate.T("hh.holderAll")
+		case householdview.LeaderMember:
+			lead = uistate.T("hh.holderLead", name(f.Holder.MemberID))
+		}
+	}
+	if f.Spender.Err == nil {
+		switch f.Spender.Kind {
+		case householdview.LeaderNone:
+			spending = uistate.T("hh.spendClauseNone")
+		case householdview.LeaderShared:
+			spending = uistate.T("hh.spendClauseShared")
+		case householdview.LeaderMember:
+			spending = uistate.T("hh.spendClauseTop", name(f.Spender.MemberID))
 		}
 	}
 	if lead == "" {
-		return spendClause
+		return spending
 	}
-	return lead + " " + spendClause
+	if spending == "" {
+		return lead
+	}
+	return lead + " " + spending
 }
 
 // HouseholdHub is the tabbed /household screen (FEATURE_MAP §5.3), redesigned
@@ -164,50 +90,64 @@ func HouseholdHub(props householdHubProps) ui.Node {
 	pr := uistate.UsePrefs().Get()
 	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
 
-	members := app.Members()
-	f := hhFiguresNow(app, members)
-	total := f.totalWorth()
+	prepared := householdPreparedAt(app, periodStart, periodEnd)
+	f := &prepared.Model
+	members := prepared.Members
 
 	// ── Hero: the household's one number, its figure chips, and the takeaway. ──
 	people := uistate.T("household.peopleN", len(members))
 	if len(members) == 1 {
 		people = uistate.T("household.peopleOne")
 	}
-	eyebrow := people + " · " + uistate.T("household.baseSuffix", f.Base) + " · " +
+	peopleCount := fmt.Sprintf("%d", len(members))
+	if f.RosterErr != nil {
+		people = uistate.T("calculation.unavailable")
+		peopleCount = people
+	}
+	baseLabel := uistate.T("household.baseSuffix", f.Base)
+	if f.Base == "" {
+		baseLabel = uistate.T("calculation.unavailable")
+	}
+	eyebrow := people + " · " + baseLabel + " · " +
 		pr.FormatDate(periodStart) + " – " + pr.FormatDate(periodEnd)
 
 	chips := []ui.Node{
-		rptChip(uistate.T("household.chipPeople"), fmt.Sprintf("%d", len(members)), ""),
-		rptChip(uistate.T("household.chipSpend"), fmtMoney(money.New(f.SpendTotal, f.Base)), rptToneCls(func() string {
-			if f.SpendTotal > 0 {
+		rptChip(uistate.T("household.chipPeople"), peopleCount, ""),
+		rptChip(uistate.T("household.chipSpend"), householdAmountText(f.Spending.Total), rptToneCls(func() string {
+			if f.Spending.Total.Err == nil && f.Spending.Total.Value.Amount > 0 {
 				return "neg"
 			}
 			return ""
 		}())),
 	}
-	if f.IncomeOK {
-		var incomeTotal int64
-		for _, s := range f.Income {
-			incomeTotal += s.Amount
-		}
-		if incomeTotal > 0 {
-			chips = append(chips, rptChip(uistate.T("household.chipIncome"), fmtMoney(money.New(incomeTotal, f.Base)), rptToneCls("pos")))
-		}
+	if f.Income.Applicable && f.Income.Total.Err == nil && f.Income.Total.Value.Amount > 0 {
+		chips = append(chips, rptChip(uistate.T("household.chipIncome"), householdAmountText(f.Income.Total), rptToneCls("pos")))
+	} else if f.Income.Err != nil || f.Income.Applicable && f.Income.Total.Err != nil {
+		chips = append(chips, rptChip(uistate.T("household.chipIncome"), uistate.T("calculation.unavailable"), ""))
 	}
-	if grp := f.ownerWorth(domain.GroupOwnerID); grp.Amount != 0 {
-		chips = append(chips, rptChip(uistate.T("household.chipShared"), fmtMoney(grp), rptToneCls(accentFor(grp))))
+	if grp := f.Worth.Owner(domain.GroupOwnerID); grp.Err == nil && grp.Value.Amount != 0 {
+		chips = append(chips, rptChip(uistate.T("household.chipShared"), householdAmountText(grp), rptToneCls(householdAmountTone(grp))))
 	}
+	incomeErr := f.Income.Err
+	if incomeErr == nil && f.Income.Applicable {
+		incomeErr = f.Income.Total.Err
+	}
+	takeaway := hhTakeaway(f)
 
 	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-hh-hero"),
 		P(css.Class("rpt-hero-eyebrow", tw.TextDim), eyebrow),
 		Div(css.Class("rpt-hero-main"),
 			Div(
 				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("household.heroLabel")),
-				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)+rptToneCls(accentFor(total))), Attr("data-countup", ""), fmtMoney(total)),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)+rptToneCls(householdAmountTone(f.Worth.Total))), Attr("data-countup", ""), Attr("data-testid", "hh-worth-total"), householdAmountText(f.Worth.Total)),
 			),
 		),
 		Div(css.Class("debt-chips"), chips),
-		If(len(members) > 0, P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "hh-takeaway"), hhTakeaway(f))),
+		householdUnavailable("hh-worth-unavailable", f.Worth.Total.Err),
+		householdUnavailable("hh-spend-unavailable", f.Spending.Total.Err),
+		householdUnavailable("hh-income-unavailable", incomeErr),
+		householdUnavailable("hh-roster-unavailable", f.RosterErr),
+		If(len(members) > 0 && takeaway != "", P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "hh-takeaway"), takeaway)),
 	)
 	heroTile := rptTile("hh-hero", "1 / span 4", rptSection("", uistate.T("household.heroTitle"), nil, heroBody))
 
@@ -217,9 +157,9 @@ func HouseholdHub(props householdHubProps) ui.Node {
 		Selected: tab.Get(),
 		OnSelect: func(v string) { tab.Set(v) },
 		Options: []uiw.SegOption{
-			{Value: "members", Label: uistate.T("household.tabMembers")},
-			{Value: "split", Label: uistate.T("household.tabSplit")},
-			{Value: "byperson", Label: uistate.T("household.tabByPerson")},
+			{Value: "members", Label: uistate.T("household.tabMembers"), TestID: "hh-tab-members"},
+			{Value: "split", Label: uistate.T("household.tabSplit"), TestID: "hh-tab-split"},
+			{Value: "byperson", Label: uistate.T("household.tabByPerson"), TestID: "hh-tab-byperson"},
 		},
 	})
 	toolbar := rptTile("hh-toolbar", "1 / span 4", Div(css.Class("filter-strip"),
@@ -228,9 +168,9 @@ func HouseholdHub(props householdHubProps) ui.Node {
 	// Pre-compute all three panel element descriptors unconditionally (mirrors the
 	// Reports() tabbed-view pattern) so the GWC reconciler can mount/unmount each
 	// panel component cleanly as the tab changes.
-	membersSection := ui.CreateElement(householdMembersPanel, householdMembersPanelProps{Rev: rev})
+	membersSection := ui.CreateElement(householdMembersPanel, householdMembersPanelProps{Rev: rev, Prepared: prepared, Language: string(uistate.ActiveLanguage())})
 	splitSection := ui.CreateElement(householdSplitPanel, householdSplitPanelProps{Rev: rev})
-	byPersonSection := ui.CreateElement(householdByPersonPanel, householdByPersonPanelProps{Rev: rev})
+	byPersonSection := ui.CreateElement(householdByPersonPanel, householdByPersonPanelProps{Rev: rev, Model: f, Language: string(uistate.ActiveLanguage())})
 
 	var body ui.Node
 	switch tab.Get() {
@@ -256,14 +196,16 @@ func Household() ui.Node {
 // ── Panel: Members ────────────────────────────────────────────────────────────
 
 type householdMembersPanelProps struct {
-	Rev int // shared data revision — forces re-render after modal saves
+	Rev      int // shared data revision — forces re-render after modal saves
+	Prepared *householdPrepared
+	Language string
 }
 
 // householdMembersPanel renders the person roster inside the hub. The per-person
 // analytics live on the "By person" tab, so the roster is rendered without its
 // standalone analytics sections.
-func householdMembersPanel(_ householdMembersPanelProps) ui.Node {
-	return rptSection("sec-people", uistate.T("household.rosterTitle"), nil, membersBody())
+func householdMembersPanel(props householdMembersPanelProps) ui.Node {
+	return rptSection("sec-people", uistate.T("household.rosterTitle"), nil, membersBody(props.Prepared))
 }
 
 // ── Panel: Split ──────────────────────────────────────────────────────────────
@@ -281,7 +223,9 @@ func householdSplitPanel(_ householdSplitPanelProps) ui.Node {
 // ── Panel: By person ──────────────────────────────────────────────────────────
 
 type householdByPersonPanelProps struct {
-	Rev int // shared data revision — forces re-render after modal saves
+	Rev      int // shared data revision — forces re-render after modal saves
+	Model    *householdview.Model
+	Language string
 }
 
 // hhRowsList wraps pre-built row nodes in the canonical .rows list container —
@@ -292,31 +236,30 @@ func hhRowsList(rows any) ui.Node {
 
 // hhRankedRow is one label + share-bar + amount row for the analytics sections.
 // Negative amounts tone the bar in the money-down hue (nw-bar-down).
-func hhRankedRow(label string, amt money.Money, maxAbs int64, toneBySign bool) ui.Node {
-	a := amt.Amount
-	if a < 0 {
-		a = -a
-	}
-	pct := 0
-	if maxAbs > 0 {
-		pct = int(a * 100 / maxAbs)
-	}
-	if pct > 100 {
-		pct = 100
+type householdRankedRowProps struct {
+	Row        householdview.RankedRow
+	ToneBySign bool
+}
+
+func hhRankedRow(props householdRankedRowProps) ui.Node {
+	row := props.Row
+	label := row.Name
+	if row.Kind == householdview.RowShared {
+		label = uistate.T("owner.group")
 	}
 	fillCls := "share-bar-fill"
 	amtCls := "amount"
-	if toneBySign && amt.IsNegative() {
+	if props.ToneBySign && row.Amount.Err == nil && row.Amount.Value.IsNegative() {
 		fillCls += " nw-bar-down"
 	}
-	if toneBySign {
-		amtCls += " " + accentFor(amt)
+	if props.ToneBySign {
+		amtCls += " " + householdAmountTone(row.Amount)
 	}
 	bar := Div(css.Class("share-bar", "share-bar-thin"),
-		Div(ClassStr(fillCls), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
-	return Div(css.Class("row"),
+		If(row.Percent.Err == nil, Div(ClassStr(fillCls), Style(map[string]string{"width": fmt.Sprintf("%d%%", row.Percent.Value)}))))
+	return Div(css.Class("row"), Attr("data-testid", "hh-row-"+row.Key),
 		Div(css.Class("row-main"), Span(css.Class("row-desc"), label), bar),
-		Span(ClassStr(amtCls), fmtMoney(amt)),
+		Span(ClassStr(amtCls), Attr("data-testid", "hh-amount-"+row.Key), householdAmountText(row.Amount)),
 	)
 }
 
@@ -329,98 +272,54 @@ func hhRankedRow(label string, amt money.Money, maxAbs int64, toneBySign bool) u
 //
 // Figures use the same computation path as the roster and /reports so the
 // numbers are consistent across all three surfaces.
-func householdByPersonPanel(_ householdByPersonPanelProps) ui.Node {
-	app := appstate.Default
-	if app == nil {
+func householdByPersonPanel(props householdByPersonPanelProps) ui.Node {
+	f := props.Model
+	if f == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	members := app.Members()
-	if len(members) == 0 {
+	if f.RosterErr != nil {
+		return Div(householdUnavailable("hh-by-person-roster-unavailable", f.RosterErr), Fragment(byPersonSections(f)...))
+	}
+	if len(f.Members) == 0 {
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{
 			Message:   uistate.T("household.byPersonEmpty"),
 			CTALabel:  uistate.T("members.addFirst"),
 			AddTarget: "member",
 		})
 	}
-	f := hhFiguresNow(app, members)
 	return Div(byPersonSections(f)...)
 }
 
 // byPersonSections builds the three analytics sections from a shared figure
 // set. Used by the hub's By-person tab (and available to the standalone
 // /members route).
-func byPersonSections(f hhFigures) []any {
-	// Net worth by person, ranked by absolute value; the shared pot rides along.
-	type entry struct {
-		label string
-		amt   money.Money
+func byPersonSections(f *householdview.Model) []any {
+	rows := func(items []householdview.RankedRow, tone bool) ui.Node {
+		return hhRowsList(MapKeyed(items, func(row householdview.RankedRow) any { return row.Key }, func(row householdview.RankedRow) ui.Node {
+			return ui.CreateElement(hhRankedRow, householdRankedRowProps{Row: row, ToneBySign: tone})
+		}))
 	}
-	worth := make([]entry, 0, len(f.Members)+1)
-	var maxWorth int64
-	for _, m := range f.Members {
-		v := f.ownerWorth(m.ID)
-		worth = append(worth, entry{m.Name, v})
-		if a := v.Amount; a > maxWorth {
-			maxWorth = a
-		} else if -a > maxWorth {
-			maxWorth = -a
-		}
-	}
-	if grp := f.ownerWorth(domain.GroupOwnerID); grp.Amount != 0 || len(f.Members) > 0 {
-		worth = append(worth, entry{uistate.T("owner.group"), grp})
-		if a := grp.Amount; a > maxWorth {
-			maxWorth = a
-		} else if -a > maxWorth {
-			maxWorth = -a
-		}
-	}
-	worthRows := make([]ui.Node, 0, len(worth))
-	for _, e := range worth {
-		worthRows = append(worthRows, hhRankedRow(e.label, e.amt, maxWorth, true))
-	}
-
-	// Spending by person this period.
-	var maxSpend int64
-	for _, m := range f.Members {
-		if s := f.SpendByID[m.ID]; s > maxSpend {
-			maxSpend = s
-		}
-	}
-	if u := f.SpendByID[""]; u > maxSpend {
-		maxSpend = u
-	}
-	spendRows := make([]ui.Node, 0, len(f.Members)+1)
-	for _, m := range f.Members {
-		spendRows = append(spendRows, hhRankedRow(m.Name, money.New(f.SpendByID[m.ID], f.Base), maxSpend, false))
-	}
-	if unattr := f.SpendByID[""]; unattr > 0 {
-		spendRows = append(spendRows, hhRankedRow(uistate.T("owner.group"), money.New(unattr, f.Base), maxSpend, false))
-	}
-
 	take := func(key string) ui.Node {
 		return P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), uistate.T(key))
 	}
 	sections := []any{
 		rptSection("sec-worth-by-person", uistate.T("members.netWorthTitle"), nil,
-			Fragment(take("members.netWorthTake"), hhRowsList(worthRows))),
+			Fragment(take("members.netWorthTake"), householdUnavailable("hh-worth-rows-unavailable", f.Worth.Total.Err), rows(f.WorthRows, true))),
 	}
-	if len(spendRows) > 0 {
+	if len(f.SpendRows) > 0 || f.Spending.Err != nil {
 		sections = append(sections, rptSection("sec-spend-by-person", uistate.T("members.spendTitle"), nil,
-			Fragment(take("members.spendTake"), hhRowsList(spendRows))))
+			Fragment(take("members.spendTake"), householdUnavailable("hh-spend-rows-unavailable", f.Spending.Total.Err), rows(f.SpendRows, false))))
 	}
-	if f.IncomeOK {
-		var maxIncome int64
-		for _, s := range f.Income {
-			if s.Amount > maxIncome {
-				maxIncome = s.Amount
-			}
-		}
-		incomeRows := make([]ui.Node, 0, len(f.Income))
-		for _, s := range f.Income {
-			incomeRows = append(incomeRows, hhRankedRow(s.Name, money.New(s.Amount, f.Base), maxIncome, false))
-		}
+	if f.Income.Applicable || f.Income.Err != nil {
 		sections = append(sections, rptSection("sec-income-by-person", uistate.T("members.incomeSplitTitle"), nil,
-			Fragment(take("members.incomeTake"), hhRowsList(incomeRows))))
+			Fragment(take("members.incomeTake"), householdUnavailable("hh-income-rows-unavailable", f.Income.Total.Err), rows(f.IncomeRows, false))))
 	}
 	return sections
+}
+
+func householdUnavailable(testID string, err error) ui.Node {
+	if err == nil {
+		return nil
+	}
+	return P(css.Class("muted"), Attr("role", "status"), Attr("data-testid", testID), uistate.T("calculation.unavailable")+": "+err.Error())
 }

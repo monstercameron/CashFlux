@@ -1,7 +1,7 @@
 // accounts.spec.mjs — regressions for the accounts-page refinements: the page-level
 // transfer flip modal, the ⋯-menu (Transactions moved in) + inline quick actions, the
 // merged update-value/edit modal, and the readable notes line.
-import { test, expect, nav } from "./fixtures.mjs";
+import { test, expect, nav, openVia } from "./fixtures.mjs";
 
 // openFirstEditModal opens the first row's merged edit modal via its ⋯ menu
 // (the 07-16 declutter demoted Edit off the row face) and returns the account id.
@@ -56,8 +56,10 @@ test.describe("accounts: labeled toolbar buttons", () => {
     await expect(manage).toBeVisible();
     await expect(manage).toHaveClass(/btn-tool/);
     await expect(manage).toContainText("Account settings");
-    await manage.click();
-    await expect(app.getByTestId("acct-groups-btn")).toBeVisible();
+    // The shared app can still be settling after the page mounts. Keep opening
+    // the menu until its first action is present, rather than losing a click to
+    // a render that replaces the trigger tree.
+    await openVia(app, manage, app.getByTestId("acct-groups-btn"));
     await expect(app.getByTestId("acct-institutions-btn")).toBeVisible();
     // Exchange rates (when present) navigates to Settings from inside the menu.
     const fx = app.getByTestId("acct-fx-btn");

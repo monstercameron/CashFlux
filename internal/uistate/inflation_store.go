@@ -35,12 +35,8 @@ const inflationPctKey = "cashflux:inflation-pct"
 // rate passed to it directly — that is the case where a nominal figure would be
 // labelled as real, which is the confusion the package exists to remove.
 func LoadInflationPct() float64 {
-	raw := SettingKVGet(inflationPctKey)
-	if raw == "" {
-		return inflation.DefaultRatePct
-	}
-	f, err := strconv.ParseFloat(raw, 64)
-	if err != nil || !inflation.Valid(f) {
+	f, err := ParseInflationPct(SettingKVGet(inflationPctKey))
+	if err != nil {
 		return inflation.DefaultRatePct
 	}
 	return f

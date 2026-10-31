@@ -18,10 +18,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/vitals"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // liveHealthInputs derives the financial-health signals through the SINGLE
@@ -533,7 +533,8 @@ func HealthScreen() ui.Node {
 	month := now.Format("2006-01")
 	in := liveHealthInputs(app, now)
 	r := healthscore.Evaluate(in)
-	resIn := liveResilienceInput(app, now)
+	resFacts := liveResilienceInputs(app, now)
+	resIn := resFacts.Input
 	baseCur := app.Settings().BaseCurrency
 	if baseCur == "" {
 		baseCur = "USD"
@@ -571,7 +572,7 @@ func HealthScreen() ui.Node {
 					healthDeltaLine(r.Score, prior, hasPrior),
 					// Resilience co-headline: how long the buffer covers everything with no
 					// income — the forward-looking answer to "am I okay if something goes wrong?"
-					If(resIn.MonthlySpend > 0,
+					If(resFacts.CashFlowKnown && resFacts.LiquidityKnown && resIn.MonthlySpend > 0,
 						Div(ClassStr("t-caption "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-dim")),
 							Attr("data-testid", "health-runway-hero"), Style(map[string]string{"margin-top": "6px"}),
 							uistate.T("healthx.runwayHero", fmtMonthsHuman(int(resilience.RunwayMonths(resIn)+0.0001))))),
@@ -598,7 +599,7 @@ func HealthScreen() ui.Node {
 	// Stress tests up top (after the hero): the forward-looking "what if something
 	// goes wrong" battery, interactive. A component so its own state hooks are isolated.
 	if r.Band != healthscore.BandNoData {
-		tiles = append(tiles, ui.CreateElement(healthStressTile, healthStressProps{In: resIn, Base: baseCur}))
+		tiles = append(tiles, ui.CreateElement(healthStressTile, healthStressProps{Facts: resFacts, Base: baseCur}))
 	}
 	for _, f := range r.Factors {
 		route := healthStepRoute(f.Key)

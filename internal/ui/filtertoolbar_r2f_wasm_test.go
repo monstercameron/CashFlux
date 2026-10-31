@@ -5,9 +5,10 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestR2FEscapeClosesSheetAndKeepsTriggerTarget(t *testing.T) {
@@ -36,7 +37,8 @@ func TestR2FEscapeClosesSheetAndKeepsTriggerTarget(t *testing.T) {
 	panel.Dispatch("onkeydown", render.Event{Key: "Escape"})
 	f.Stabilize()
 	for _, node := range f.AllByTag("div") {
-		if node.Attr("id") == "filter-inline-panel" {
+		// The sheet fades out before it leaves, so it is closed once it is leaving.
+		if node.Attr("id") == "filter-inline-panel" && !strings.Contains(node.Attr("class"), "is-leaving") {
 			t.Fatal("Escape left the filter sheet open")
 		}
 	}

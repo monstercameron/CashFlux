@@ -39,25 +39,42 @@ func CategoryTrends(txns []domain.Transaction, bounds []time.Time, rates currenc
 		return nil, nil
 	}
 
-	buckets := make([]map[string]int64, n)
-	ids := map[string]struct{}{}
-	for i := 0; i < n; i++ {
-		b, err := categoryTotals(txns, bounds[i], bounds[i+1], rates)
+	byID := map[string][]int64{}
+	add := func(id string, i int, amount int64) {
+		if byID[id] == nil {
+			byID[id] = make([]int64, n)
+		}
+		byID[id][i] += amount
+	}
+	err := visitBuckets(netted(txns), bounds, func(i int, t domain.Transaction) error {
+		if !t.IsExpense() || !t.CountsInReports() {
+			return nil
+		}
+		if t.HasSplits() {
+			for _, line := range t.Splits {
+				conv, err := rates.Convert(line.Amount, rates.Base)
+				if err != nil {
+					return err
+				}
+				add(line.CategoryID, i, conv.Abs().Amount)
+			}
+			return nil
+		}
+		conv, err := rates.Convert(t.Amount, rates.Base)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		buckets[i] = b
-		for id := range b {
-			ids[id] = struct{}{}
-		}
+		add(t.CategoryID, i, conv.Abs().Amount)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	out := make([]CategoryTrend, 0, len(ids))
-	for id := range ids {
-		trend := CategoryTrend{CategoryID: id, Spend: make([]int64, n)}
-		for i, b := range buckets {
-			amt := b[id]
-			trend.Spend[i] = amt
+	out := make([]CategoryTrend, 0, len(byID))
+	for id, spend := range byID {
+		trend := CategoryTrend{CategoryID: id, Spend: spend}
+		for _, amt := range spend {
 			trend.Total += amt
 		}
 		trend.DeltaPct, trend.HasDelta = ledger.PercentChange(trend.Spend[n-1], trend.Spend[0])

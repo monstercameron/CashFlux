@@ -2,9 +2,50 @@ package localqa
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 )
+
+type failedMockSource struct {
+	Source
+	err error
+}
+
+func (s failedMockSource) LastError() error { return s.err }
+
+func TestAnswerCheckedSourceFailuresAreUnavailableNotZero(t *testing.T) {
+	for _, cause := range []string{"missing FX rate", "store is closed"} {
+		t.Run(cause, func(t *testing.T) {
+			base := baseSource()
+			base.liquidBalance = 0
+			source := failedMockSource{Source: base, err: fmt.Errorf("%s", cause)}
+			answer, ok := Answer(IntentBalance, source, "", func(v int64) string { return fmt.Sprint(v) })
+			if !ok || !strings.Contains(answer, "unknown, not zero") || strings.Contains(answer, "$0") {
+				t.Fatalf("Answer = (%q, %v), want explicit unavailable without a zero amount", answer, ok)
+			}
+		})
+	}
+}
+
+func TestAnswerCheckedArithmeticOverflowIsUnavailable(t *testing.T) {
+	base := baseSource()
+	base.assets = math.MaxInt64
+	base.liabilities = -1
+	answer, ok := Answer(IntentNetWorth, base, "", func(v int64) string { return fmt.Sprint(v) })
+	if !ok || !strings.Contains(answer, "unknown, not zero") {
+		t.Fatalf("Answer = (%q, %v), want explicit unavailable", answer, ok)
+	}
+}
+
+func TestAnswerLegacyEmptySourceStillReportsActualZero(t *testing.T) {
+	base := baseSource()
+	base.liquidBalance = 0
+	answer, ok := Answer(IntentBalance, base, "", func(v int64) string { return fmt.Sprint(v) })
+	if !ok || !strings.Contains(answer, "0") || strings.Contains(answer, "unknown, not zero") {
+		t.Fatalf("Answer = (%q, %v), want actual zero from legacy Source", answer, ok)
+	}
+}
 
 // mockSource is a test double that satisfies the Source interface with canned
 // values. Fields whose zero value represents "no data" use a separate boolean

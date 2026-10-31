@@ -26,6 +26,7 @@
 package nwchange
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -35,6 +36,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
+
+var ErrUnknownChange = errors.New("nwchange: change is unavailable")
 
 // Window is a half-open comparison window [Since, Until): net worth is read as
 // of each bound, counting transactions strictly before it.
@@ -94,6 +97,15 @@ type Change struct {
 // DeltaMinor is the signed movement across the window.
 func (c Change) DeltaMinor() int64 { return c.EndMinor - c.StartMinor }
 
+// DeltaMinorChecked returns the signed movement when the change is known and
+// the subtraction fits in int64.
+func (c Change) DeltaMinorChecked() (int64, error) {
+	if !c.Known {
+		return 0, ErrUnknownChange
+	}
+	return money.Sub(c.EndMinor, c.StartMinor)
+}
+
 // Delta is DeltaMinor as money in the base currency.
 func (c Change) Delta() money.Money { return money.New(c.DeltaMinor(), c.Base) }
 
@@ -105,6 +117,30 @@ func (c Change) PercentChange() (int64, bool) {
 		return 0, false
 	}
 	return ledger.PercentChange(c.EndMinor, c.StartMinor)
+}
+
+// PercentChangeChecked preserves PercentChange's truncation and signed-baseline
+// semantics while returning arithmetic overflow instead of a wrapped value.
+func (c Change) PercentChangeChecked() (int64, bool, error) {
+	if !c.Known {
+		return 0, false, ErrUnknownChange
+	}
+	if c.StartMinor == 0 {
+		return 0, false, nil
+	}
+	delta, err := money.Sub(c.EndMinor, c.StartMinor)
+	if err != nil {
+		return 0, false, err
+	}
+	baseline, err := money.Abs(c.StartMinor)
+	if err != nil {
+		return 0, false, err
+	}
+	pct, err := money.MulDiv(delta, 100, baseline, money.RoundTowardZero)
+	if err != nil {
+		return 0, false, err
+	}
+	return pct, true, nil
 }
 
 // Flat reports whether nothing moved.

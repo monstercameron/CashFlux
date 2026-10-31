@@ -26,9 +26,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TxnDraftFill contains optional fields to merge into a quick-add draft.
@@ -89,7 +89,7 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 			ui.CreateElement(txnDraftAIAction, txnDraftAIActionProps{Visible: view.ShowAsk, Loading: loading.Get(), LabelKey: view.AskKey, OnAsk: ask}),
 		),
 		ui.CreateElement(txnDraftOffer, txnDraftOfferProps{View: view, Settings: settings, FormatDate: pr.FormatDate, OnApply: apply}),
-		If(errText.Get() != "", P(css.Class("err", tw.Text12), Attr("role", "alert"), errText.Get())),
+		If(errText.Get() != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(css.Class(tw.Text12), errText.Get())})),
 	)
 }
 

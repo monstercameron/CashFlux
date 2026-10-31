@@ -307,6 +307,7 @@ var vSweepKeys = Catalog{
 	"goalcompare.orderMoot":             "Funding order does not change either date — the monthly plans already fit alongside each other.",
 	"goalcompare.orderNeedsPlans":       "Both goals need a monthly plan before funding order can be compared.",
 	"goalcompare.orderNeedsOneCurrency": "Funding order can only be compared when both goals use the same currency.",
+	"goalcompare.orderPoolUnavailable":  "The combined monthly plans are too large to compare safely.",
 
 	// C399 — contribution history: planned vs actual.
 	"goalhist.title":          "Funded each month",
@@ -359,8 +360,8 @@ var vSweepKeys = Catalog{
 	"why.budget":         "Spending crossed a budget's line.",
 	"why.budgetLimit":    "Limit %s.",
 	"why.budgetSpent":    "Spent %s, which is %d%% of the limit.",
-	"why.stale":          "An account's balance has not been confirmed recently.",
-	"why.staleDays":      "Last confirmed %d days ago.",
+	"why.stale":          "An account's balance is out of date.",
+	"why.staleDays":      "Last updated %d days ago.",
 	"why.lowBalance":     "An account dropped below your floor.",
 	"why.lowFloor":       "Floor %d.",
 	"why.lowNow":         "Balance %d.",
@@ -390,8 +391,6 @@ var vSweepKeys = Catalog{
 	"accountsFwd.title":    "Next 90 days",
 	"accountsFwd.negative": "Runs out on %s — as low as %s",
 	"accountsFwd.low":      "Dips to %s on %s, ending around %s",
-	"accountsFwd.rising":   "Stays above today's balance, ending around %s",
-	"accountsFwd.assumes":  "Assumes your %d scheduled flows keep running as they are.",
 
 	// C376 — paste a brokerage export instead of typing every position.
 	"holdingImport.open":         "Paste positions from a brokerage",
@@ -448,11 +447,15 @@ var vSweepKeys = Catalog{
 	"bench.noOverlap":       "%s does not cover this window, so there is nothing to compare yet.",
 
 	// E3 — where the app's own numbers disagree with each other.
-	"contra.title": "These figures disagree",
-	"contra.count": "%d found",
-	"contra.look":  "Go look",
-	"contra.more":  "Show %d more",
-	"contra.less":  "Show fewer",
+	"contra.title":           "These figures disagree",
+	"contra.count":           "%d found",
+	"contra.look":            "Go look",
+	"contra.more":            "Show %d more",
+	"contra.less":            "Show fewer",
+	"contra.dismiss":         "Dismiss",
+	"contra.restore":         "Bring back %d dismissed",
+	"contra.dismissedNotice": "Dismissed.",
+	"contra.restoredNotice":  "Brought back %d.",
 
 	// LF-8 — unfinished work, as distinct from the integrity findings beside it.
 	"health.hygieneLead":            "Worth finishing:",

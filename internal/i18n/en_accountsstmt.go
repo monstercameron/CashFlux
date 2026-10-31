@@ -3,8 +3,8 @@
 package i18n
 
 // accountsStmtKeys holds English strings for the account-metadata batch (Agent B):
-// AC3 statement/due-day metadata, AC4 liability carrying cost, AC11 exclude-from-
-// net-worth, and AC15 idle-cash. Kept in its own file (not en.go) so this change
+// AC3 statement/due-day metadata, AC4 liability carrying cost, and AC11 exclude-from-
+// net-worth. Kept in its own file (not en.go) so this change
 // stays clear of the concurrent-WIP catalog. Registered into the catalog at init.
 var accountsStmtKeys = Catalog{
 	// AC3: statement-close day field on the liability edit form.
@@ -20,17 +20,6 @@ var accountsStmtKeys = Catalog{
 
 	// AC4: per-row carrying-cost line. %s = monthly interest cost (e.g. "$43").
 	"accountsstmt.carryingCost": "Costs about %s/month to hold",
-	// AC4: household total carrying cost. %s = total monthly interest.
-	"accountsstmt.carryingCostTotal": "Your debts cost about %s/month in interest to hold",
-	// AC4: link to the payoff page.
-	"accountsstmt.carryingCostLink": "See payoff plan",
-
-	// AC15: idle-cash line. %s = idle amount, %s = forgone yearly yield, %s = benchmark rate.
-	"accountsstmt.idleCash": "About %s is sitting idle — it could earn ~%s/year at your %s benchmark rate.",
-	// AC15: when no benchmark rate is set yet.
-	"accountsstmt.idleCashNoBenchmark": "About %s is sitting idle. Set a benchmark savings rate to see what it could earn.",
-	// AC15: link to the allocate page.
-	"accountsstmt.idleCashLink": "Put it to work",
 }
 
 func init() {

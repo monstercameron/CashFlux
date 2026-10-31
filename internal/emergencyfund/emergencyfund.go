@@ -36,6 +36,12 @@ func (b Basis) EssentialMonthlyMinor() int64 {
 	return nonNeg(b.FixedMonthlyMinor) + nonNeg(b.EssentialSpendMonthlyMinor)
 }
 
+// EssentialMonthlyMinorChecked returns the clamped essential-month amount, or
+// an overflow error when the two non-negative components cannot fit in int64.
+func (b Basis) EssentialMonthlyMinorChecked() (int64, error) {
+	return money.Add(nonNeg(b.FixedMonthlyMinor), nonNeg(b.EssentialSpendMonthlyMinor))
+}
+
 // Sizing is the derived essential-month figure and the standard fund targets.
 type Sizing struct {
 	// EssentialMonthly is the cost of one essential month.

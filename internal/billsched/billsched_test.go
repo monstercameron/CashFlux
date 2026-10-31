@@ -3,12 +3,90 @@
 package billsched
 
 import (
+	"math"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func date(y int, m time.Month, d int) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+func TestIncomePerPaydayCheckedCadenceFXPauseAndFrequency(t *testing.T) {
+	flows := []domain.Recurring{
+		{Amount: money.New(10000, "USD"), Cadence: domain.CadenceMonthly},
+		{Amount: money.New(10000, "EUR"), Cadence: domain.CadenceMonthly},
+		{Amount: money.New(900000, "USD"), Cadence: domain.CadenceMonthly, Paused: true},
+		{Amount: money.New(-900000, "USD"), Cadence: domain.CadenceMonthly},
+	}
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 2}}
+	got, err := IncomePerPayday(flows, rates, "biweekly")
+	if err != nil || got != 13846 { // (10000 + 20000) * 12 / 26, truncating toward zero.
+		t.Fatalf("IncomePerPayday = %d, %v; want 13846, nil", got, err)
+	}
+	got, err = IncomePerPayday(flows, rates, "monthly")
+	if err != nil || got != 30000 {
+		t.Fatalf("monthly IncomePerPayday = %d, %v; want 30000, nil", got, err)
+	}
+}
+
+func TestIncomePerPaydayRejectsMissingFXAndOverflow(t *testing.T) {
+	if _, err := IncomePerPayday([]domain.Recurring{{Amount: money.New(100, "EUR"), Cadence: domain.CadenceMonthly}}, currency.Rates{Base: "USD"}, "monthly"); err == nil {
+		t.Fatal("missing FX rate accepted")
+	}
+	if _, err := IncomePerPayday([]domain.Recurring{{Amount: money.New(math.MaxInt64, "USD"), Cadence: domain.CadenceWeekly}}, currency.Rates{Base: "USD"}, "monthly"); err == nil {
+		t.Fatal("overflowing cadence accepted")
+	}
+	if _, err := IncomePerPayday([]domain.Recurring{
+		{Amount: money.New(math.MaxInt64/2+1, "USD"), Cadence: domain.CadenceMonthly},
+		{Amount: money.New(math.MaxInt64/2+1, "USD"), Cadence: domain.CadenceMonthly},
+	}, currency.Rates{Base: "USD"}, "monthly"); err == nil {
+		t.Fatal("overflowing aggregate accepted")
+	}
+}
+
+func TestOptimizeCheckedRejectsGrossOverflowAndMinInt(t *testing.T) {
+	from := date(2026, time.July, 1)
+	for _, tc := range []struct {
+		name   string
+		start  int64
+		items  []Item
+		pay    []time.Time
+		income int64
+	}{
+		{name: "min int start", start: math.MinInt64},
+		{name: "daily debit aggregate", items: []Item{{Amount: math.MaxInt64 / 2}, {Amount: math.MaxInt64 / 2}}, income: 0},
+		{name: "income accumulation", pay: []time.Time{from, from.AddDate(0, 0, 1)}, income: math.MaxInt64 / 3},
+		{name: "negative obligation", items: []Item{{Amount: math.MinInt64}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := OptimizeChecked(tc.start, tc.items, tc.pay, tc.income, from, 2, 0); err == nil {
+				t.Fatal("unsafe schedule accepted")
+			}
+		})
+	}
+}
+
+func TestOptimizeCheckedMatchesLegacyForValidInputs(t *testing.T) {
+	from := date(2026, time.July, 1)
+	items := []Item{
+		{ID: "a", Amount: 2500, Due: from.AddDate(0, 0, 4), Movable: true},
+		{ID: "b", Amount: 3100, Due: from.AddDate(0, 0, 8), Movable: false},
+	}
+	paydays := []time.Time{from, from.AddDate(0, 0, 7), from.AddDate(0, 0, 14)}
+	want := Optimize(10000, items, paydays, 5000, from, 20, 1000)
+	got, err := OptimizeChecked(10000, items, paydays, 5000, from, 20, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("checked optimizer diverged on valid inputs\n got: %#v\nwant: %#v", got, want)
+	}
 }
 
 func TestPaydaysBiweeklyStepsAnchorOntoWindow(t *testing.T) {

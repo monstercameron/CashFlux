@@ -7,10 +7,11 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // txntemplates_ui.go renders the transaction quick-template ("favourites") UI
@@ -45,7 +46,7 @@ func TxnTemplatePicker(onPick func(domain.TxnTemplate)) ui.Node {
 	tmpls := uistate.TxnTemplates()
 	if len(tmpls) == 0 {
 		return Div(css.Class("txt-picker"), Attr("data-testid", "txn-tmpl-picker"),
-			P(css.Class("txt-empty"), uistate.T("txnTemplates.empty")))
+			Div(css.Class("txt-empty"), uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("txnTemplates.empty"))})))
 	}
 	chips := make([]ui.Node, 0, len(tmpls))
 	for _, t := range tmpls {
@@ -88,13 +89,16 @@ func txnTemplateChip(props txnTemplateChipProps) ui.Node {
 	}
 	amt := fmtMoney(money.New(t.SignedMinor(), t.Currency))
 
-	return Button(css.Class("txt-chip"), Type("button"),
-		Attr("data-testid", "txn-tmpl-chip-"+t.ID),
-		Attr("title", uistate.T("txnTemplates.use")),
-		OnClick(pick),
-		Span(css.Class("txt-chip-name"), label),
-		Span(css.Class("txt-chip-amt"), amt),
-		Span(css.Class("txt-chip-del"), Attr("role", "button"),
+	// The pick and delete controls are siblings, so neither button nests inside the other.
+	return Div(css.Class("txt-chip-wrap"),
+		Button(css.Class("txt-chip"), Type("button"),
+			Attr("data-testid", "txn-tmpl-chip-"+t.ID),
+			Attr("title", uistate.T("txnTemplates.use")),
+			OnClick(pick),
+			Span(css.Class("txt-chip-name"), label),
+			Span(css.Class("txt-chip-amt"), amt),
+		),
+		Button(css.Class("txt-chip-del"), Type("button"),
 			Attr("data-testid", "txn-tmpl-chip-del-"+t.ID),
 			Attr("aria-label", uistate.T("txnTemplates.delete")),
 			OnClick(del), "✕"),

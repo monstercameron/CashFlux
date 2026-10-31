@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,16 +14,16 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/goalview"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // growthPctLabel formats an expected-annual-return in basis points as a compact
@@ -51,8 +50,9 @@ func GoalRow(props goalRowProps) ui.Node {
 		if props.OnRetarget == nil {
 			return
 		}
-		when, ok := goalsvc.WorkableTargetDate(g, props.Health.SurplusMinor,
-			goalsvc.FairShareCount(props.Health.SurplusMinor, props.Health.FairMinor), time.Now())
+		now := time.Now()
+		e := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(appstate.Default), now)
+		when, ok := goalview.Retarget(g, e, props.Health, props.Base, goalRates(appstate.Default), now)
 		if !ok {
 			return
 		}
@@ -174,7 +174,17 @@ func GoalRow(props goalRowProps) ui.Node {
 			merged := false
 			for i, al := range allocs {
 				if al.AccountID == acctID {
-					allocs[i].Amount = money.New(al.Amount.Amount+amt, cur)
+					settings := app.Settings()
+					base := settings.BaseCurrency
+					if base == "" {
+						base = "USD"
+					}
+					combined, err := goalview.AddReservationAmount(al.Amount, money.New(amt, cur), currency.Rates{Base: base, Rates: settings.FXRates})
+					if err != nil {
+						uistate.PostNotice(err.Error(), true)
+						return
+					}
+					allocs[i].Amount = combined
 					merged = true
 					break
 				}
@@ -218,22 +228,29 @@ func GoalRow(props goalRowProps) ui.Node {
 	kind := g.EffectiveKind()
 	financial := kind.IsFinancial()
 
-	// Kind-aware progress: money for financial, linked-to-do count for checklist,
-	// a binary done for milestone, check-ins/streak for habit.
-	prog := goalsvc.EvaluateProgress(g, props.Tasks, now)
-	pct := prog.Percent
-	// First-class earmarks: "reached" now counts committed savings PLUS reserved
-	// earmarks (CoverageMinor), so grounding a goal in real set-aside money completes
-	// it — not only money that has moved. For non-financial kinds Reached == the
-	// kind's own completion, so this is a no-op there. coveragePct drives the loader
-	// and headline; savedPct (pct) is the moved portion drawn as the solid segment,
-	// with the earmarked gap between them shown as a second, hatched tone.
-	complete := goalsvc.Reached(g, props.Tasks, now)
-	coveragePct := pct
-	if financial {
-		coveragePct = goalsvc.CoveragePercent(g)
+	model := props.Model
+	if model == nil {
+		rates := currency.Rates{Base: props.Base}
+		var tasks []domain.Task
+		if appstate.Default != nil {
+			settings := appstate.Default.Settings()
+			rates = currency.Rates{Base: settings.BaseCurrency, Rates: settings.FXRates}
+			tasks = appstate.Default.Tasks()
+		}
+		prepared := goalview.BuildRow(g, goalsvc.BuildTaskIndex(tasks)[g.ID], rates, now)
+		model = &prepared
 	}
-	pace := goalsvc.ClassifyPace(g, now) // money-based; used only on the financial path
+	now = model.Now
+	evaluation := model.Evaluation
+	prog := evaluation.Progress
+	pct := prog.Percent
+	complete := evaluation.Complete
+	coverageKnown := evaluation.Err == nil
+	coveragePct := pct
+	if financial && coverageKnown {
+		coveragePct = evaluation.Coverage.CoveragePercent
+	}
+	pace := evaluation.Pace
 
 	redirect := ui.UseEvent(Prevent(func() {
 		if props.OnRedirect != nil {
@@ -246,6 +263,8 @@ func GoalRow(props goalRowProps) ui.Node {
 	switch {
 	case complete:
 		cardState, barClass = "is-done", "done"
+	case financial && !coverageKnown:
+		cardState, barClass = "", ""
 	case financial:
 		cardState, barClass = goalCardState(pace, props.Health.Health, complete)
 	case !g.TargetDate.IsZero() && g.TargetDate.Before(now):
@@ -277,7 +296,13 @@ func GoalRow(props goalRowProps) ui.Node {
 		// against the target, so reserved money reads as real progress at a glance.
 		// The target figure is a direct affordance: click to edit in place (mirrors the
 		// budgets limit; reuses its editor styling).
-		cov := money.New(goalsvc.CoverageMinor(g), g.TargetAmount.Currency)
+		cov := evaluation.Coverage.Covered
+		if !coverageKnown {
+			cov = g.CurrentAmount
+			if evaluation.Coverage.SavedKnown {
+				cov = evaluation.Coverage.Saved
+			}
+		}
 		switch {
 		case targetEditing.Get():
 			mainFig = Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(saveTargetEdit),
@@ -299,13 +324,16 @@ func GoalRow(props goalRowProps) ui.Node {
 			mainFig = Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(cov)), " / "+fmtMoney(g.TargetAmount))
 		}
 		pctFig = Span(css.Class("budget-pct"), fmt.Sprintf("%d%%", coveragePct))
+		if !coverageKnown {
+			pctFig = Span(css.Class("budget-pct"), uistate.T("goals.coverageUnavailableShort"))
+		}
 	}
 
 	// Header chips. Financial: pace badge + sinking-fund set-aside. Habit: a streak
 	// chip. Others: none. (The monthly-needed rate lives ONLY in the figures grid —
 	// one fact, one place.)
 	var paceBadgeNode, fundChip, streakChip, paceReasonNode ui.Node = Fragment(), Fragment(), Fragment(), Fragment()
-	if financial {
+	if financial && coverageKnown {
 		// In the "Needs a plan" section the row carries a finer urgency grade (Far
 		// behind / Slipping / Watch) so a cluster of Watch goals is differentiated; it
 		// takes the badge slot there. Everywhere else PlanUrgency is None and the normal
@@ -317,15 +345,15 @@ func GoalRow(props goalRowProps) ui.Node {
 		}
 		// The diagnostic "why" behind the badge (required /mo + available-money
 		// constraint), shown only on the live card (not archived/complete).
-		if !g.Archived && !complete {
+		if cardExpanded.Get() && !g.Archived && !complete {
 			paceReasonNode = goalPaceReason(props.Health, props.Base, g.ID)
 		}
-		if g.IsSinkingFund && props.FundSetAside > 0 {
+		if cardExpanded.Get() && g.IsSinkingFund && props.FundSetAside > 0 {
 			fundAmt := money.New(props.FundSetAside, g.CurrentAmount.Currency)
 			fundChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "fund-setaside-"+g.ID),
 				uistate.T("goals.monthlySetAside", fmtMoney(fundAmt)))
 		}
-	} else if kind == domain.GoalKindHabit && prog.Streak > 0 {
+	} else if cardExpanded.Get() && kind == domain.GoalKindHabit && prog.Streak > 0 {
 		streakChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-streak-"+g.ID),
 			uistate.T("goals.streakFmt", prog.Streak))
 	}
@@ -339,14 +367,115 @@ func GoalRow(props goalRowProps) ui.Node {
 	// Review-due chip (any kind, when the review cadence has elapsed) + a linked-budgets
 	// count chip (financial goals that feed one or more budgets).
 	var reviewChip, budgetChip ui.Node = Fragment(), Fragment()
-	if goalsvc.ReviewDue(g, now) {
+	if cardExpanded.Get() && goalsvc.ReviewDue(g, now) {
 		reviewChip = Span(ClassStr("pace-badge pace-review"), Attr("data-testid", "goal-review-due-"+g.ID),
 			uistate.T("goals.reviewDue"))
 	}
-	if len(g.BudgetIDs) > 0 {
+	if cardExpanded.Get() && len(g.BudgetIDs) > 0 {
 		budgetChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-budgets-"+g.ID),
 			uistate.T("goals.linkedBudgetChip", len(g.BudgetIDs)))
 	}
+	// GL redesign (Task 2): the contribution planner is opt-in. Show its disclosure chip
+	// only when the slider itself would render (financial, active, with a sensible range),
+	// mirroring GoalContribSlider's own guard — so a chip never leads to an empty planner.
+	_, _, _, sliderOK := evaluation.SliderRange(g, goalRates(appstate.Default))
+	// A REACHED goal has nothing left to plan — the planner chip hides with the figures
+	// (completion propagates to every sub-feature, not just the tint).
+	showPlanner := financial && coverageKnown && !g.Archived && !complete && sliderOK
+	// C367: the planner is the "what if I add more?" scenario tool — label it in the
+	// reviewer's own words so its purpose is obvious, not a generic "plan contribution".
+	planLabel := uistate.T("goals.whatIfMore")
+	if planOpen.Get() {
+		planLabel = uistate.T("goals.whatIfMoreHide")
+	}
+
+	// The card's "loader": a progress bar with a kind-appropriate label + percent
+	// inside it. Built once — both the compact and expanded states render it.
+	// Progress semantics live on the childless saved-fill bar (role="img" with
+	// the percent in the label): the loader wrapper contains focusable figure
+	// buttons, and a labeled role wrapping interactive children fails axe
+	// nested-interactive (#67).
+	loaderNode := Div(css.Class("goal-card-loader"),
+		// Two-tone fill: a hatched earmark band runs out to coverage BEHIND the solid
+		// saved segment, so the gap between "saved" and "backed" is legible at a glance.
+		// Rendered first → painted under the saved fill (same stacking context, later
+		// DOM node wins), leaving only the pct..coverage slice showing through.
+		If(financial && coveragePct > pct,
+			Div(ClassStr("bar-fill bar-earmark"), Attr("data-testid", "goal-bar-earmark-"+g.ID), Attr("style", barFillStyle(coveragePct)))),
+		Div(ClassStr("bar-fill "+barClass),
+			Attr("role", "img"),
+			Attr("aria-label", uistate.T("goals.progressLabel")+": "+strconv.Itoa(coveragePct)+"%"),
+			Attr("style", barFillStyle(pct))),
+		Div(css.Class("goal-card-loader-figs"),
+			mainFig,
+			pctFig,
+		),
+	)
+
+	// UX-06: compact default. One context-sensitive primary action per kind, plus the
+	// Details control that reveals the full card.
+	if !cardExpanded.Get() {
+		var compactPrimary ui.Node = Fragment()
+		if !g.Archived {
+			switch kind {
+			case domain.GoalKindFinancial:
+				if complete {
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive")))
+				} else {
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside")))
+				}
+			case domain.GoalKindMilestone:
+				if complete {
+					compactPrimary = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-reopen-"+g.ID), OnClick(markUndone), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markUndone")))
+				} else {
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-markdone-"+g.ID), OnClick(markDone), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markDone")))
+				}
+			case domain.GoalKindHabit:
+				compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-checkin-"+g.ID), OnClick(checkIn), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.checkIn")))
+			}
+		}
+		var compactSub ui.Node
+		if financial {
+			compactSub = ui.CreateElement(GoalFigures, goalFiguresProps{Goal: g, Model: *model, Compact: true})
+		} else {
+			compactSub = goalNonFinancialSummary(g, evaluation, pr.FormatDate)
+			if jar, ok := goalRoundUpJar(appstate.Default, g.ID); ok {
+				compactSub = Fragment(compactSub, Div(css.Class("goal-sub"), jar))
+			}
+		}
+		return Div(ClassStr("goal-card is-compact "+cardState),
+			Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
+			Div(css.Class("goal-card-head"),
+				Span(css.Class("goal-card-title"), g.Name),
+				paceBadgeNode,
+				pausedChip,
+			),
+			loaderNode,
+			// The bar's saved-vs-set-aside key, decodable without expanding the card. The
+			// "saved" swatch samples the bar's status tint (barClass) so an amber Watch bar
+			// gets an amber swatch, not a hardcoded green one.
+			If(financial && !complete, goalBarLegend(g, evaluation, barClass, props.EarmarkOverbooked, true)),
+			compactSub,
+			Div(css.Class("goal-card-actions"),
+				compactPrimary,
+				// C367: a visible "What if I add more?" jump into the scenario planner —
+				// only when the goal actually has a plan to explore (mirrors showPlanner).
+				If(showPlanner, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
+					Attr("data-testid", "goal-whatif-"+g.ID),
+					Attr("aria-label", uistate.T("goals.whatIfMore")+" — "+g.Name), Title(uistate.T("goals.whatIfMore")),
+					OnClick(openWhatIf),
+					uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+					Span(uistate.T("goals.whatIfMore")))),
+				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
+					Attr("data-testid", "goal-expand-"+g.ID), Attr("aria-expanded", "false"),
+					Attr("aria-label", uistate.T("goals.expandTitle")+" — "+g.Name), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
+					Span(uistate.T("goals.expand")),
+					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
+			),
+		)
+	}
+
+	// Everything below belongs exclusively to the expanded card.
 	// G8 quick-fund chip (computed at render; the click handler re-derives the same
 	// figures so a stale card can never over-reserve).
 	var quickFundChip ui.Node = Fragment()
@@ -374,9 +503,8 @@ func GoalRow(props goalRowProps) ui.Node {
 	// not in the meta strip.
 	var earmarkLegend ui.Node = Fragment()
 	var subSection ui.Node
-	// UX-06: the compact card's figure strip — to go, needed/mo, landing date only.
-	var compactFigs ui.Node = Fragment()
 	if financial {
+		details := prepareGoalCardDetails(g, evaluation, props.Accounts, goalRates(appstate.Default), now)
 		overfund, _ := goalsvc.Overfund(g)
 		// Figures grid (redesign): the key numbers as scannable stat cells instead of a
 		// run-on "$X to go · by date · save $X/mo" sentence. Only cells with real data
@@ -385,71 +513,7 @@ func GoalRow(props goalRowProps) ui.Node {
 		// "To go" is measured against COVERAGE (target − saved − earmarked), so a goal
 		// grounded in earmarks reads as closer to done — consistent with the backed
 		// headline. rem (savings-only) still feeds over-fund/what-next below.
-		toGoMinor := g.TargetAmount.Amount - goalsvc.CoverageMinor(g)
-		if toGoMinor < 0 {
-			toGoMinor = 0
-		}
-		toGo := money.New(toGoMinor, g.TargetAmount.Currency)
-		var figs []ui.Node
-		if !complete {
-			figs = append(figs, goalFig(uistate.T("goalsredesign.figToGo"), fmtMoney(toGo)))
-			// QA L5: one bare "Monthly" cell served TWO different figures — the
-			// mathematically required pace and the user's own saved plan — so a
-			// $140 plan silently displayed as the $121.43 requirement. The pace is
-			// now labeled "Needed / mo", and a user-set plan shows as its own
-			// "Your plan / mo" cell beside it, never replaced.
-			if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-				figs = append(figs, goalFig(uistate.T("goals.figMonthlyNeeded"), fmtMoney(per)))
-			}
-			if g.MonthlyContribution.Amount > 0 {
-				figs = append(figs, goalFig(uistate.T("goals.figMonthlyPlan"), fmtMoney(g.MonthlyContribution)))
-			}
-			if !g.TargetDate.IsZero() {
-				figs = append(figs, goalFig(uistate.T("goalsredesign.figTarget"), pr.FormatDate(g.TargetDate)))
-			}
-			// Growth-adjusted projection: for a goal with an expected annual return, show
-			// when compounding + contributions actually reach the target — often sooner
-			// than the flat pace implies. On-device, using the user's own assumed rate.
-			if g.ExpectedReturnBips > 0 {
-				monthlyMinor := int64(0)
-				if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-					monthlyMinor = per.Amount
-				} else if g.MonthlyContribution.Amount > 0 {
-					monthlyMinor = g.MonthlyContribution.Amount
-				}
-				proj := goalsvc.ProjectWithGrowth(goalsvc.CoverageMinor(g), g.TargetAmount.Amount, monthlyMinor, g.ExpectedReturnBips, now)
-				if proj.Reachable {
-					figs = append(figs, goalFig(
-						uistate.T("goalsredesign.figProjected", growthPctLabel(g.ExpectedReturnBips)),
-						pr.FormatDate(proj.Date)))
-				}
-			}
-		}
-		var figsNode ui.Node = Fragment()
-		if len(figs) > 0 {
-			figsNode = Div(css.Class("goal-figs"), Attr("data-testid", "goal-figs-"+g.ID), figs)
-		}
-		// The compact strip repeats only the three decision figures.
-		if !complete {
-			cf := []ui.Node{goalFig(uistate.T("goalsredesign.figToGo"), fmtMoney(toGo))}
-			if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-				cf = append(cf, goalFig(uistate.T("goals.figMonthlyNeeded"), fmtMoney(per)))
-			}
-			if !g.TargetDate.IsZero() {
-				cf = append(cf, goalFig(uistate.T("goalsredesign.figTarget"), pr.FormatDate(g.TargetDate)))
-			} else if g.ExpectedReturnBips > 0 {
-				monthlyMinor := int64(0)
-				if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-					monthlyMinor = per.Amount
-				} else if g.MonthlyContribution.Amount > 0 {
-					monthlyMinor = g.MonthlyContribution.Amount
-				}
-				if proj := goalsvc.ProjectWithGrowth(goalsvc.CoverageMinor(g), g.TargetAmount.Amount, monthlyMinor, g.ExpectedReturnBips, now); proj.Reachable {
-					cf = append(cf, goalFig(uistate.T("goalsredesign.figProjected", growthPctLabel(g.ExpectedReturnBips)), pr.FormatDate(proj.Date)))
-				}
-			}
-			compactFigs = Div(css.Class("goal-figs"), Attr("data-testid", "goal-compact-figs-"+g.ID), cf)
-		}
+		figsNode := ui.CreateElement(GoalFigures, goalFiguresProps{Goal: g, Model: *model})
 		var whatNext ui.Node = Fragment()
 		if complete && !g.Archived {
 			whatNext = Div(css.Class("budget-sub"), Attr("data-testid", "goal-whatnext-"+g.ID),
@@ -490,38 +554,26 @@ func GoalRow(props goalRowProps) ui.Node {
 		// no longer fits the account balance (spent down since), flag it in a warning tone
 		// rather than claiming false coverage.
 		if !complete {
-			earmarkLegend = goalBarLegend(g, barClass, props.EarmarkOverbooked, false)
+			earmarkLegend = goalBarLegend(g, evaluation, barClass, props.EarmarkOverbooked, false)
 		}
 		subSection = Fragment(
 			figsNode,
 			Div(css.Class("goal-meta"),
 				overfundNote, whatNext, linkedLine, catLine,
-				goalInterestEtaLine(g, props.Accounts, now),
+				details.Interest,
 			),
 			// The savings-pace rail lives INSIDE the card's metadata block (right below the
 			// figures/notes it summarises), not as a detached section underneath the card.
-			goalTrajectoryNode(g, now),
+			details.Trajectory,
 			// C399: the trajectory projects forward from the plan; this looks back at
 			// whether the plan was actually funded. The projection is only as good as
 			// that, so the two belong together.
-			goalContribHistoryNode(g, now),
+			details.History,
 		)
 	} else {
-		var line string
-		if complete {
-			line = uistate.T("goals.complete")
-		} else if !g.TargetDate.IsZero() {
-			line = uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
-			if len(line) > 3 && line[:3] == " · " {
-				line = line[3:] // drop the leading separator when it stands alone
-			}
-		}
-		if line != "" {
-			subSection = Div(css.Class("budget-sub goal-sub"), Span(line))
-		} else {
-			subSection = Fragment()
-		}
+		subSection = goalNonFinancialSummary(g, evaluation, pr.FormatDate)
 	}
+
 	// TX11: show the running round-up jar on the target goal's row ("$6.37 in
 	// round-ups"), only when this is the round-up target goal and something has
 	// accrued this cadence period.
@@ -623,7 +675,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	var retargetItem, planArchiveItem ui.Node = Fragment(), Fragment()
 	if !g.Archived && !complete && financial {
 		if props.Health.Health == goalsvc.HealthWatch || props.Health.Health == goalsvc.HealthAtRisk {
-			if when, ok := goalsvc.WorkableTargetDate(g, props.Health.SurplusMinor, goalsvc.FairShareCount(props.Health.SurplusMinor, props.Health.FairMinor), now); ok && when.After(g.TargetDate) {
+			if when, ok := model.RetargetDate, model.HasRetarget; ok && when.After(g.TargetDate) {
 				retargetItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "goal-retarget-"+g.ID),
 					Title(uistate.T("goals.retargetTitle")),
@@ -656,67 +708,9 @@ func GoalRow(props goalRowProps) ui.Node {
 	// any, and always for a checklist goal (where the steps ARE the progress) so it offers
 	// the add-step CTA even when empty. Each item toggles done live (updating progress);
 	// checklist goals get a "+ add step" affordance.
-	linked := goalsvc.LinkedTasks(props.Tasks, g.ID)
-	stepsDone, stepsTotal := goalsvc.TaskCounts(props.Tasks, g.ID)
 	var todosSection ui.Node = Fragment()
-	if len(linked) > 0 || kind == domain.GoalKindChecklist {
-		// Show only the top 3 steps so a long list never dictates the card's height;
-		// open steps come first (most actionable), then completed. A "+N more" line notes
-		// the remainder — the full list stays manageable on the to-do page.
-		display := append([]domain.Task(nil), linked...)
-		sort.SliceStable(display, func(i, j int) bool {
-			di := display[i].Status == domain.StatusDone
-			dj := display[j].Status == domain.StatusDone
-			return !di && dj // open steps before completed ones
-		})
-		const maxSteps = 3
-		hidden := 0
-		if len(display) > maxSteps {
-			hidden = len(display) - maxSteps
-			display = display[:maxSteps]
-		}
-		var items []ui.Node
-		for _, lt := range display {
-			items = append(items, ui.CreateElement(GoalTodoItem, goalTodoProps{Task: lt, OnToggle: toggleTodo}))
-		}
-		var body ui.Node
-		if len(items) == 0 {
-			body = P(css.Class("goal-todos-empty"), uistate.T("goals.noSteps"))
-		} else {
-			body = Div(css.Class("goal-todos-list"), items)
-		}
-		var moreLine ui.Node = Fragment()
-		if hidden > 0 {
-			moreLine = P(css.Class("goal-todos-more"), Attr("data-testid", "goal-todos-more-"+g.ID), uistate.T("goals.stepsMore", hidden))
-		}
-		var addBtn ui.Node = Fragment()
-		if !g.Archived && kind == domain.GoalKindChecklist {
-			addBtn = Button(css.Class("goal-todo-add"), Type("button"), Attr("data-testid", "goal-addstep-"+g.ID), OnClick(openAddStep),
-				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("goals.addStep")))
-		}
-		todosSection = Div(css.Class("goal-todos"), Attr("data-testid", "goal-todos-"+g.ID),
-			Div(css.Class("goal-todos-head"),
-				Span(css.Class("goal-todos-title"), uistate.T("goals.todosHead")),
-				Span(css.Class("goal-todos-count"), fmt.Sprintf("%d/%d", stepsDone, stepsTotal)),
-			),
-			body,
-			moreLine,
-			addBtn,
-		)
-	}
-
-	// GL redesign (Task 2): the contribution planner is opt-in. Show its disclosure chip
-	// only when the slider itself would render (financial, active, with a sensible range),
-	// mirroring GoalContribSlider's own guard — so a chip never leads to an empty planner.
-	_, _, _, sliderOK := goalsvc.SliderRange(g, now)
-	// A REACHED goal has nothing left to plan — the planner chip hides with the figures
-	// (completion propagates to every sub-feature, not just the tint).
-	showPlanner := financial && !g.Archived && !complete && sliderOK
-	// C367: the planner is the "what if I add more?" scenario tool — label it in the
-	// reviewer's own words so its purpose is obvious, not a generic "plan contribution".
-	planLabel := uistate.T("goals.whatIfMore")
-	if planOpen.Get() {
-		planLabel = uistate.T("goals.whatIfMoreHide")
+	if cardExpanded.Get() {
+		todosSection = ui.CreateElement(GoalTaskPreview, goalTaskPreviewProps{Goal: g, Summary: model.Tasks, OnToggle: toggleTodo, OnAdd: openAddStep})
 	}
 
 	// A free-text note on the goal — a clamped preview that opens the goal editor on click
@@ -727,89 +721,6 @@ func GoalRow(props goalRowProps) ui.Node {
 			Attr("aria-label", uistate.T("goals.notesLabel")), Title(uistate.T("goals.editTitle")), OnClick(openEdit),
 			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-notes-text"), notes))
-	}
-
-	// The card's "loader": a progress bar with a kind-appropriate label + percent
-	// inside it. Built once — both the compact and expanded states render it.
-	// Progress semantics live on the childless saved-fill bar (role="img" with
-	// the percent in the label): the loader wrapper contains focusable figure
-	// buttons, and a labeled role wrapping interactive children fails axe
-	// nested-interactive (#67).
-	loaderNode := Div(css.Class("goal-card-loader"),
-		// Two-tone fill: a hatched earmark band runs out to coverage BEHIND the solid
-		// saved segment, so the gap between "saved" and "backed" is legible at a glance.
-		// Rendered first → painted under the saved fill (same stacking context, later
-		// DOM node wins), leaving only the pct..coverage slice showing through.
-		If(financial && coveragePct > pct,
-			Div(ClassStr("bar-fill bar-earmark"), Attr("data-testid", "goal-bar-earmark-"+g.ID), Attr("style", barFillStyle(coveragePct)))),
-		Div(ClassStr("bar-fill "+barClass),
-			Attr("role", "img"),
-			Attr("aria-label", uistate.T("goals.progressLabel")+": "+strconv.Itoa(coveragePct)+"%"),
-			Attr("style", barFillStyle(pct))),
-		Div(css.Class("goal-card-loader-figs"),
-			mainFig,
-			pctFig,
-		),
-	)
-
-	// UX-06: compact default. One context-sensitive primary action per kind, plus the
-	// Details control that reveals the full card.
-	if !cardExpanded.Get() {
-		var compactPrimary ui.Node = Fragment()
-		if !g.Archived {
-			switch kind {
-			case domain.GoalKindFinancial:
-				if complete {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive")))
-				} else {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside")))
-				}
-			case domain.GoalKindMilestone:
-				if complete {
-					compactPrimary = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-reopen-"+g.ID), OnClick(markUndone), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markUndone")))
-				} else {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-markdone-"+g.ID), OnClick(markDone), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markDone")))
-				}
-			case domain.GoalKindHabit:
-				compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-checkin-"+g.ID), OnClick(checkIn), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.checkIn")))
-			}
-		}
-		var compactSub ui.Node
-		if financial {
-			compactSub = compactFigs
-		} else {
-			compactSub = subSection
-		}
-		return Div(ClassStr("goal-card is-compact "+cardState),
-			Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
-			Div(css.Class("goal-card-head"),
-				Span(css.Class("goal-card-title"), g.Name),
-				paceBadgeNode,
-				pausedChip,
-			),
-			loaderNode,
-			// The bar's saved-vs-set-aside key, decodable without expanding the card. The
-			// "saved" swatch samples the bar's status tint (barClass) so an amber Watch bar
-			// gets an amber swatch, not a hardcoded green one.
-			If(financial && !complete, goalBarLegend(g, barClass, props.EarmarkOverbooked, true)),
-			compactSub,
-			Div(css.Class("goal-card-actions"),
-				compactPrimary,
-				// C367: a visible "What if I add more?" jump into the scenario planner —
-				// only when the goal actually has a plan to explore (mirrors showPlanner).
-				If(showPlanner, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
-					Attr("data-testid", "goal-whatif-"+g.ID),
-					Attr("aria-label", uistate.T("goals.whatIfMore")+" — "+g.Name), Title(uistate.T("goals.whatIfMore")),
-					OnClick(openWhatIf),
-					uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-					Span(uistate.T("goals.whatIfMore")))),
-				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
-					Attr("data-testid", "goal-expand-"+g.ID), Attr("aria-expanded", "false"),
-					Attr("aria-label", uistate.T("goals.expandTitle")+" — "+g.Name), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
-					Span(uistate.T("goals.expand")),
-					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
-			),
-		)
 	}
 
 	return Div(ClassStr("goal-card "+cardState),
@@ -1048,69 +959,11 @@ func addHabitCheckIn(goalID string) {
 // never more than that account's free-to-earmark headroom. Returns ("", "", 0) when
 // there's nothing to fund or nothing free.
 func bestQuickEarmark(app *appstate.App, goalID string) (acctID, acctName string, amt int64) {
-	var g domain.Goal
-	found := false
-	for _, gg := range app.Goals() {
-		if gg.ID == goalID {
-			g, found = gg, true
-			break
-		}
-	}
-	if !found || !g.IsFinancial() || g.TargetAmount.Amount <= 0 {
+	if app == nil {
 		return "", "", 0
 	}
-	gap := g.TargetAmount.Amount - goalsvc.CoverageMinor(g)
-	if gap <= 0 {
-		return "", "", 0
-	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	cur := g.TargetAmount.Currency
-	if cur == "" {
-		cur = base
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	txns := app.Transactions()
-	free := func(a domain.Account) int64 {
-		bal, _ := ledger.Balance(a, txns)
-		inGoal := bal.Amount
-		if bal.Currency != cur {
-			if conv, err := rates.Convert(bal, cur); err == nil {
-				inGoal = conv.Amount
-			}
-		}
-		return goalsvc.AvailableToEarmarkMinor(app.Goals(), a.ID, inGoal, g.ID)
-	}
-	var best domain.Account
-	var bestFree int64
-	for _, a := range app.Accounts() {
-		if a.Archived || !earmarkEligibleType(a.Type) {
-			continue
-		}
-		f := free(a)
-		if f <= 0 {
-			continue
-		}
-		// The linked account wins whenever it can cover the gap outright; otherwise
-		// the account with the most headroom.
-		if a.ID == g.AccountID && f >= gap {
-			best, bestFree = a, f
-			break
-		}
-		if f > bestFree {
-			best, bestFree = a, f
-		}
-	}
-	if best.ID == "" {
-		return "", "", 0
-	}
-	amt = gap
-	if bestFree < amt {
-		amt = bestFree
-	}
-	return best.ID, best.Name, amt
+	suggestion := goalFunding(app).Suggestions[goalID]
+	return suggestion.AccountID, suggestion.AccountName, suggestion.Amount.Amount
 }
 
 // goalBarLegend renders the saved-vs-set-aside key beneath a goal's progress bar so
@@ -1119,8 +972,11 @@ func bestQuickEarmark(app *appstate.App, goalID string) (acctID, acctName string
 // bar gets an amber swatch — the legend never disagrees with the bar. compact drops the
 // "money stays put" note for the collapsed card's tighter line. Returns an empty node
 // when nothing is set aside (am <= 0).
-func goalBarLegend(g domain.Goal, barClass string, overbooked, compact bool) ui.Node {
-	am := g.AllocatedMinor()
+func goalBarLegend(g domain.Goal, evaluation goalsvc.Evaluation, barClass string, overbooked, compact bool) ui.Node {
+	if evaluation.Err != nil {
+		return goalCoverageUnavailable(g.ID, evaluation)
+	}
+	am := evaluation.Coverage.SetAside.Amount
 	if am <= 0 {
 		return Fragment()
 	}
@@ -1130,7 +986,7 @@ func goalBarLegend(g domain.Goal, barClass string, overbooked, compact bool) ui.
 		return Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "goal-earmarked-"+g.ID),
 			uistate.T("goals.earmarkOverbooked", earmarkMoney))
 	}
-	savedMoney := fmtMoney(money.New(g.CurrentAmount.Amount, cur))
+	savedMoney := fmtMoney(evaluation.Coverage.Saved)
 	savedSwatch := "goal-legend-swatch is-saved"
 	if barClass != "" {
 		savedSwatch += " " + barClass

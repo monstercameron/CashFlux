@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -119,37 +120,19 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 		}
 		return a.PutTransaction(next)
 	}
-	amountChanged := prior.Amount.Amount != next.Amount.Amount
-	dateChanged := !prior.Date.Equal(next.Date)
-	if !amountChanged && !dateChanged {
+	writes, err := a.planPairedTransactionEdit(prior, next, receivedMinor)
+	if err != nil {
+		return err
+	}
+	if len(writes) == 1 {
 		return a.PutTransaction(next)
-	}
-
-	// Locate the counterpart against the PRE-edit values, while the pair still matches.
-	pair, found := a.transferPartner(prior)
-	if !found {
-		// Nothing to keep in step (an already-orphaned leg, or a cross-currency pair
-		// that isReciprocalTransferLeg cannot match). Write the one row and let the
-		// caller's own validation speak.
-		return a.PutTransaction(next)
-	}
-
-	if amountChanged {
-		mirrored, err := a.mirroredLegAmount(next, pair, receivedMinor)
-		if err != nil {
-			return err
-		}
-		pair.Amount = mirrored
-	}
-	if dateChanged {
-		pair.Date = next.Date
 	}
 
 	// Suppress per-leg firings so the surface re-renders once, with both legs written.
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	for _, txn := range []domain.Transaction{next, pair} {
+	for _, txn := range writes {
 		if issues := validate.ValidateTransaction(txn, a.Accounts()...); !issues.OK() {
 			return issues
 		}
@@ -157,10 +140,10 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 			return err
 		}
 	}
-	if err := a.store.PutTransactionsAtomic([]domain.Transaction{next, pair}); err != nil {
+	if err := a.store.PutTransactionsAtomic(writes); err != nil {
 		return fmt.Errorf("save transfer pair: %w", err)
 	}
-	a.log.Info("transfer pair saved", "ids", []string{next.ID, pair.ID})
+	a.log.Info("transfer pair saved", "ids", expectedIDs(writes))
 	a.fireTxnMutated()
 	return nil
 }
@@ -172,7 +155,7 @@ func (a *App) transferPartner(prior domain.Transaction) (domain.Transaction, boo
 		if txn.ID == prior.ID {
 			continue
 		}
-		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID {
+		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID && txn.IsTransfer() && txn.AccountID == prior.TransferAccountID && txn.TransferAccountID == prior.AccountID {
 			return txn, true
 		}
 		// Normalize the amounts to the same currency before the account-aware
@@ -243,11 +226,15 @@ func (a *App) mirroredLegAmount(edited, pair domain.Transaction, receivedMinor i
 
 // CreateTransferPair records both transfer legs and an optional fee in a single
 // SQLite transaction. Cross-currency transfers require a valid saved rate or an
-// explicit ReceivedMinor. Reuse OperationID when retrying the same action.
+// explicit ReceivedMinor. Both accounts must exist and be active. Reuse OperationID
+// when retrying the same action.
 //
 // Returns the out-leg and in-leg transaction IDs on success so callers can
 // navigate to the ledger or construct an undo snapshot.
 func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err error) {
+	if err := a.ready(); err != nil {
+		return "", "", err
+	}
 	if p.FromAccountID == "" {
 		return "", "", fmt.Errorf("transfer: FromAccountID is required")
 	}
@@ -274,87 +261,27 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	if ferr != nil {
 		return "", "", ferr
 	}
-
-	when := p.Date
-	if when.IsZero() {
-		when = time.Now()
-	}
-	when = normalizeTransactionDate(when)
-	desc := p.Desc
-	if desc == "" {
-		desc = "Transfer"
-	}
-	source := p.Source
-	if source == "" {
-		source = domain.TxnSourceManual
+	if fromAcc.Archived || toAcc.Archived {
+		return "", "", fmt.Errorf("transfer: archived accounts cannot be used")
 	}
 
-	fromMoney, toMoney, err := a.transferLegs(fromAcc, toAcc, p.AmountMinor, p.ReceivedMinor)
+	if p.Date.IsZero() {
+		p.Date = a.clock()
+		// A retry without a date keeps the date its first attempt booked.
+		if existing, found, gerr := a.store.GetTransaction(transferID(p.OperationID, "out")); gerr == nil && found {
+			p.Date = existing.Date
+		}
+	}
+	txns, outID, inID, err := buildTransferRows(p, fromAcc, toAcc, a.transactionPairRates())
 	if err != nil {
 		return "", "", err
-	}
-	outID, inID = transferID(p.OperationID, "out"), transferID(p.OperationID, "in")
-	if p.Date.IsZero() {
-		for _, existing := range a.Transactions() {
-			if existing.ID == outID {
-				when = existing.Date
-				break
-			}
-		}
-	}
-	groupID := transferGroupID(p, when, desc, source)
-	// C680: one id naming the RELATIONSHIP, carried by both legs. Without it every
-	// pair operation has to re-derive the partner from date, amount, sign and
-	// account — a derivation that fails on the cases it is most needed for: an
-	// edited amount stops the legs looking reciprocal, and an FX pair never matches
-	// at all because its two legs carry different magnitudes by design.
-
-	// C68: a transfer is an explicit, unambiguous action the user just performed,
-	// so both legs are inherently "reviewed" — Reviewed:true keeps the ActionFlagReview
-	// workflow from auto-tagging them #needs-review (which read as a false alarm).
-	out := domain.Transaction{
-		ID: outID, AccountID: fromAcc.ID,
-		TransferAccountID: toAcc.ID,
-		TransferGroupID:   groupID,
-		Amount:            fromMoney,
-		Date:              when,
-		Desc:              desc,
-		Payee:             toAcc.Name,
-		Reviewed:          true,
-		Source:            source,
-	}
-	in := domain.Transaction{
-		ID: inID, AccountID: toAcc.ID,
-		TransferAccountID: fromAcc.ID,
-		TransferGroupID:   groupID,
-		Amount:            toMoney,
-		Date:              when,
-		Desc:              desc,
-		Payee:             fromAcc.Name,
-		Reviewed:          true,
-		Source:            source,
-	}
-
-	txns := []domain.Transaction{out, in}
-	if p.FeeMinor > 0 {
-		// The fee is real spending, not part of the moved amount, so it posts
-		// as a plain expense (no TransferAccountID — it must count in totals).
-		fee := domain.Transaction{
-			ID: transferID(p.OperationID, "fee"), AccountID: fromAcc.ID,
-			Amount:   money.New(-fromAcc.InflowSign()*p.FeeMinor, fromAcc.Currency),
-			Date:     when,
-			Desc:     desc + " — fee",
-			Payee:    toAcc.Name,
-			Reviewed: true,
-			Source:   source,
-		}
-		txns = append(txns, fee)
 	}
 	if err := a.roleGuard(); err != nil {
 		return "", "", err
 	}
+	accounts := a.Accounts()
 	for _, txn := range txns {
-		if issues := validate.ValidateTransaction(txn); !issues.OK() {
+		if issues := validate.ValidateTransaction(txn, accounts...); !issues.OK() {
 			return "", "", issues
 		}
 		if err := a.validateCustom("transaction", txn.Custom); err != nil {
@@ -384,30 +311,23 @@ func transferGroupID(p TransferParams, when time.Time, desc string, source domai
 	return "transfer-group-" + hex.EncodeToString(sum[:16])
 }
 
-// liabilityPaymentMinor signs a payment using the account's fixed convention.
-// The transaction argument is retained for callers in appstate.go; live balances
-// never decide the direction, including at zero and after an overpayment.
-func liabilityPaymentMinor(acc domain.Account, _ []domain.Transaction, amountMinor int64) int64 {
+// liabilityPaymentMinor signs a payment using the account's fixed convention, so
+// live balances never decide the direction, including at zero and after an
+// overpayment.
+func liabilityPaymentMinor(acc domain.Account, amountMinor int64) int64 {
 	if amountMinor < 0 {
 		amountMinor = -amountMinor
 	}
 	return acc.InflowSign() * amountMinor
 }
 
-// transferAccounts resolves and validates the two accounts of a transfer pair.
+// transferAccounts resolves the two accounts of a transfer pair.
 func (a *App) transferAccounts(fromID, toID string) (fromAcc, toAcc domain.Account, err error) {
-	var foundFrom, foundTo bool
-	for _, ac := range a.Accounts() {
-		switch ac.ID {
-		case fromID:
-			fromAcc, foundFrom = ac, true
-		case toID:
-			toAcc, foundTo = ac, true
-		}
-	}
+	fromAcc, foundFrom := a.findAccount(fromID)
 	if !foundFrom {
 		return domain.Account{}, domain.Account{}, fmt.Errorf("transfer: source account %q not found", fromID)
 	}
+	toAcc, foundTo := a.findAccount(toID)
 	if !foundTo {
 		return domain.Account{}, domain.Account{}, fmt.Errorf("transfer: destination account %q not found", toID)
 	}
@@ -419,6 +339,10 @@ func (a *App) transferAccounts(fromID, toID string) (fromAcc, toAcc domain.Accou
 // reduce debt (payments). Cross-currency legs require saved rates or an explicit
 // receivedMinor magnitude; same-currency legs always share a magnitude.
 func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64) (fromMoney, toMoney money.Money, err error) {
+	return transferLegsWithRates(fromAcc, toAcc, amountMinor, receivedMinor, a.transactionPairRates())
+}
+
+func transferLegsWithRates(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64, rates currency.Rates) (fromMoney, toMoney money.Money, err error) {
 	fromMoney = money.New(-fromAcc.InflowSign()*amountMinor, fromAcc.Currency)
 	toMoney = money.New(amountMinor, toAcc.Currency)
 	if fromAcc.Currency != toAcc.Currency {
@@ -426,7 +350,7 @@ func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedM
 			toMoney = money.New(receivedMinor, toAcc.Currency)
 		} else {
 			srcAbs := money.New(amountMinor, fromAcc.Currency)
-			conv, cerr := a.transactionPairRates().Convert(srcAbs, toAcc.Currency)
+			conv, cerr := rates.Convert(srcAbs, toAcc.Currency)
 			if cerr != nil {
 				return money.Money{}, money.Money{}, fmt.Errorf("%w: %s to %s", ErrTransferRateUnavailable, fromAcc.Currency, toAcc.Currency)
 			}
@@ -434,7 +358,7 @@ func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedM
 		}
 	}
 	if toAcc.Class == domain.ClassLiability {
-		toMoney.Amount = liabilityPaymentMinor(toAcc, nil, toMoney.Amount)
+		toMoney.Amount = liabilityPaymentMinor(toAcc, toMoney.Amount)
 	}
 	return fromMoney, toMoney, nil
 }
@@ -451,10 +375,13 @@ type TransferPreview struct {
 }
 
 // PreviewTransferPair computes the before/after balances a CreateTransferPair
-// call with the same params would produce, without writing anything. It shares
-// the exact leg math (transferLegs) with CreateTransferPair so the preview can
-// never drift from what actually posts.
+// call with the same params would produce, without writing anything. It builds the
+// legs with the same function CreateTransferPair uses and applies them with the same
+// signed fee, so the figures match what posts for the same ledger and rates.
 func (a *App) PreviewTransferPair(p TransferParams) (TransferPreview, error) {
+	if err := a.ready(); err != nil {
+		return TransferPreview{}, err
+	}
 	if p.FromAccountID == "" || p.ToAccountID == "" {
 		return TransferPreview{}, fmt.Errorf("transfer preview: both accounts are required")
 	}
@@ -471,6 +398,9 @@ func (a *App) PreviewTransferPair(p TransferParams) (TransferPreview, error) {
 	if err != nil {
 		return TransferPreview{}, err
 	}
+	if fromAcc.Archived || toAcc.Archived {
+		return TransferPreview{}, fmt.Errorf("transfer preview: archived accounts cannot be used")
+	}
 	txns := a.Transactions()
 	fromBal, err := ledger.Balance(fromAcc, txns)
 	if err != nil {
@@ -484,10 +414,30 @@ func (a *App) PreviewTransferPair(p TransferParams) (TransferPreview, error) {
 	if err != nil {
 		return TransferPreview{}, err
 	}
+	return transferPreviewBalances(fromAcc, toAcc, fromBal, toBal, fromMoney, toMoney, p.FeeMinor)
+}
+
+// transferPreviewBalances applies a transfer's two legs and its fee to the booked balances of
+// both accounts. The fee is the signed row the transfer posts on the source account, and every
+// addition is checked for overflow.
+func transferPreviewBalances(from, to domain.Account, fromBal, toBal, fromLeg, toLeg money.Money, feeMinor int64) (TransferPreview, error) {
+	feeDelta := int64(0)
+	if feeMinor > 0 {
+		feeDelta = -from.InflowSign() * feeMinor
+	}
+	fromAfter, err := checkedAdd(fromBal.Amount, fromLeg.Amount)
+	if err == nil {
+		fromAfter, err = checkedAdd(fromAfter, feeDelta)
+	}
+	if err != nil {
+		return TransferPreview{}, fmt.Errorf("transfer preview: source balance overflows")
+	}
+	toAfter, err := checkedAdd(toBal.Amount, toLeg.Amount)
+	if err != nil {
+		return TransferPreview{}, fmt.Errorf("transfer preview: destination balance overflows")
+	}
 	return TransferPreview{
-		FromBefore: fromBal,
-		FromAfter:  money.New(fromBal.Amount+fromMoney.Amount-p.FeeMinor, fromAcc.Currency),
-		ToBefore:   toBal,
-		ToAfter:    money.New(toBal.Amount+toMoney.Amount, toAcc.Currency),
+		FromBefore: fromBal, FromAfter: money.New(fromAfter, from.Currency),
+		ToBefore: toBal, ToAfter: money.New(toAfter, to.Currency),
 	}, nil
 }

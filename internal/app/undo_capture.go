@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/history"
 	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 var undoCaptureCursor uint64
@@ -118,31 +119,97 @@ func applyCapturedRecords(snapshot history.Snapshot, records []store.RecordChang
 }
 
 func captureIncrementalUndo(app *appstate.App) error {
+	_, err := captureIncrementalUndoReceipt(app)
+	return err
+}
+
+// captureIncrementalUndoReceipt uses the same canonical filtered capture as the
+// autosave path and returns the audit/undo ID only when it stages a real point.
+func captureIncrementalUndoReceipt(app *appstate.App) (string, error) {
 	target, err := app.Store().ChangeCursor()
 	if err != nil {
-		return err
+		return "", err
 	}
 	var records []store.RecordChange
 	for from := undoCaptureCursor; from < target; {
 		page, err := app.Store().CaptureChanges(from, target, 128)
 		if err != nil {
-			return err
+			return "", err
 		}
 		records = append(records, page.Changes...)
 		from = page.Through
 	}
 	cs, err := applyCapturedRecords(lastUndoSnap, records)
 	if err != nil {
-		return err
+		return "", err
 	}
 	undoCaptureCursor = target
 	cs = filterCapturedChanges(cs)
+	undoID := ""
 	if !cs.IsEmpty() {
-		RecordAuditPoint(cs)
+		undoID = RecordAuditPoint(cs)
+		cs.UndoID = undoID
 		undoPending = append(undoPending, pendingUndoCapture{through: target, change: cs})
 	}
 	lastUndoCaptureApp, lastUndoCaptureRev = app, app.Rev()
+	return undoID, nil
+}
+
+// captureAssistantBaseline forces the ordinary household capture before an
+// approved Assistant tool starts. This keeps any earlier pending manual writes
+// separate and preserves the actor attached when each pending point was made.
+func captureAssistantBaseline() bool {
+	return captureAssistantBaselineChecked() == nil
+}
+
+func captureAssistantBaselineChecked() error {
+	if applyingUndo {
+		return fmt.Errorf("undo replay is in progress")
+	}
+	app := appstate.Default
+	if app == nil {
+		return fmt.Errorf("app state is unavailable")
+	}
+	if lastUndoCaptureApp != app || lastUndoSnap == nil {
+		initUndo()
+		if lastUndoCaptureApp != app || lastUndoSnap == nil {
+			return fmt.Errorf("could not initialize undo baseline")
+		}
+		return nil
+	}
+	if _, err := captureIncrementalUndoReceipt(app); err != nil {
+		app.Log().Error("capture assistant baseline failed", "err", err)
+		return err
+	}
 	return nil
+}
+
+// captureAssistantReceipt forces one capture after the synchronous Assistant
+// tool run. Store changes since the baseline are therefore exactly this tool's
+// mutation, and only a nonempty filtered diff receives a receipt.
+func captureAssistantReceipt() (string, bool) {
+	id, changed, _ := captureAssistantReceiptChecked()
+	return id, changed
+}
+
+func captureAssistantReceiptChecked() (string, bool, error) {
+	if applyingUndo {
+		return "", false, fmt.Errorf("undo replay is in progress")
+	}
+	app := appstate.Default
+	if app == nil {
+		return "", false, fmt.Errorf("app state is unavailable")
+	}
+	if lastUndoCaptureApp != app || lastUndoSnap == nil {
+		initUndo()
+		return "", false, fmt.Errorf("could not initialize undo baseline")
+	}
+	undoID, err := captureIncrementalUndoReceipt(app)
+	if err != nil {
+		app.Log().Error("capture assistant change failed", "err", err)
+		return "", false, err
+	}
+	return undoID, undoID != "", nil
 }
 
 func publishDurableUndo(through uint64) {
@@ -155,4 +222,7 @@ func publishDurableUndo(through uint64) {
 		i++
 	}
 	undoPending = undoPending[i:]
+	if i > 0 {
+		uistate.NotifyAssistantUndoStateChanged()
+	}
 }

@@ -23,15 +23,13 @@ const (
 	KindCSV   = "csv"
 	KindJSON  = "json"
 	KindPDF   = "pdf"
-	// KindDocument is retained for account files saved before PDF documents
-	// used KindPDF. Those files may already have external blob references.
+	// KindDocument is an attached account document (statement, contract, title) that is not an image.
 	KindDocument = "document"
 )
 
 // IsBinaryKind reports whether an artifact kind stores raw file Bytes (and is
 // therefore blob-backed: its bytes live in IndexedDB, not the SQLite dataset).
-// Images, PDFs, and legacy account documents are binary; CSV/JSON are held as
-// parsed columns/rows.
+// Images, PDFs and account documents are binary; CSV/JSON are held as parsed columns/rows.
 func IsBinaryKind(kind string) bool {
 	return kind == KindImage || kind == KindPDF || kind == KindDocument
 }
@@ -89,6 +87,11 @@ func Size(a domain.Artifact) int {
 
 // HumanSize renders a byte count as a compact human string (B, KB, MB).
 func HumanSize(n int) string {
+	return HumanSize64(int64(n))
+}
+
+// HumanSize64 renders an int64 byte count without narrowing on wasm32.
+func HumanSize64(n int64) string {
 	switch {
 	case n >= 1<<20:
 		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))

@@ -2,7 +2,12 @@
 
 package workflow
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
+)
 
 func TestValidateTransferAction(t *testing.T) {
 	valid := Action{
@@ -30,6 +35,13 @@ func TestValidateTransferAction(t *testing.T) {
 			action:  valid,
 			trigger: TriggerManual,
 			wantErr: false,
+		},
+		{
+			name:        "same source and destination",
+			action:      Action{Kind: ActionTransfer, TransferFromAccountID: "acc-checking", TransferToAccountID: "acc-checking", TransferAmount: 5000},
+			trigger:     TriggerScheduled,
+			wantErr:     true,
+			errContains: "different accounts",
 		},
 		{
 			name:        "missing source account ID",
@@ -83,6 +95,61 @@ func TestValidateTransferAction(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPrepareDraftSchedulesTransferWithInjectedClock(t *testing.T) {
+	now := time.Date(2026, time.October, 21, 12, 30, 0, 0, time.UTC)
+	actions := []Action{{Kind: ActionTransfer, TransferFromAccountID: "checking", TransferToAccountID: "savings", TransferAmount: 2500}}
+	draft, errs := PrepareDraft(Workflow{
+		ID: "wf-transfer", Name: "Save weekly", Trigger: Trigger{Kind: TriggerScheduled, Cadence: domain.CadenceWeekly}, Actions: actions,
+	}, now)
+	if len(errs) != 0 {
+		t.Fatalf("PrepareDraft validation errors: %v", errs)
+	}
+	wantNext := domain.CadenceWeekly.Next(now)
+	if !draft.Trigger.NextRun.Equal(wantNext) {
+		t.Fatalf("NextRun = %v, want %v", draft.Trigger.NextRun, wantNext)
+	}
+	if got := draft.Actions[0].DedupeKey; got != "wf:wf-transfer:{period}" {
+		t.Fatalf("dedupe key = %q", got)
+	}
+	if actions[0].DedupeKey != "" {
+		t.Fatal("PrepareDraft mutated the caller-owned actions")
+	}
+}
+
+func TestPrepareDraftPreservesManualAndExplicitScheduleValues(t *testing.T) {
+	next := time.Date(2026, time.November, 1, 9, 0, 0, 0, time.UTC)
+	manual, errs := PrepareDraft(Workflow{
+		ID: "manual", Name: "Manual", Trigger: Trigger{Kind: TriggerManual},
+		Actions: []Action{{Kind: ActionTransfer, TransferFromAccountID: "checking", TransferToAccountID: "savings", TransferAmount: 2500}},
+	}, next)
+	if len(errs) != 0 {
+		t.Fatalf("manual validation errors: %v", errs)
+	}
+	if !manual.Trigger.NextRun.IsZero() || manual.Actions[0].DedupeKey != "" {
+		t.Fatalf("manual workflow got schedule defaults: %+v", manual)
+	}
+	explicit, errs := PrepareDraft(Workflow{
+		ID: "scheduled", Name: "Scheduled", Trigger: Trigger{Kind: TriggerScheduled, Cadence: domain.CadenceMonthly, NextRun: next},
+		Actions: []Action{{Kind: ActionTransfer, TransferFromAccountID: "checking", TransferToAccountID: "savings", TransferAmount: 2500, DedupeKey: "custom-key"}},
+	}, next.Add(time.Hour))
+	if len(errs) != 0 {
+		t.Fatalf("scheduled validation errors: %v", errs)
+	}
+	if !explicit.Trigger.NextRun.Equal(next) || explicit.Actions[0].DedupeKey != "custom-key" {
+		t.Fatalf("explicit schedule fields were overwritten: %+v", explicit)
+	}
+}
+
+func TestValidateRejectsSameAccountTransfer(t *testing.T) {
+	errs := Validate(Workflow{
+		ID: "same", Name: "Invalid", Trigger: Trigger{Kind: TriggerScheduled},
+		Actions: []Action{{Kind: ActionTransfer, TransferFromAccountID: "checking", TransferToAccountID: "checking", TransferAmount: 100}},
+	})
+	if len(errs) == 0 || !contains(errs[0], "different accounts") {
+		t.Fatalf("same-account transfer validation = %v", errs)
 	}
 }
 

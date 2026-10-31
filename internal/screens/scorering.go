@@ -7,8 +7,8 @@ package screens
 import (
 	"fmt"
 
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // scoreRingNode renders the shared SVG circular gauge used by both the

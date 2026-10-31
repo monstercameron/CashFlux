@@ -344,3 +344,69 @@ func TestResolve(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultIDAtAnchorsOnTheLatestEligibleDateNotAfterNow(t *testing.T) {
+	checking := acct("chk1", domain.TypeChecking, domain.ClassAsset, false)
+	savings := acct("sav1", domain.TypeSavings, domain.ClassAsset, false)
+	invest := acct("inv1", domain.TypeInvestment, domain.ClassAsset, false)
+	now := day0.AddDate(0, 0, 200)
+	future := now.AddDate(1, 0, 0)
+	old := now.AddDate(0, 0, -30)
+	cases := []struct {
+		name string
+		txns []domain.Transaction
+		now  time.Time
+		want string
+	}{
+		{
+			"a future-dated row does not push the window past real activity",
+			[]domain.Transaction{txn("a", "chk1", old), txn("b", "chk1", old), txn("c", "sav1", old), txn("f", "sav1", future)},
+			now, "chk1",
+		},
+		{
+			"without now the future row anchors the window, as DefaultID does",
+			[]domain.Transaction{txn("a", "chk1", old), txn("b", "chk1", old), txn("c", "sav1", old), txn("f", "sav1", future)},
+			time.Time{}, "sav1",
+		},
+		{
+			"an ineligible account's latest row does not anchor the window",
+			[]domain.Transaction{txn("a", "chk1", day0), txn("b", "sav1", day0), txn("c", "sav1", day0), txn("late", "inv1", now)},
+			time.Time{}, "sav1",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := accountselect.DefaultIDAt([]domain.Account{checking, savings, invest}, tc.txns, "", tc.now)
+			if got != tc.want {
+				t.Fatalf("DefaultIDAt = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDefaultIDNeverPicksAValuationAsset(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  domain.AccountType
+	}{
+		{"property", domain.TypeProperty},
+		{"vehicle", domain.TypeVehicle},
+		{"other", domain.TypeOther},
+		{"investment", domain.TypeInvestment},
+		{"retirement", domain.TypeRetirement},
+		{"crypto", domain.TypeCrypto},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+" with the most transactions is not chosen", func(t *testing.T) {
+			valuation := acct("val", tc.typ, domain.ClassAsset, false)
+			checking := acct("chk", domain.TypeChecking, domain.ClassAsset, false)
+			txns := []domain.Transaction{txn("1", "val", day1), txn("2", "val", day2), txn("3", "val", day3), txn("4", "chk", day3)}
+			if got := accountselect.DefaultID([]domain.Account{valuation, checking}, txns, ""); got != "chk" {
+				t.Fatalf("DefaultID = %q, want chk", got)
+			}
+			if got := accountselect.DefaultID([]domain.Account{valuation}, txns, ""); got != "" {
+				t.Fatalf("DefaultID with only a valuation asset = %q, want none", got)
+			}
+		})
+	}
+}

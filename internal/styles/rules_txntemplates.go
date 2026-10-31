@@ -28,7 +28,15 @@ func registerTxnTemplatesSurface() {
 		color("var(--text-dim)"),
 	)
 
-	// --- One template chip: a pill with the payee/name + its amount --------------
+	// --- One template chip: a pill with the payee/name + its amount, and its delete
+	// control beside it. The wrapper carries the hover so the delete control reveals
+	// whether the pointer is on the pill or the control itself.
+	rule(".txt-chip-wrap",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.2rem"),
+		maxWidth("100%"),
+	)
 	rule(".txt-chip",
 		position("relative"),
 		display("inline-flex"),
@@ -88,7 +96,7 @@ func registerTxnTemplatesSurface() {
 		opacity("0"),
 		transition("opacity 0.12s ease, background 0.12s ease, color 0.12s ease"),
 	)
-	rule(".txt-chip:hover .txt-chip-del, .txt-chip:focus-within .txt-chip-del",
+	rule(".txt-chip-wrap:hover .txt-chip-del, .txt-chip-wrap:focus-within .txt-chip-del",
 		opacity("1"),
 	)
 	rule(".txt-chip-del:hover",

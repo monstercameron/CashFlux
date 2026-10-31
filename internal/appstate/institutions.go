@@ -3,16 +3,19 @@
 package appstate
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/acctproject"
 	"github.com/monstercameron/CashFlux/internal/docexpiry"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/emergencypack"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 // docExpiryTaskKey is the Task.Custom key under which a document-expiry reminder
@@ -26,6 +29,9 @@ const docExpiryTaskKey = "docExpiryKey"
 // grounds the ★★ Multi-Institution Analytics feature with a real entity instead of
 // matching on the free-text Account.Institution string.
 func (a *App) Institutions() []domain.Institution {
+	if a.ready() != nil {
+		return nil
+	}
 	v, err := a.store.ListInstitutions()
 	a.logErr("institutions", err)
 	return v
@@ -50,32 +56,71 @@ func (a *App) PutInstitution(in domain.Institution) error {
 }
 
 // DeleteInstitution removes an institution and reassigns every account that
-// referenced it back to no-institution (AC10 reassign-on-delete), persisting only
-// the accounts that actually changed.
+// referenced it back to no-institution (AC10 reassign-on-delete). Only the accounts that
+// actually changed are written, in the same commit as the institution's removal, so a
+// failure leaves both the accounts and the institution as they were.
 func (a *App) DeleteInstitution(instID string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	for _, acc := range domain.ReassignAccountsOnInstitutionDelete(a.Accounts(), instID) {
-		if err := a.store.PutAccount(acc); err != nil {
-			return fmt.Errorf("appstate: reassign account %q on institution delete: %w", acc.ID, err)
-		}
+	accounts, err := a.AccountsChecked()
+	if err != nil {
+		return fmt.Errorf("appstate: delete institution: %w", err)
 	}
-	return a.del("institution", instID, a.store.DeleteInstitution)
+	original := make(map[string]domain.Account, len(accounts))
+	for _, acc := range accounts {
+		original[acc.ID] = acc
+	}
+	var changes []store.RecordChange
+	for _, acc := range domain.ReassignAccountsOnInstitutionDelete(accounts, instID) {
+		before, err := json.Marshal(original[acc.ID])
+		if err != nil {
+			return fmt.Errorf("appstate: encode account %q: %w", acc.ID, err)
+		}
+		after, err := json.Marshal(acc)
+		if err != nil {
+			return fmt.Errorf("appstate: encode reassigned account %q: %w", acc.ID, err)
+		}
+		changes = append(changes, store.RecordChange{Table: "accounts", ID: acc.ID, Before: before, After: after})
+	}
+	reassigned := len(changes)
+	inst, found, err := a.store.GetInstitution(instID)
+	if err != nil {
+		return fmt.Errorf("appstate: read institution %q: %w", instID, err)
+	}
+	if found {
+		before, err := json.Marshal(inst)
+		if err != nil {
+			return fmt.Errorf("appstate: encode institution %q: %w", instID, err)
+		}
+		changes = append(changes, store.RecordChange{Table: "institutions", ID: instID, Before: before})
+	}
+	if err := a.store.ReplayChanges(changes); err != nil {
+		return fmt.Errorf("appstate: delete institution %q: %w", instID, err)
+	}
+	a.log.Info("entity deleted", "entity", "institution", "id", instID, "existed", found, "reassigned", reassigned)
+	return nil
 }
 
 // --- AC13: projected balance on the row ---
 
 // ProjectAccount projects one account's balance over the next `horizonDays` days
-// from today's balance plus every recurring cash flow scoped to that account
-// (paychecks, bills, transfers). It returns the running low point and the dated
-// drivers behind it, so the row can show "$2,340 today → ~$1,150 low on the 28th"
-// and expand to explain "rent −$1,400 on the 1st". A missing account yields a flat
-// projection at zero.
-func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) acctproject.Projection {
+// from today's exact ledger balance and its recurring cash flows. Recurring amounts are cash flows
+// (negative leaves the account), so the projection runs in the stated convention: a liability's
+// stored balance is normalised with its own liability sign first, and the result reads
+// negative-means-owed. Storage, ledger, currency, and arithmetic errors are returned; an account that is
+// verifiably absent remains a valid empty projection at zero.
+func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) (acctproject.Projection, error) {
+	if err := a.ready(); err != nil {
+		return acctproject.Projection{}, err
+	}
+	accounts, err := a.AccountsChecked()
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s: %w", accountID, err)
+	}
 	var acc domain.Account
 	var found bool
-	for _, x := range a.Accounts() {
+	for _, x := range accounts {
 		if x.ID == accountID {
 			acc, found = x, true
 			break
@@ -84,34 +129,15 @@ func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) 
 	if !found {
 		return acctproject.Project(0, asOf, nil, horizonDays)
 	}
-	bal, err := ledger.Balance(acc, a.Transactions())
-	a.logErr("project account balance", err)
-
-	var drivers []acctproject.Driver
-	end := asOf.AddDate(0, 0, horizonDays)
-	for _, r := range a.Recurring() {
-		if r.AccountID != accountID || r.Amount.IsZero() {
-			continue
-		}
-		due := r.NextDue
-		// Walk occurrences from NextDue up to the horizon end; cap iterations so a
-		// misconfigured cadence can never spin.
-		for i := 0; i < 400 && !due.After(end); i++ {
-			if !due.Before(asOf) {
-				drivers = append(drivers, acctproject.Driver{
-					Label:  r.Label,
-					Date:   due,
-					Amount: r.Amount.Amount,
-				})
-			}
-			nextDue := r.Cadence.Next(due)
-			if !nextDue.After(due) {
-				break // non-advancing cadence guard
-			}
-			due = nextDue
-		}
+	txns, err := a.TransactionsChecked()
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s: %w", accountID, err)
 	}
-	return acctproject.Project(bal.Amount, asOf, drivers, horizonDays)
+	bal, err := ledger.Balance(acc, txns)
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s balance: %w", accountID, err)
+	}
+	return accountview.PrepareProjectionInputs(a.Recurring()).ProjectFor(acc, bal, asOf, horizonDays)
 }
 
 // --- AC17: document expiry reminders (reconciled against tasks) ---
@@ -177,6 +203,16 @@ func (a *App) ReconcileDocExpiryTasks(now time.Time, leadDays int) (created, res
 
 // --- AC16: estate emergency pack ---
 
+// institutionAccountsKey is the key the emergency pack groups an institution's accounts under: the
+// cleaned name, so accounts that only carry the name as text land with the directory entry, or the
+// entry's ID when the name is blank. The placeholder shown for a blank name is never a key.
+func institutionAccountsKey(in domain.Institution) string {
+	if name := in.CleanName(); name != "" {
+		return name
+	}
+	return "id:" + in.ID
+}
+
 // BuildEmergencyPack assembles the "in case of emergency" pack (AC16) from the
 // local dataset: accounts (with balances, beneficiary/TOD notes and filed
 // documents), institutions and their support contacts, and any people-to-contact.
@@ -187,6 +223,9 @@ func (a *App) ReconcileDocExpiryTasks(now time.Time, leadDays int) (created, res
 // pure value the emergencypack renderers turn into printable text or HTML — no data
 // leaves the machine.
 func (a *App) BuildEmergencyPack(ownerName, closingNote string, contacts []emergencypack.Contact, vaultHasEntries bool, now time.Time) emergencypack.Pack {
+	if a.ready() != nil {
+		return emergencypack.Pack{GeneratedAt: now, OwnerName: ownerName, VaultHasEntries: vaultHasEntries, Contacts: contacts, ClosingNote: closingNote}
+	}
 	instByID := domain.InstitutionByID(a.Institutions())
 	txns := a.Transactions()
 	artByID := map[string]domain.Artifact{}
@@ -200,12 +239,12 @@ func (a *App) BuildEmergencyPack(ownerName, closingNote string, contacts []emerg
 		if acc.Archived {
 			continue
 		}
-		instName := acc.Institution
+		instName, instKey := acc.Institution, acc.Institution
 		if in, ok := instByID[acc.InstitutionID]; ok {
-			instName = in.TrimmedName()
+			instName, instKey = in.TrimmedName(), institutionAccountsKey(in)
 		}
-		if instName != "" {
-			instAccounts[instName] = append(instAccounts[instName], acc.Name)
+		if instKey != "" {
+			instAccounts[instKey] = append(instAccounts[instKey], acc.Name)
 		}
 		bal, err := ledger.Balance(acc, txns)
 		a.logErr("emergency pack balance", err)
@@ -237,7 +276,7 @@ func (a *App) BuildEmergencyPack(ownerName, closingNote string, contacts []emerg
 			SupportPhone: in.SupportPhone,
 			SupportURL:   in.SupportURL,
 			Note:         in.Note,
-			Accounts:     instAccounts[in.TrimmedName()],
+			Accounts:     instAccounts[institutionAccountsKey(in)],
 		})
 	}
 

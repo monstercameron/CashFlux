@@ -29,7 +29,9 @@ var ageMoneyKeys = Catalog{
 	"budgets.ageMoneyUnit":    "days",
 	"budgets.ageMoneyUnitOne": "day",
 	// Not-ready state — too little matched history to trust a figure.
-	"budgets.ageMoneyNotReady": "Add a bit more income and spending history to see this.",
+	"budgets.ageMoneyNotReady":       "Add a bit more income and spending history to see this.",
+	"budgets.ageMoneyUnavailable":    "Age of money · unavailable",
+	"budgets.ageMoneyTotalsTooLarge": "Recent spending is too large to calculate this figure reliably.",
 }
 
 func init() {

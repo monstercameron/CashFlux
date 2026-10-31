@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestAccountDefaultMemberTargetUsesActiveMemberThenOwner(t *testing.T) {
@@ -39,8 +39,10 @@ func TestAccountMenuOffersDefaultActionsAndMarksCurrentDefault(t *testing.T) {
 	if !strings.Contains(f.Text(), "Default") {
 		t.Fatal("current default marker is missing")
 	}
+	openAccountMenu(t, f, "a1")
 	findByTestID(f, "button", "acct-default-household-a1").Click()
 	f.Stabilize()
+	openAccountMenu(t, f, "a1")
 	findByTestID(f, "button", "acct-default-member-a1").Click()
 	f.Stabilize()
 	if !calledHousehold || !calledMember {
@@ -51,6 +53,7 @@ func TestAccountMenuOffersDefaultActionsAndMarksCurrentDefault(t *testing.T) {
 		Account: account, DefaultHousehold: true,
 		OnClearDefaultHousehold: func() { householdCleared = true },
 	}))
+	openAccountMenu(t, f, "a1")
 	findByTestID(f, "button", "acct-clear-household-default-a1").Click()
 	f.Stabilize()
 	if !householdCleared {
@@ -61,6 +64,7 @@ func TestAccountMenuOffersDefaultActionsAndMarksCurrentDefault(t *testing.T) {
 		Account: account, DefaultMembers: []string{"m2"}, DefaultMemberID: "m2", DefaultMemberName: "Sam",
 		OnClearDefaultMember: func(memberID string) { clearedMember = memberID },
 	}))
+	openAccountMenu(t, f, "a1")
 	findByTestID(f, "button", "acct-clear-member-default-a1").Click()
 	f.Stabilize()
 	if clearedMember != "m2" {
@@ -75,7 +79,19 @@ func TestArchivedAccountCannotOfferDefaultActions(t *testing.T) {
 	if strings.Contains(f.Text(), "Make default") {
 		t.Fatalf("archived account offers default action: %s", f.Text())
 	}
+	openAccountMenu(t, f, "a1")
 	if findByTestID(f, "button", "acct-default-household-a1") != nil || findByTestID(f, "button", "acct-default-member-a1") != nil {
 		t.Fatal("archived account default action is present")
 	}
+}
+
+// openAccountMenu opens the row's overflow menu, whose entries mount only while it is open.
+func openAccountMenu(t *testing.T, f *render.Fixture, accountID string) {
+	t.Helper()
+	trigger := findByTestID(f, "button", "acct-more-actions-"+accountID)
+	if trigger == nil {
+		t.Fatalf("account %s has no overflow menu trigger", accountID)
+	}
+	trigger.Click()
+	f.Stabilize()
 }

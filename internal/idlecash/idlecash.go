@@ -19,6 +19,12 @@
 // Pure Go, no syscall/js, no I/O. Unit-testable on native Go.
 package idlecash
 
+import (
+	"math"
+	"math/big"
+	"strconv"
+)
+
 // DefaultThresholdMinor is the idle amount below which Evaluate does not raise the
 // flag: a small buffer over committed spending is prudent, not drag. $500 by
 // default (50000 cents). Callers may override via Inputs.ThresholdMinor.
@@ -39,11 +45,13 @@ type Inputs struct {
 
 	// BenchmarkAPRPercent is the user-entered annual yield they compare against
 	// (e.g. 4.5 for a 4.5% high-yield savings account). Zero disables the forgone
-	// figure (nothing to compare to); negative is treated as zero.
+	// figure (nothing to compare to); negative, NaN and infinite values are
+	// treated as zero.
 	BenchmarkAPRPercent float64
 
 	// ThresholdMinor is the minimum idle amount that raises the flag. Zero uses
-	// DefaultThresholdMinor; a negative value means "flag any positive idle".
+	// DefaultThresholdMinor; a negative value means "flag any positive idle", so
+	// zero idle cash is never flagged.
 	ThresholdMinor int64
 }
 
@@ -59,7 +67,9 @@ type Result struct {
 	IdleMinor int64
 
 	// ForgoneAnnualMinor is the yearly yield left on the table: idle × benchmark/100,
-	// truncated to whole minor units. Zero when the benchmark is zero.
+	// computed exactly on the benchmark's decimal text and truncated toward zero to
+	// whole minor units. Zero when the benchmark is zero; saturates at
+	// math.MaxInt64 if the exact figure does not fit.
 	ForgoneAnnualMinor int64
 
 	// ForgoneMonthlyMinor is ForgoneAnnualMinor ÷ 12 (truncated) — the monthly framing
@@ -81,27 +91,26 @@ func Evaluate(in Inputs) Result {
 	if committed < 0 {
 		committed = 0
 	}
-	idle := in.LiquidMinor - committed
-	if idle < 0 {
-		idle = 0
+	var idle int64
+	if in.LiquidMinor > committed {
+		idle = in.LiquidMinor - committed
 	}
 
 	bench := in.BenchmarkAPRPercent
-	if bench < 0 {
+	if math.IsNaN(bench) || math.IsInf(bench, 0) || bench < 0 {
 		bench = 0
 	}
 
-	// forgone = idle × benchmark/100, computed in float then truncated. idle is
-	// minor units; the product stays in minor units.
-	forgoneAnnual := int64(float64(idle) * bench / 100)
+	forgoneAnnual := forgoneAnnualMinor(idle, bench)
 	forgoneMonthly := forgoneAnnual / 12
 
 	threshold := in.ThresholdMinor
 	if threshold == 0 {
 		threshold = DefaultThresholdMinor
 	}
+	flagged := idle >= threshold
 	if threshold < 0 {
-		threshold = 0
+		flagged = idle > 0
 	}
 
 	return Result{
@@ -111,6 +120,27 @@ func Evaluate(in Inputs) Result {
 		ForgoneAnnualMinor:  forgoneAnnual,
 		ForgoneMonthlyMinor: forgoneMonthly,
 		BenchmarkAPRPercent: bench,
-		Flag:                idle >= threshold && bench > 0,
+		Flag:                flagged && bench > 0,
 	}
+}
+
+// forgoneAnnualMinor returns idle × percent/100 truncated toward zero. The percent
+// is read from its shortest decimal text, so a benchmark typed as 4.1 is exactly
+// 4.1 and not the nearest binary fraction, and the product is computed with
+// big-integer arithmetic.
+func forgoneAnnualMinor(idle int64, percent float64) int64 {
+	if idle <= 0 || percent <= 0 {
+		return 0
+	}
+	rate, ok := new(big.Rat).SetString(strconv.FormatFloat(percent, 'f', -1, 64))
+	if !ok {
+		return 0
+	}
+	product := new(big.Int).Mul(big.NewInt(idle), rate.Num())
+	divisor := new(big.Int).Mul(rate.Denom(), big.NewInt(100))
+	quotient := product.Quo(product, divisor)
+	if !quotient.IsInt64() {
+		return math.MaxInt64
+	}
+	return quotient.Int64()
 }

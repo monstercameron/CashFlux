@@ -31,6 +31,12 @@ type Limits struct {
 	// Year is the tax year these apply to. It is reported with every figure.
 	Year int
 
+	// VerifiedOn is the date these year-specific values were checked against the
+	// primary sources named in SourceNote; it is not the tax year or a live lookup.
+	VerifiedOn string
+	// SourceNote identifies the official publications supporting this entry.
+	SourceNote string
+
 	// Retirement contribution limits.
 	Contrib401k         int
 	Contrib401kCatchUp  int
@@ -65,9 +71,13 @@ type Limits struct {
 // stays: somebody doing last year's taxes needs last year's numbers, and quietly
 // overwriting them would make the app wrong for exactly the person most likely to
 // be looking.
+const sharedSources = "Standard deductions: https://www.irs.gov/irb/2025-45_IRB; HSA limits: https://www.irs.gov/publications/p969; Social Security taxable maximum: https://www.ssa.gov/oact/cola/cbb.html; retirement ages for birth years 1960 onward: https://www.ssa.gov/benefits/retirement/planner/1960.html; delayed credits: https://www.ssa.gov/benefits/retirement/planner/delayret.html"
+
 var years = map[int]Limits{
 	2025: {
 		Year:                    2025,
+		VerifiedOn:              "2026-10-21",
+		SourceNote:              "Retirement limits: https://www.irs.gov/newsroom/401k-limit-increases-to-23500-for-2025-ira-limit-remains-7000; " + sharedSources,
 		Contrib401k:             23500,
 		Contrib401kCatchUp:      7500,
 		ContribIRA:              7000,
@@ -77,8 +87,8 @@ var years = map[int]Limits{
 		ContribHSAFamily:        8550,
 		ContribHSACatchUp:       1000,
 		ContribHSACatchUpAt:     55,
-		StandardDeductionSingle: 15000,
-		StandardDeductionJoint:  30000,
+		StandardDeductionSingle: 15750,
+		StandardDeductionJoint:  31500,
 		SocialSecurityWageBase:  176100,
 		FullRetirementAge:       67,
 		EarliestClaimAge:        62,
@@ -86,6 +96,8 @@ var years = map[int]Limits{
 	},
 	2026: {
 		Year:                    2026,
+		VerifiedOn:              "2026-10-21",
+		SourceNote:              "Retirement limits: https://www.irs.gov/newsroom/401k-limit-increases-to-24500-for-2026-ira-limit-increases-to-7500; " + sharedSources,
 		Contrib401k:             24500,
 		Contrib401kCatchUp:      8000,
 		ContribIRA:              7500,
@@ -95,8 +107,8 @@ var years = map[int]Limits{
 		ContribHSAFamily:        8750,
 		ContribHSACatchUp:       1000,
 		ContribHSACatchUpAt:     55,
-		StandardDeductionSingle: 15750,
-		StandardDeductionJoint:  31500,
+		StandardDeductionSingle: 16100,
+		StandardDeductionJoint:  32200,
 		SocialSecurityWageBase:  184500,
 		FullRetirementAge:       67,
 		EarliestClaimAge:        62,
@@ -147,14 +159,16 @@ func (l Limits) Summary() string {
 		return "No figures available."
 	}
 	return fmt.Sprintf(`US federal figures for %d:
-- 401(k) employee contribution: $%s (plus $%s catch-up from age %d)
+- 401(k) employee contribution: $%s (plus general $%s catch-up from age %d; higher catch-up rules apply at ages 60-63)
 - IRA contribution: $%s (plus $%s catch-up from age %d)
 - HSA contribution: $%s self-only, $%s family (plus $%s catch-up from age %d)
 - Standard deduction: $%s single, $%s married filing jointly
 - Social Security wage base: $%s
-- Social Security: earliest claim %d, full retirement age %d, credits stop at %d
+- Social Security: earliest claim %d, full retirement age %d for people born in 1960 or later, credits stop at %d
 
-These are the published %d figures, quoted as reference. They are not advice, and they change annually.`,
+These are the published %d figures, quoted as reference. They are not advice, and they change annually.
+Verified on %s against these primary sources:
+%s`,
 		l.Year,
 		commas(l.Contrib401k), commas(l.Contrib401kCatchUp), l.CatchUpAge,
 		commas(l.ContribIRA), commas(l.ContribIRACatchUp), l.CatchUpAge,
@@ -162,7 +176,7 @@ These are the published %d figures, quoted as reference. They are not advice, an
 		commas(l.StandardDeductionSingle), commas(l.StandardDeductionJoint),
 		commas(l.SocialSecurityWageBase),
 		l.EarliestClaimAge, l.FullRetirementAge, l.LatestCreditAge,
-		l.Year)
+		l.Year, l.VerifiedOn, l.SourceNote)
 }
 
 // commas renders a whole-dollar figure with thousands separators.

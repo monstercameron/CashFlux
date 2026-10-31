@@ -30,7 +30,8 @@ func TestAutoBudgetSaveUpdatesWeeklyMatchWithoutCreatingDuplicate(t *testing.T) 
 	}
 	rows := []budgeting.BudgetSuggestion{{CategoryID: "food", CategoryName: "Food", MonthlyMinor: 60_000}}
 	matched := budgeting.AutoBudgetMatches(app.Budgets())
-	saveAutoBudget(app, rows, matched, "USD", ratesUSD(), time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC), func(budgeting.BudgetSuggestion) int64 { return 60_000 }, func() map[string]bool { return map[string]bool{"food": true} }, nil, nil, nil, func() {})
+	tuning := budgeting.PrepareAutoBudgetTuning(rows, nil, map[string]bool{"food": true})
+	saveAutoBudget(app, tuning, matched, "USD", ratesUSD(), time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC), nil, nil, nil, func() {})
 	budgets := app.Budgets()
 	if len(budgets) != 1 || budgets[0].ID != original.ID {
 		t.Fatalf("budgets after update = %+v, want only existing weekly budget", budgets)
@@ -58,7 +59,8 @@ func TestAutoBudgetSaveIsAtomicWhenOneSelectedBudgetIsInvalid(t *testing.T) {
 		{CategoryID: "invalid", CategoryName: "", MonthlyMinor: 5_000},
 	}
 	closed := false
-	saveAutoBudget(app, rows, nil, "USD", ratesUSD(), time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC), func(budgeting.BudgetSuggestion) int64 { return 5_000 }, func() map[string]bool { return map[string]bool{"valid": true, "invalid": true} }, nil, nil, nil, func() { closed = true })
+	tuning := budgeting.PrepareAutoBudgetTuning(rows, nil, map[string]bool{"valid": true, "invalid": true})
+	saveAutoBudget(app, tuning, nil, "USD", ratesUSD(), time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC), nil, nil, nil, func() { closed = true })
 	if got := app.Budgets(); len(got) != 0 {
 		t.Fatalf("partial AutoBudget write left budgets %+v; want no writes when one row fails", got)
 	}

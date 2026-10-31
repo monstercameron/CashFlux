@@ -24,7 +24,7 @@
 // CDN also drops Tailwind's preflight (which set border-style globally).
 package tw
 
-import "github.com/monstercameron/GoWebComponents/v5/css"
+import "github.com/monstercameron/GoWebComponents/v7/css"
 
 // --- the app's custom palette (exact hex from the former tailwind.config) ------
 const (
@@ -194,20 +194,21 @@ var (
 )
 
 // --- typography ---------------------------------------------------------------
-// Type-scale tokens carry Tailwind's font-size + line-height pair; arbitrary
+// Every size here reads the app's --type-* scale, so Go and CSS share one set of steps and all of them
+// follow the UI-scale setting. Type-scale tokens carry Tailwind's font-size + line-height pair; arbitrary
 // text-[..px] sets font-size only (Tailwind's arbitrary behavior).
 var (
-	TextXs   = []css.Rule{css.FontSize(css.Rem(0.75)), raw("line-height", "1rem")}
-	TextBase = []css.Rule{css.FontSize(css.Rem(1)), raw("line-height", "1.5rem")}
-	TextLg   = []css.Rule{css.FontSize(css.Rem(1.125)), raw("line-height", "1.75rem")}
+	TextXs   = []css.Rule{css.FontSize(css.Length("var(--type-12)")), raw("line-height", "1rem")}
+	TextBase = []css.Rule{css.FontSize(css.Length("var(--type-16)")), raw("line-height", "1.5rem")}
+	TextLg   = []css.Rule{css.FontSize(css.Length("var(--type-18)")), raw("line-height", "1.75rem")}
 
-	Text11  = css.FontSize(css.Px(11))
-	Text12  = css.FontSize(css.Px(12))
-	Text13  = css.FontSize(css.Px(13))
+	Text11  = css.FontSize(css.Length("var(--type-11)"))
+	Text12  = css.FontSize(css.Length("var(--type-12)"))
+	Text13  = css.FontSize(css.Length("var(--type-13)"))
 	Text135 = raw("font-size", "13.5px")
-	Text14  = css.FontSize(css.Px(14))
+	Text14  = css.FontSize(css.Length("var(--type-14)"))
 	Text15  = css.FontSize(css.Px(15))
-	Text18  = css.FontSize(css.Px(18))
+	Text18  = css.FontSize(css.Length("var(--type-18)"))
 	Text28  = css.FontSize(css.Px(28))
 
 	TextCenter = raw("text-align", "center")
@@ -289,12 +290,12 @@ var (
 // --- effects ------------------------------------------------------------------
 var (
 	ShadowLg  = raw("box-shadow", "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)")
-	Opacity0  = css.Opacity(0)
-	Opacity60 = css.Opacity(0.6)
+	Opacity0  = css.OpacityNum(css.Num(0))
+	Opacity60 = css.OpacityNum(css.Num(0.6))
 
-	HoverOpacity100             = css.Hover(css.Opacity(1))
-	GroupHoverOpacity100        = css.DefineVariant(".group:hover &")(css.Opacity(1))
-	GroupFocusWithinOpacity100  = css.DefineVariant(".group:focus-within &")(css.Opacity(1))
+	HoverOpacity100             = css.Hover(css.OpacityNum(css.Num(1)))
+	GroupHoverOpacity100        = css.DefineVariant(".group:hover &")(css.OpacityNum(css.Num(1)))
+	GroupFocusWithinOpacity100  = css.DefineVariant(".group:focus-within &")(css.OpacityNum(css.Num(1)))
 	MotionSafeTransitionOpacity = css.Media(css.RawMedia("(prefers-reduced-motion: no-preference)"), raw("transition-property", "opacity"), raw("transition-duration", "150ms"))
 )
 

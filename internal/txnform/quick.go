@@ -283,7 +283,7 @@ func QuickPreview(d QuickDraft, s QuickSource, attempted bool) QuickView {
 		member = s.MemberLens[0]
 	}
 	v := QuickView{AccountID: QuickAccountID(accountselect.ResolveInput{Accounts: s.Accounts, Transactions: s.Transactions,
-		ExplicitID: d.AccountID, ActiveMemberID: member, Members: s.Members, WorkspaceDefaultID: s.DefaultAccount})}
+		ExplicitID: d.AccountID, ActiveMemberID: member, Members: s.Members, WorkspaceDefaultID: s.DefaultAccount, Now: s.Now})}
 	v.Date = d.Date
 	if v.Date == "" {
 		v.Date = dateutil.FormatDate(s.Now)

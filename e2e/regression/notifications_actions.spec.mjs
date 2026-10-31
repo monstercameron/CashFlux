@@ -2,6 +2,30 @@
 // and the one-level undo for a dismissed notification.
 import { test, expect, nav } from "./fixtures.mjs";
 
+test.describe("notifications: triage tabs", () => {
+  test("tabs follow the arrow keys and expose the selected view", async ({ app }) => {
+    await nav(app, "/notifications");
+    const live = app.getByTestId("notif-view-live");
+    const watching = app.getByTestId("notif-view-watching");
+    const history = app.getByTestId("notif-view-history");
+    await expect(live).toHaveAttribute("role", "tab");
+    await expect(live).toHaveAttribute("aria-selected", "true");
+    await expect(app.locator(".nhx-toggle")).toHaveAttribute("role", "tablist");
+
+    await live.focus();
+    await app.keyboard.press("ArrowRight");
+    await expect(watching).toHaveAttribute("aria-selected", "true");
+    await expect(live).toHaveAttribute("aria-selected", "false");
+
+    await app.keyboard.press("ArrowRight");
+    await expect(history).toHaveAttribute("aria-selected", "true");
+    await expect(app.getByTestId("notif-history-search")).toBeVisible();
+
+    await app.keyboard.press("ArrowLeft");
+    await expect(watching).toHaveAttribute("aria-selected", "true");
+  });
+});
+
 test.describe("notifications: snooze horizons + undo dismiss", () => {
   test("snoozing for a week hides the alert; dismissing offers Undo that restores it", async ({ app }) => {
     await nav(app, "/notifications");

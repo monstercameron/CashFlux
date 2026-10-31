@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v5/css"
+	"github.com/monstercameron/GoWebComponents/v7/css"
 )
 
 // emit folds a token (a css.Rule or []css.Rule) into a class and returns the CSS
@@ -53,8 +53,8 @@ func TestExactTailwindValues(t *testing.T) {
 		{"Rounded4", Rounded4, []string{"border-radius:4px"}},
 		{"RoundedFull", RoundedFull, []string{"border-radius:9999px"}},
 		{"Rounded", Rounded, []string{"border-radius:0.25rem"}},
-		{"Text12", Text12, []string{"font-size:12px"}},
-		{"TextXs", TextXs, []string{"font-size:0.75rem", "line-height:1rem"}},
+		{"Text12", Text12, []string{"font-size:var(--type-12)"}},
+		{"TextXs", TextXs, []string{"font-size:var(--type-12)", "line-height:1rem"}},
 		{"Border", Border, []string{"border-width:1px", "border-style:solid"}},
 		{"BorderLine", BorderLine, []string{"border-color:#232325"}},
 		{"ShadowLg", ShadowLg, []string{"box-shadow:0 10px 15px"}},

@@ -13,9 +13,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // allocTile wraps a tile body in the shared Widget chrome + the full-width bento column.
@@ -54,13 +54,14 @@ func allocStatChip(label, value, valueCls string) ui.Node {
 // --- alloc-hero ------------------------------------------------------------------
 
 type allocHeroProps struct {
-	View            allocView
-	AmountStr       string
-	OnAmount        any
-	ShowIncomeNudge bool
-	MonthIncome     money.Money
-	OnPrefillIncome any
-	OnDismissIncome any
+	View              allocView
+	AmountStr         string
+	OnAmount          ui.Handler
+	ShowIncomeNudge   bool
+	IncomeUnavailable bool
+	MonthIncome       money.Money
+	OnPrefillIncome   any
+	OnDismissIncome   any
 }
 
 // allocAmountIsZero reports whether the hero amount string carries no value — an
@@ -93,6 +94,9 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 			),
 		)
 	}
+	if props.IncomeUnavailable {
+		nudge = P(css.Class("muted alloc-income-unavailable"), Attr("data-testid", "income-unavailable"), uistate.T("allocate.incomeUnavailable"))
+	}
 
 	var kept ui.Node = Fragment()
 	if v.TotalMinor > 0 && v.Remainder > 0 {
@@ -100,7 +104,7 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 	}
 
 	figs := Div(css.Class("debt-chips"),
-		allocStatChip(uistate.T("allocate.figAllocatable"), fmtMoney(money.New(v.Allocatable(), base)), " "+tw.ColorClass("text-up")),
+		allocStatChip(uistate.T("allocate.figAllocatable"), fmtMoney(money.New(v.AllocatableMinor, base)), " "+tw.ColorClass("text-up")),
 		// QA M4: the chip must state the money ACTUALLY held back from the plan —
 		// v.Remainder (reserve buffer + caps/rounding leftovers), the same figure
 		// the "Kept back" sentence and the destination totals reconcile against.
@@ -127,6 +131,8 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 					Placeholder(uistate.T("allocate.amountFieldPlaceholder")), OnInput(props.OnAmount), uiw.FieldValue(props.AmountStr)),
 			),
 			nudge,
+			If(v.InputUnavailable, P(css.Class("t-caption text-down"), Attr("role", "alert"), uistate.T("allocate.dataUnavailable"))),
+			If(v.InputInvalid && !v.InputUnavailable, P(css.Class("t-caption text-down"), Attr("role", "alert"), uistate.T("allocate.invalidAmount"))),
 			kept,
 		),
 		figs,
@@ -214,7 +220,7 @@ func allocModeLabel(mode string) string {
 }
 
 // allocWeightField is one criterion weight input (a small number field with a caption).
-func allocWeightField(label, value string, onInput any) ui.Node {
+func allocWeightField(label, value string, onInput ui.Handler) ui.Node {
 	return labeledField(label,
 		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.5"), Attr("aria-label", label), OnInput(onInput), uiw.FieldValue(value)))
 }

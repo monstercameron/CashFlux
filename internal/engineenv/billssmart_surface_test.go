@@ -65,3 +65,64 @@ func TestAddBillsSmartVarsNoPaydays(t *testing.T) {
 		t.Error("no paydays → gains and moves must be 0")
 	}
 }
+
+func TestUnavailableBillsSmartVarsAreOmittedAndReserved(t *testing.T) {
+	vars := Vars(Data{
+		Rates: currency.Rates{Base: "USD"}, Now: time.Now(),
+		BillsSmart: BillsSmartData{Unavailable: true},
+		Molecules:  []domain.Molecule{{Name: "bills_low_raw", Formula: "123"}},
+	})
+	for _, name := range BillsSmartVarNames {
+		if _, ok := vars[name]; ok {
+			t.Errorf("unavailable variable %q should be omitted", name)
+		}
+	}
+}
+
+func TestBillsSmartVarsOmittedOnLiquidOrFXFailure(t *testing.T) {
+	missingLiquidFX := Data{
+		Rates: currency.Rates{Base: "USD"}, Now: time.Now(),
+		Accounts:   []domain.Account{{ID: "foreign", Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "EUR", OpeningBalance: money.New(100, "EUR")}},
+		BillsSmart: BillsSmartData{Paydays: []time.Time{time.Now()}, IncomePerPayday: 100},
+	}
+	vars := Vars(missingLiquidFX)
+	for _, name := range BillsSmartVarNames {
+		if _, ok := vars[name]; ok {
+			t.Errorf("liquid FX failure should omit %q", name)
+		}
+	}
+
+	badObligationFX := Data{
+		Rates: currency.Rates{Base: "USD"}, Now: time.Now(),
+		Recurring:  []domain.Recurring{{ID: "eur-bill", Label: "Bill", Amount: money.New(-100, "EUR"), Cadence: domain.CadenceMonthly, NextDue: time.Now()}},
+		BillsSmart: BillsSmartData{Paydays: []time.Time{time.Now()}, IncomePerPayday: 100},
+	}
+	vars = Vars(badObligationFX)
+	for _, name := range BillsSmartVarNames {
+		if _, ok := vars[name]; ok {
+			t.Errorf("obligation FX failure should omit %q", name)
+		}
+	}
+}
+
+func TestBillsSmartVarsOmittedForUnrepresentableSourceMagnitude(t *testing.T) {
+	vars := Vars(Data{
+		Rates: currency.Rates{Base: "USD"}, Now: time.Now(),
+		Accounts:   []domain.Account{{ID: "cash", Name: "Checking", Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(10000, "USD")}},
+		Recurring:  []domain.Recurring{{ID: "min-int", Label: "Invalid", Amount: money.New(-1<<63, "USD"), Cadence: domain.CadenceMonthly, NextDue: time.Now()}},
+		BillsSmart: BillsSmartData{Paydays: []time.Time{time.Now()}, IncomePerPayday: 100},
+	})
+	for _, name := range BillsSmartVarNames {
+		if _, ok := vars[name]; ok {
+			t.Errorf("unrepresentable source amount should omit %q", name)
+		}
+	}
+	if vars["liquid_cash"] != 100 {
+		t.Errorf("known cash should remain available, got liquid_cash=%v", vars["liquid_cash"])
+	}
+	for _, name := range []string{"bills_due", "idle_cash", "idle_cash_forgone_annual", "safe_to_spend"} {
+		if _, ok := vars[name]; ok {
+			t.Errorf("invalid bill commitment should omit dependent %q", name)
+		}
+	}
+}

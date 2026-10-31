@@ -1,0 +1,7 @@
+Command: go test -work -v -p=1 -run '^TestSOLP2UnusualSlices3300$' -count=1 ./internal/unusual (private GOCACHE, GOMAXPROCS=1)
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build1679605590
+=== RUN   TestSOLP2UnusualSlices3300
+    job_test.go:82: SOLP2 unusual: rows=3300 slices=18568 longest=38.4098ms findings=183
+--- PASS: TestSOLP2UnusualSlices3300 (4.73s)
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/unusual	5.560s

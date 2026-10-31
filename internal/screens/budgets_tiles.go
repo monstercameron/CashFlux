@@ -23,10 +23,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgets_tiles.go holds the Native widget bodies the /budgets surface host composes
@@ -102,7 +102,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("budgets.basisButton")))
 
-	summaryPool := budgetSummaryPool(vw, v, summaryPlan.hist, summaryPlan.normalizedBudgetTotal)
+	summaryPool := budgetSummaryPool(vw, v, summaryPlan.hist, summaryPlan.normalizedBudgetTotal, summaryPlan.normalizationOK)
 
 	// BUD2: count the same over-or-near set that the list's attention filter uses.
 	for _, s := range v.Statuses {
@@ -117,14 +117,17 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		v: v, hist: summaryPlan.hist, filterAttn: filterAttn, fundHasPool: summaryPool.fundHasPool, fundFree: summaryPool.fundFree,
 		zbbHero: summaryPool.zbbHero, spendCap: summaryPool.spendCap, smartSettings: summaryPlan.smartSettings,
 	})
-	incomeActual, funding, actualIncome := budgetSummaryFunding(budgetSummaryFundingProps{
+	fundingSummary := budgetSummaryFunding(budgetSummaryFundingProps{
 		app: app, wStart: summaryPlan.wStart, wEnd: summaryPlan.wEnd, v: v, normalizationOK: summaryPlan.normalizationOK,
 		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, hist: summaryPlan.hist,
 	})
+	funding, actualIncome := fundingSummary.prepared.Funding, fundingSummary.prepared.Received
+	actualIncomeKnown := fundingSummary.prepared.IncomeKnown
 	summaryAllocation := budgetSummaryAllocation(budgetSummaryAllocationProps{
 		futurePeriod: futurePeriod, planView: summaryPlan.planView, basisBtn: basisBtn, hist: summaryPlan.hist, v: v,
 		normalizationOK: summaryPlan.normalizationOK, normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, wEnd: summaryPlan.wEnd,
-		actualIncome: actualIncome, pr: pr,
+		actualIncome: actualIncome, actualIncomeKnown: actualIncomeKnown,
+		overAssigned: fundingSummary.prepared.OverAssigned, overAssignedKnown: fundingSummary.prepared.OverAssignedKnown, pr: pr,
 	})
 
 	rail := budgetSummaryIssues(budgetSummaryIssuesProps{
@@ -133,15 +136,18 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	})
 
 	statusLine := budgetSummaryStatus(budgetSummaryStatusProps{
-		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: v, futurePeriod: futurePeriod,
-		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned, funding: funding, hist: summaryPlan.hist,
+		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: summaryPlan.planView, futurePeriod: futurePeriod,
+		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned,
+		fundingKnown: fundingSummary.prepared.FundingKnown, fundingEligible: fundingSummary.prepared.FundingEligible,
+		funding: funding, hist: summaryPlan.hist,
 		excluded: summaryPlan.excluded, issues: summaryPlan.issues, filterAttn: filterAttn,
 		attnCount: len(budgetAttentionStatuses(v.Statuses)), attnOver: attnOver, smartSettings: summaryPlan.smartSettings,
 	})
 	details := budgetSummaryDetails(budgetSummaryDetailsProps{
 		v: v, normalizationOK: summaryPlan.normalizationOK, alloc: summaryAllocation.alloc,
-		futurePeriod: futurePeriod, funding: funding, hist: summaryPlan.hist, vw: vw, app: app, activeMemberID: activeMemberID, pr: pr,
-		rail: rail, incomeActual: incomeActual, lastMonthTag: summaryPool.lastMonthTag,
+		futurePeriod: futurePeriod, funding: funding, fundingKnown: fundingSummary.prepared.FundingKnown,
+		fundingEligible: fundingSummary.prepared.FundingEligible, hist: summaryPlan.hist, vw: vw, app: app, activeMemberID: activeMemberID, pr: pr,
+		rail: rail, incomeActual: fundingSummary.incomeActual, lastMonthTag: summaryPool.lastMonthTag,
 		closeOffer: summaryAllocation.closeOffer, toAssignChip: toAssignChip,
 		hasAlloc: summaryAllocation.hasAlloc, basisBtn: basisBtn, ageChip: ageChip,
 	})
@@ -310,9 +316,12 @@ func majorStrToMinor(s, base string) (int64, bool) {
 }
 
 type incomeBasisProps struct {
-	Base    string
-	Sources []incomeSource // income categories + last-month amounts (by-source basis)
-	Income  int64          // the resolved income feeding the hero (the ledger's running total)
+	Base            string
+	Sources         []incomeSource // prepared source averages and availability
+	SourceAmountErr error
+	SourceRankErr   error
+	Income          int64 // canonical combined preview, rounded independently of rows
+	IncomeErr       error
 }
 
 // budgetIncomeBasisControl is the income-source picker inside the "Income to budget with"
@@ -336,10 +345,10 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 		// Switching to "by source" with nothing chosen yet seeds every source that
 		// actually earned last month, so the basis starts equal to "all income" and the
 		// user removes what to hold aside — a friendlier start than $0.
-		if next == budgeting.IncomeModeCategories && len(dd.Cats) == 0 {
+		if next == budgeting.IncomeModeCategories && len(dd.Cats) == 0 && props.SourceAmountErr == nil {
 			var seed []string
 			for _, s := range props.Sources {
-				if s.Minor > 0 {
+				if s.Known && s.Minor > 0 {
 					seed = append(seed, s.CategoryID)
 				}
 			}
@@ -378,10 +387,13 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 	})
 	// Include-all / hold-all-aside bulk actions for the source ledger.
 	selectAllSources := ui.UseEvent(Prevent(func() {
+		if props.SourceAmountErr != nil {
+			return // keep manual selections when positive-source facts are unknown
+		}
 		dd := draftAtom.Get()
 		var all []string
 		for _, s := range props.Sources {
-			if s.Minor > 0 {
+			if s.Known && s.Minor > 0 {
 				all = append(all, s.CategoryID)
 			}
 		}
@@ -447,7 +459,7 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 			}
 		}
 		actions := Div(css.Class("zbb-sources-actions"),
-			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-select-all"), selectAllOnClick, uistate.T("budgets.incomeSelectAll")),
+			Button(css.Class("zbb-sources-act"), Type("button"), Disabled(props.SourceAmountErr != nil), Attr("data-testid", "budgets-zbb-select-all"), selectAllOnClick, uistate.T("budgets.incomeSelectAll")),
 			Span(css.Class("zbb-sources-actsep"), Attr("aria-hidden", "true"), "·"),
 			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-hold-all"), holdAllOnClick, uistate.T("budgets.incomeHoldAll")),
 		)
@@ -488,7 +500,14 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 // builder — each toggle row is its own component so the On* hook stays at a stable
 // position (framework rule: never register hooks inside a variable-length loop).
 func budgetIncomeSourcesLedger(props incomeBasisProps, selected map[string]bool, toggle func(string), actions ui.Node, included int) ui.Node {
+	var sourceNotice ui.Node = Fragment()
+	if props.SourceAmountErr != nil || props.SourceRankErr != nil {
+		sourceNotice = P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budgets-zbb-source-unavailable"), uistate.T("budgets.incomplete"))
+	}
 	if len(props.Sources) == 0 {
+		if props.SourceAmountErr != nil {
+			return Div(css.Class("zbb-sources"), sourceNotice)
+		}
 		return Div(css.Class("zbb-sources"),
 			P(css.Class("zbb-sources-empty", tw.TextDim), Attr("data-testid", "budgets-zbb-sources-empty"),
 				uistate.T("budgets.incomeSourcesEmpty")))
@@ -500,15 +519,20 @@ func budgetIncomeSourcesLedger(props incomeBasisProps, selected map[string]bool,
 				Source: s, Base: props.Base, Included: selected[s.CategoryID], OnToggle: toggle,
 			})
 		})
+	incomeText := "—"
+	if props.IncomeErr == nil {
+		incomeText = fmtMoney(money.New(props.Income, props.Base))
+	}
 	return Div(css.Class("zbb-sources"), Attr("data-testid", "budgets-zbb-sources"),
 		Div(css.Class("zbb-sources-head"),
 			Span(css.Class("zbb-sources-title"), uistate.T("budgets.incomeSourcesTitle")),
 			actions,
 		),
+		sourceNotice,
 		Div(css.Class("zbb-sources-total"),
 			Span(css.Class("zbb-sources-total-cap"), uistate.T("budgets.incomeSourcesTotalCap")),
 			Span(css.Class("zbb-sources-total-val fig"), Attr("data-testid", "budgets-zbb-sources-total"),
-				fmtMoney(money.New(props.Income, props.Base))),
+				incomeText),
 			Span(css.Class("zbb-sources-count", tw.TextDim), uistate.T("budgets.incomeSourcesCount", included, len(props.Sources))),
 		),
 		Div(css.Class("zbb-sources-rows"), rows),
@@ -534,16 +558,18 @@ func budgetIncomeSourceRow(props budgetIncomeSourceRowProps) ui.Node {
 	}
 	hasIncome := props.Source.Minor > 0
 	var aside, amtNode ui.Node = Fragment(), Fragment()
-	if hasIncome {
+	if !props.Source.Known {
+		amtNode = Span(css.Class("zbb-source-amt zbb-source-none"), Attr("data-testid", "budgets-zbb-source-amount-"+props.Source.CategoryID), uistate.T("calculation.unavailable"))
+	} else if hasIncome {
 		// A real source: show its amount, and a "held aside" tag when excluded.
 		if !props.Included {
 			aside = Span(css.Class("zbb-source-aside"), uistate.T("budgets.incomeSourceHeldAside"))
 		}
-		amtNode = Span(css.Class("zbb-source-amt fig"), fmtMoney(money.New(props.Source.Minor, props.Base)))
+		amtNode = Span(css.Class("zbb-source-amt fig"), Attr("data-testid", "budgets-zbb-source-amount-"+props.Source.CategoryID), fmtMoney(money.New(props.Source.Minor, props.Base)))
 	} else {
 		// No income last month: say so plainly, so it's not confused with a source the
 		// user simply hasn't checked (no bare dash, no misleading "held aside" tag).
-		amtNode = Span(css.Class("zbb-source-amt zbb-source-none"), uistate.T("budgets.incomeSourceNoHistory"))
+		amtNode = Span(css.Class("zbb-source-amt zbb-source-none"), Attr("data-testid", "budgets-zbb-source-amount-"+props.Source.CategoryID), uistate.T("budgets.incomeSourceNoHistory"))
 	}
 	return Label(ClassStr(rowCls), Attr("data-testid", "budgets-zbb-source-"+props.Source.CategoryID),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("aria-label", props.Source.Name), OnChange(onChange)}, checkedAttr(props.Included)...)...),
@@ -577,7 +603,8 @@ func budgetBasisBodyReady(_ struct{}) ui.Node {
 
 	// Everything the modal shows reflects the STAGED draft (its mode, chosen sources, and
 	// averaging window), so the running total and per-source amounts preview unsaved edits
-	// and stay consistent: the checked rows sum to the previewed income.
+	// and use the same window. Source rows truncate individually; the canonical
+	// combined preview may retain a minor-unit rounding remainder.
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	// C531: anchor the preview on the month the PAGE is showing, not on today, so
 	// the figure approved here is the figure the page will use. Paging back to a
@@ -588,17 +615,17 @@ func budgetBasisBodyReady(_ struct{}) ui.Node {
 		mode = budgeting.IncomeModeAll
 	}
 	draftIncome, incomeErr := resolveIncomeBasis(app, mode, d.PaycheckMin, d.Fixed, d.Cats, d.AvgMonths, ms, base, rates)
-	sources := computeIncomeSources(app, base, rates, ms, d.AvgMonths)
+	sources := computeIncomeSources(app, rates, ms, d.AvgMonths)
 	var incomeNotice ui.Node = Fragment()
 	if incomeErr != nil {
 		slog.Error("preview selected budget income", "error", incomeErr)
-		incomeNotice = P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))
+		incomeNotice = P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budgets-zbb-income-unavailable"), uistate.T("budgets.incomplete"))
 	}
 
 	return Div(css.Class("zbb-basis-modal"),
 		P(css.Class("zbb-basis-modal-help", tw.TextDim), uistate.T("budgets.basisModalHelp")),
 		incomeNotice,
-		ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: base, Sources: sources, Income: draftIncome}),
+		ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: base, Sources: sources.Rows, SourceAmountErr: sources.AmountErr, SourceRankErr: sources.RankErr, Income: draftIncome, IncomeErr: incomeErr}),
 	)
 }
 
@@ -858,6 +885,12 @@ func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
 		return Div(css.Class("zbb-savings-goal is-ontrack"),
 			Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
 			Span(css.Class("zbb-savings-goal-time"), uistate.T("budgets.savingsFunded")))
+	}
+	if sa.GoalError != nil {
+		return Div(css.Class("zbb-savings-goal"),
+			Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
+			Span(css.Class("zbb-savings-goal-time"), Attr("role", "status"), Attr("data-testid", "budgets-savings-goal-unavailable-"+sa.AccountID),
+				uistate.T("budgets.savingsGoalUnavailable")))
 	}
 	// No amount set yet — invite one, no projection to make.
 	if sa.Monthly <= 0 {

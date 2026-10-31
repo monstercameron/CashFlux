@@ -13,9 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txntable"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func cstableRow() *txnFrameRowProps {
@@ -204,8 +204,13 @@ func TestCSTABLERowCellsRetainColumnOrderAndARIA(t *testing.T) {
 	r.GroupSize = 2
 	f.Render(Table(Tbody(ui.CreateElement(txnFrameRowCells, txnFrameRowCellsProps{Row: r, SaveStatus: "Saving..."}))))
 	row := findByTestID(f, "tr", "txn-row-"+r.ID)
-	if row == nil || row.Attr("class") != "row txn-ledger-row selected cleared txn-excluded" || row.Attr("aria-rowindex") != "42" || row.Attr("aria-busy") != "true" {
+	if row == nil || row.Attr("aria-rowindex") != "42" || row.Attr("aria-busy") != "true" {
 		t.Fatal("row markers changed")
+	}
+	for _, class := range []string{"row", "txn-ledger-row", "selected", "cleared", "txn-excluded", "txn-row-grouped"} {
+		if !hasClass(row.Attr("class"), class) {
+			t.Fatalf("row class=%q is missing %q", row.Attr("class"), class)
+		}
 	}
 	want := []string{"td-select", "td-date", "row-desc-cell txn-col-description", "td-cat", "td-acct txn-col-account", "td-user txn-col-who", "td-amount txn-col-amount ", "td-amount ", "td-source", "td-actions txn-col-actions"}
 	cells := row.Children()
@@ -213,8 +218,10 @@ func TestCSTABLERowCellsRetainColumnOrderAndARIA(t *testing.T) {
 		t.Fatalf("cells %d", len(cells))
 	}
 	for i, cell := range cells {
-		if cell.Attr("class") != want[i] {
-			t.Fatalf("cell %d class=%q want=%q", i, cell.Attr("class"), want[i])
+		for _, class := range strings.Fields(want[i]) {
+			if !hasClass(cell.Attr("class"), class) {
+				t.Fatalf("cell %d class=%q is missing %q", i, cell.Attr("class"), class)
+			}
 		}
 	}
 }

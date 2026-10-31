@@ -1,0 +1,26 @@
+go version go1.26.9 windows/arm64
+windows
+amd64
+C:\Users\mreca\Documents\Codex\2026-10-19\fin\work\gocache-go1269-app
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build3644120711
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/taxgather
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkNetIncomeWithLinks/rows_1000-18         	      21	  14776157 ns/op	 1658189 B/op	    1658 allocs/op
+BenchmarkNetIncomeWithLinks/rows_1000-18         	      68	   5022247 ns/op	 1657881 B/op	    1657 allocs/op
+BenchmarkNetIncomeWithLinks/rows_1000-18         	      96	   3224152 ns/op	 1657840 B/op	    1656 allocs/op
+BenchmarkNetIncomeWithLinks/rows_1000-18         	      98	   5513666 ns/op	 1657900 B/op	    1657 allocs/op
+BenchmarkNetIncomeWithLinks/rows_1000-18         	     129	   2530884 ns/op	 1657857 B/op	    1656 allocs/op
+BenchmarkNetIncomeWithLinks/rows_10000-18        	      18	  19978794 ns/op	17070814 B/op	   16181 allocs/op
+BenchmarkNetIncomeWithLinks/rows_10000-18        	      22	  17138295 ns/op	17070811 B/op	   16181 allocs/op
+BenchmarkNetIncomeWithLinks/rows_10000-18        	      20	  18728835 ns/op	17070798 B/op	   16181 allocs/op
+BenchmarkNetIncomeWithLinks/rows_10000-18        	      16	  49232181 ns/op	17070811 B/op	   16181 allocs/op
+BenchmarkNetIncomeWithLinks/rows_10000-18        	       1	 306994100 ns/op	17071000 B/op	   16183 allocs/op
+BenchmarkNetIncomeWithLinks/rows_100000-18       	       1	 809412300 ns/op	170041872 B/op	  161349 allocs/op
+BenchmarkNetIncomeWithLinks/rows_100000-18       	       1	 798696900 ns/op	170036808 B/op	  161345 allocs/op
+BenchmarkNetIncomeWithLinks/rows_100000-18       	       1	 700041200 ns/op	170036664 B/op	  161342 allocs/op
+BenchmarkNetIncomeWithLinks/rows_100000-18       	       1	 697912300 ns/op	170036664 B/op	  161342 allocs/op
+BenchmarkNetIncomeWithLinks/rows_100000-18       	       1	 780436500 ns/op	170047080 B/op	  161356 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/taxgather	14.010s

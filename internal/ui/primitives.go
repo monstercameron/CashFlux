@@ -7,9 +7,9 @@ package ui
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // ---------------------------------------------------------------------------
@@ -169,16 +169,26 @@ type EntityRowProps struct {
 	// Meta are secondary descriptor lines (.row-meta). Each entry is rendered as a
 	// separate span so callers can pass formatted strings or node-like strings.
 	Meta []string
+	// Value is an optional trailing node placed between the text block and Actions, such as a
+	// balance or an amount. A nil Value renders nothing. It is wrapped in .row-value, which keeps
+	// it from shrinking and sets tabular numerals.
+	Value uic.Node
 	// Actions are pre-built interactive nodes placed in the trailing slot.
 	// Because they are already-constructed nodes (not callbacks), EntityRow itself
 	// registers no per-row hooks and is safe to call inside a MapKeyed loop.
 	// Per-row interactive elements (IconButton, etc.) must be built as their own
 	// components by the caller before being passed here.
 	Actions []uic.Node
+	// TestID is the data-testid of the row root. Empty adds none.
+	TestID string
+	// Attrs are extra attributes or classes added to the row root, such as an id or a data
+	// attribute. They are appended after the row's own class.
+	Attrs []any
 }
 
 // EntityRow renders a generic list row (.row) with a leading slot, a .row-main
-// text block (.row-desc + .row-meta lines), and a trailing actions slot.
+// text block (.row-desc + .row-meta lines), an optional trailing value slot, and a trailing
+// actions slot.
 // EntityRow owns no click hooks itself — all interactivity is passed as pre-built
 // action nodes — so it is safe to call directly inside a variable-length loop.
 func EntityRow(props EntityRowProps) uic.Node {
@@ -189,10 +199,17 @@ func EntityRow(props EntityRowProps) uic.Node {
 	}
 
 	rowArgs := []any{css.Class("row")}
+	if props.TestID != "" {
+		rowArgs = append(rowArgs, Attr("data-testid", props.TestID))
+	}
+	rowArgs = append(rowArgs, props.Attrs...)
 	if props.Leading != nil {
 		rowArgs = append(rowArgs, props.Leading)
 	}
 	rowArgs = append(rowArgs, Div(mainArgs...))
+	if props.Value != nil {
+		rowArgs = append(rowArgs, Div(css.Class("row-value"), props.Value))
+	}
 	for _, a := range props.Actions {
 		rowArgs = append(rowArgs, a)
 	}

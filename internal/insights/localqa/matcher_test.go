@@ -54,13 +54,13 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			name:        "how much did i spend on",
-			input:       "How much did I spend on groceries last week?",
+			input:       "How much did I spend on groceries this month?",
 			wantIntent:  localqa.IntentSpendingByCategory,
 			wantMatched: true,
 		},
 		{
 			name:        "how much have i spent on",
-			input:       "How much have I spent on dining this quarter?",
+			input:       "How much have I spent on dining this month?",
 			wantIntent:  localqa.IntentSpendingByCategory,
 			wantMatched: true,
 		},
@@ -256,6 +256,21 @@ func TestMatch(t *testing.T) {
 	}
 }
 
+func TestCategoryPeriodOutsideCurrentMonthFallsThrough(t *testing.T) {
+	for _, query := range []string{
+		"How much did I spend on groceries last month?",
+		"How much did I spend on dining yesterday?",
+		"How much have I spent on fuel this quarter?",
+	} {
+		if got, ok := localqa.Match(query); ok || got != localqa.IntentNone {
+			t.Errorf("Match(%q) = (%v, %v), want no local match", query, got, ok)
+		}
+	}
+	if got, ok := localqa.Match("How much did I spend on groceries this month?"); !ok || got != localqa.IntentSpendingByCategory {
+		t.Errorf("current-month Match = (%v, %v), want category spending", got, ok)
+	}
+}
+
 func TestIntent_String(t *testing.T) {
 	tests := []struct {
 		intent localqa.Intent
@@ -300,8 +315,8 @@ func TestExtractCategory(t *testing.T) {
 		},
 		{
 			name:  "capitalized category preserved",
-			input: "How much have I spent on Groceries this month",
-			want:  "Groceries this month",
+			input: "How much have I spent on Groceries this month?",
+			want:  "Groceries",
 		},
 		{
 			name:  "entertainment category",

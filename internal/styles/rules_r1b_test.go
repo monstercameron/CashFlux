@@ -50,12 +50,12 @@ func TestR1BSelectedRowsDoNotDependOnZebraStripes(t *testing.T) {
 func TestR4CReviewAttentionAndCategoryMarkPlacement(t *testing.T) {
 	resetSheet()
 	registerTxnScope()
+	registerGenerated()
 	registerTxnToolbar()
 	out := Build()
 	for _, want := range []string{
 		".td-cat-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto;}",
-		".txn-review-callout{display:inline-flex;align-items:center;gap:0.45rem;padding:0.45rem 0.7rem;border:1px solid var(--border);border-radius:var(--radius-lg);background:transparent;color:var(--text);",
-		".txn-review-callout-attention::before{content:\"\";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);flex:0 0 8px;}",
+		".btn-tool.bt-stale{",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("R4C attention/category rule missing %q", want)

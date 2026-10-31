@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v5/state"
+import "github.com/monstercameron/GoWebComponents/v7/state"
 
 // ReturnTo is a one-hop breadcrumb: where a cross-page action came FROM, what the
 // user was doing there, and where it was going.

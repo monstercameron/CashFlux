@@ -41,6 +41,12 @@ func init() {
 	auditview.UndoFunc = func() bool { return undoLastChange() }
 	auditview.CanUndoFunc = func() bool { return undoStack.CanUndo() }
 	auditview.CaptureNow = func() { captureUndoPoint() }
+	auditview.CaptureAssistantBaseline = captureAssistantBaseline
+	auditview.CaptureAssistantBaselineChecked = captureAssistantBaselineChecked
+	auditview.CaptureAssistantReceipt = captureAssistantReceipt
+	auditview.CaptureAssistantReceiptChecked = captureAssistantReceiptChecked
+	auditview.TopUndoID = func() string { return undoStack.UndoID() }
+	auditview.UndoExpected = undoExpected
 }
 
 // RecordAuditPoint translates cs into an auditlog.Entry, appends it to the
@@ -53,14 +59,14 @@ func init() {
 //
 // Phase-2 wiring: captureUndoPoint in undo.go calls RecordAuditPoint(cs) after
 // undoStack.Push — that wiring is already in place.
-func RecordAuditPoint(cs history.ChangeSet) {
+func RecordAuditPoint(cs history.ChangeSet) string {
 	// Replay guard: undo/redo applications set applyingUndo to suppress the
 	// captureUndoPoint→RecordAuditPoint path during a restoration write-back.
 	if applyingUndo {
-		return
+		return ""
 	}
 	if cs.IsEmpty() {
-		return
+		return ""
 	}
 	// The audit log must not audit itself: a capture whose only content is the
 	// previous entry's own auditEntries write is pure noise — skip it.
@@ -72,7 +78,7 @@ func RecordAuditPoint(cs history.ChangeSet) {
 		}
 	}
 	if onlyAudit {
-		return
+		return ""
 	}
 	action, entityType, entityID := inferEntryFields(cs)
 	summary := buildSummary(cs, action, entityType)
@@ -93,8 +99,9 @@ func RecordAuditPoint(cs history.ChangeSet) {
 			summary += " · from an import"
 		}
 	}
+	undoID := auditEntryID()
 	e := auditlog.Entry{
-		ID:         auditEntryID(),
+		ID:         undoID,
 		At:         time.Now().UTC(),
 		Actor:      actor,
 		Action:     action,
@@ -109,6 +116,7 @@ func RecordAuditPoint(cs history.ChangeSet) {
 	if appstate.Default != nil {
 		appstate.Default.RecordAudit(e)
 	}
+	return undoID
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
