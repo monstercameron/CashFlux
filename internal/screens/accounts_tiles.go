@@ -961,8 +961,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
 				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
 			If(len(accounts) >= 1, uiw.OverflowMenu(uiw.OverflowMenuProps{
-				TriggerText:   uistate.T("acctxn.acctSettingsMenu"),
-				TriggerIcon:   icon.ChevronDown,
 				TriggerLabel:  uistate.T("acctxn.acctSettingsMenuTitle"),
 				TriggerTestID: "acct-manage-btn",
 				TriggerClass:  "btn btn-tool",
