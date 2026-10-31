@@ -18,6 +18,7 @@ and every commit updates this file under `Unreleased`.
 - The spending breakdown bar on Transactions colours each category from the chart palette, with matching swatches in its labels, so the segments can be told apart.
 - The Transactions summary drops its running-total line and sits in its own bubble above the search and filters, matching the input bubble.
 - The Transactions summary holds the two actions at its top, and the toolbar tiles use the shared type and radius tokens so the summary, toolbar and other pages match.
+- The two Transactions actions sit on the same row as the net figure, on the right, so the figure starts at the top of the bubble like the other pages.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.

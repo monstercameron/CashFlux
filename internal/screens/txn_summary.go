@@ -21,6 +21,7 @@ func txnSummaryHead(props txnToolbarRenderProps) ui.Node {
 		TestID:   "txn-summary",
 		Figure:   uiw.PageHeadlineFigure(uiw.PageHeadlineFigureProps{Text: fmtMoney(net), TestID: "txn-summary-net"}),
 		Sentence: Span(uistate.T("txnsum.sentence", txnCountPeriod(props.Filter))),
+		Visual:   txnTopActions(props),
 		Footer:   txnToolbarFoot(ui.CreateElement(txnToolbarCount, props)),
 	})
 }

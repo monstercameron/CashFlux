@@ -662,7 +662,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	renderProps := txnToolbarRenderProps{txnToolbarProps: props, Own: own, Filter: filter, MemberLens: memberLens, LensOn: lensOn, Indexes: indexes, Summary: summary, Derived: derived, SetFilter: func(mut func(*txnfilter.Criteria)) { setTxFilterOn(filterAtom, mut) }}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: txnResponsiveToolbar(Div(css.Class("txn-bubble"), txnTopActions(renderProps), txnSummaryHead(renderProps)), Div(css.Class("txn-bubble"), ui.CreateElement(txnToolbarControls, renderProps), ui.CreateElement(txnUpcomingStrip, struct{}{}), ui.CreateElement(txnToolbarInterpret, renderProps))),
+		Body: txnResponsiveToolbar(Div(css.Class("txn-bubble"), txnSummaryHead(renderProps)), Div(css.Class("txn-bubble"), ui.CreateElement(txnToolbarControls, renderProps), ui.CreateElement(txnUpcomingStrip, struct{}{}), ui.CreateElement(txnToolbarInterpret, renderProps))),
 	})
 }
 
