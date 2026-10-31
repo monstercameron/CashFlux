@@ -7,6 +7,8 @@ package ui
 import (
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
@@ -95,7 +97,12 @@ func radioOption(props radioOptionProps) uic.Node {
 	if option.TestID != "" {
 		args = append(args, Attr("data-testid", option.TestID))
 	}
-	args = append(args, option.Label)
+	if option.Icon == "" {
+		args = append(args, option.Label)
+		return Button(args...)
+	}
+	args = append(args, Attr("aria-label", option.Label), Attr("title", option.Label),
+		Icon(option.Icon, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
 	return Button(args...)
 }
 

@@ -840,7 +840,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	}
 	onSearch := func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Search = v }) }
 
-	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
 	// Menu items take plain funcs (the item owns its click hook), so the transfer opener is one too.
 	openTransfer := func() { transferAtom.Set(true) }
 	// AC1: open the account-group manager. When at least one group exists, jump
@@ -901,15 +900,20 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	typeOpts := withAllOption(uistate.T("accounts.allTypes"),
 		uiw.OptionsFrom(types, func(s string) string { return s }, func(s string) string { return humanizeType(s) }, ""))
 
-	archLabel := uistate.T("accounts.showArchived")
+	archivedValue := "hide"
 	if f.ShowArchived {
-		archLabel = uistate.T("accounts.hideArchived")
+		archivedValue = "show"
 	}
 	filtersBody := Div(css.Class("filter-fields"),
 		filterSelect(uistate.T("accounts.filterType"), f.Type, typeOpts, func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Type = v }) }),
-		withFieldLabel(uistate.T("accounts.archived"),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(f.ShowArchived)),
-				Attr("data-testid", "acct-toggle-archived"), OnClick(onToggleArch), Text(archLabel))),
+		withFieldLabel(uistate.T("accounts.archived"), uiw.RadioGroup(uiw.RadioGroupProps{
+			Label: uistate.T("accounts.archived"), Value: archivedValue,
+			Options: []uiw.RadioOption{
+				{Value: "hide", Label: uistate.T("accounts.hideArchived"), Icon: icon.EyeOff, TestID: "acct-archived-hide"},
+				{Value: "show", Label: uistate.T("accounts.showArchived"), Icon: icon.Eye, TestID: "acct-archived-show"},
+			},
+			OnChange: func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = v == "show" }) },
+		})),
 	)
 
 	chips := []uiw.Chip{}

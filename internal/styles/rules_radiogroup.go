@@ -32,7 +32,7 @@ func registerRadioGroup() {
 		minHeight("2.25rem"), padding("0 0.9rem"),
 		border("1px solid transparent"), borderRadius("calc(var(--radius-lg) - 3px)"),
 		background("transparent"), color("var(--text-dim)"),
-		fontSize("var(--fs-body)"), fontWeight("500"), lineHeight("1"), cursor("pointer"),
+		fontSize("var(--fs-body)"), fontWeight("500"), lineHeight("1"), cursor("pointer"), whiteSpace("nowrap"),
 		prop("transition", "color 220ms ease, background-color 180ms ease, border-color 180ms ease, transform 120ms ease"),
 	)
 	rule(".radio-option:hover:not(.is-checked):not(.is-disabled)",
@@ -54,6 +54,10 @@ func registerRadioGroup() {
 	)
 	// The sliding indicator is the selection itself, so it still moves under reduced motion.
 	// Only the option hover and colour transitions stop.
+	// Inside the filters panel the group fills its column, so the choices sit side by side.
+	rule(".filter-fields .radio-group",
+		display("grid"), width("100%"),
+	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".radio-option",
 		prop("transition", "none"),
 	)

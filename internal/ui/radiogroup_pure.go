@@ -2,12 +2,17 @@
 
 package ui
 
+import "github.com/monstercameron/CashFlux/internal/icon"
+
 // RadioOption is one choice in a RadioGroup.
 type RadioOption struct {
 	// Value is what the group reports when this option is chosen.
 	Value string
-	// Label is the visible text.
+	// Label is the visible text, or the accessible name when Icon is set.
 	Label string
+	// Icon, when set, shows a glyph in place of the text. Label still names the option
+	// for assistive technology and as a tooltip.
+	Icon icon.Name
 	// TestID is an optional test id for the option.
 	TestID string
 	// Disabled keeps the option visible but not selectable, and skips it with the arrow keys.
