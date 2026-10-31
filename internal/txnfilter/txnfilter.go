@@ -199,10 +199,10 @@ func (c Criteria) ResolvePeriod(now time.Time) Criteria {
 	case key == PeriodThisMonth:
 		c.From, c.To = monthBounds(now.Year(), now.Month())
 	case key == PeriodLastMonth:
-		last := now.AddDate(0, -1, 0)
+		last := dateutil.AddMonths(dateutil.MonthStart(now), -1)
 		c.From, c.To = monthBounds(last.Year(), last.Month())
 	case key == PeriodLastThreeMonths:
-		from := now.AddDate(0, -2, 0)
+		from := dateutil.AddMonths(dateutil.MonthStart(now), -2)
 		c.From, _ = monthBounds(from.Year(), from.Month())
 		_, c.To = monthBounds(now.Year(), now.Month())
 	case key == PeriodThisYear:
@@ -243,12 +243,12 @@ func InferPeriodPreset(from, to string, now time.Time) string {
 	if from == thisFrom && to == thisTo {
 		return PeriodThisMonth
 	}
-	last := now.AddDate(0, -1, 0)
+	last := dateutil.AddMonths(dateutil.MonthStart(now), -1)
 	lastFrom, lastTo := monthBounds(last.Year(), last.Month())
 	if from == lastFrom && to == lastTo {
 		return PeriodLastMonth
 	}
-	threeAgo := now.AddDate(0, -2, 0)
+	threeAgo := dateutil.AddMonths(dateutil.MonthStart(now), -2)
 	threeFrom, _ := monthBounds(threeAgo.Year(), threeAgo.Month())
 	if _, threeTo := monthBounds(now.Year(), now.Month()); from == threeFrom && to == threeTo {
 		return PeriodLastThreeMonths

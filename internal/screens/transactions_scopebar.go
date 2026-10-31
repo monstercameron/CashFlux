@@ -8,6 +8,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnscope"
@@ -239,10 +240,10 @@ func txnScopePresetRange(value string, now time.Time) (from, to, key string, ok 
 		from, to = txnscope.MonthBounds(now)
 		key, ok = txnfilter.PeriodThisMonth, true
 	case "last-month":
-		from, to = txnscope.MonthBounds(now.AddDate(0, -1, 0))
+		from, to = txnscope.MonthBounds(dateutil.AddMonths(dateutil.MonthStart(now), -1))
 		key, ok = txnfilter.PeriodLastMonth, true
 	case "last-three-months":
-		from, _ = txnscope.MonthBounds(now.AddDate(0, -2, 0))
+		from, _ = txnscope.MonthBounds(dateutil.AddMonths(dateutil.MonthStart(now), -2))
 		_, to = txnscope.MonthBounds(now)
 		key, ok = txnfilter.PeriodLastThreeMonths, true
 	case "this-year":
@@ -277,11 +278,11 @@ func txnScopePreset(f uistate.TxFilter, now time.Time) string {
 	if f.From == monthFrom && f.To == monthTo {
 		return "this-month"
 	}
-	lastFrom, lastTo := txnscope.MonthBounds(now.AddDate(0, -1, 0))
+	lastFrom, lastTo := txnscope.MonthBounds(dateutil.AddMonths(dateutil.MonthStart(now), -1))
 	if f.From == lastFrom && f.To == lastTo {
 		return "last-month"
 	}
-	threeFrom, _ := txnscope.MonthBounds(now.AddDate(0, -2, 0))
+	threeFrom, _ := txnscope.MonthBounds(dateutil.AddMonths(dateutil.MonthStart(now), -2))
 	if f.From == threeFrom && f.To == monthTo {
 		return "last-three-months"
 	}
