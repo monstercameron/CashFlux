@@ -224,35 +224,6 @@ func registerTxnControls() {
 		outline("2px solid var(--accent)"),
 		outlineOffset("-2px"),
 	)
-	rule(".txn-responsive-toolbar .txn-viewtoggle",
-		boxSizing("border-box"),
-		minHeight("44px"),
-		padding("3px"),
-		gap("2px"),
-		borderRadius("var(--radius-md)"),
-		background("var(--bg-elev)"),
-	)
-	rule(".txn-responsive-toolbar .txn-viewtoggle-btn",
-		minHeight("36px"),
-		gap(".4rem"),
-		padding(".4rem .7rem"),
-		borderRadius("var(--radius-md)"),
-		fontSize("var(--fs-body)"),
-		fontWeight("500"),
-	)
-	rule(".txn-responsive-toolbar .txn-viewtoggle-btn:not([aria-pressed=\"true\"]):hover",
-		background("var(--hover)"),
-		color("var(--text)"),
-	)
-	rule(".txn-responsive-toolbar .txn-viewtoggle-btn[aria-pressed=\"true\"]",
-		background("color-mix(in srgb, var(--accent) 17%, var(--bg-card))"),
-		color("var(--text)"),
-		boxShadow("inset 2px 0 0 var(--accent)"),
-	)
-	rule(".txn-responsive-toolbar .txn-viewtoggle-btn:focus-visible",
-		outline("2px solid var(--accent)"),
-		outlineOffset("-2px"),
-	)
 	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .filter-toolbar-primary",
 		flexDirection("column"),
 		alignItems("stretch"),

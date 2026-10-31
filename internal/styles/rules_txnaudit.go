@@ -159,45 +159,6 @@ func registerTxnAudit() {
 	)
 	// Ledger / Calendar: a segmented pair, so which view is showing is legible from
 	// the fill rather than from which one is missing. aria-pressed carries the same
-	// fact to assistive tech.
-	rule(".txn-viewtoggle",
-		display("inline-flex"),
-		alignItems("center"),
-		borderRadius("var(--radius-pill)"),
-		border("1px solid var(--border)"),
-		background("var(--bg-card)"),
-		overflow("hidden"),
-	)
-	rule(".txn-viewtoggle-btn",
-		display("inline-flex"),
-		alignItems("center"),
-		gap(".3rem"),
-		padding(".25rem .7rem"),
-		border("0"),
-		background("transparent"),
-		color("var(--text-dim)"),
-		font("inherit"),
-		fontSize("var(--fs-body)"),
-		cursor("pointer"),
-		whiteSpace("nowrap"),
-	)
-	rule(".txn-viewtoggle-btn:hover",
-		color("var(--text)"),
-	)
-	rule(".txn-viewtoggle-btn[aria-pressed=\"true\"]",
-		background("var(--accent)"),
-		color("#fff"),
-	)
-	ruleContentMax(contentGrid1, ".txn-viewtoggle-btn span",
-		position("absolute"),
-		width("1px"),
-		height("1px"),
-		padding("0"),
-		margin("-1px"),
-		overflow("hidden"),
-		whiteSpace("nowrap"),
-		border("0"),
-	)
 
 	// --- C569: the ledger says it is re-sorting until the new order is painted --
 	// The rows dim while a sort is in flight, so a fast click-and-read cannot mistake

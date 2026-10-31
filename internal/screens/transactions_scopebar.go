@@ -297,23 +297,17 @@ func txnScopePreset(f uistate.TxFilter, now time.Time) string {
 	return "custom"
 }
 
-// txnViewToggle renders the Ledger/Calendar switch on the secondary toolbar row.
+// txnViewToggle renders the Ledger/Calendar switch on the secondary toolbar row. It is the
+// shared RadioGroup the Accounts page uses for its single-choice views.
 func txnViewToggle(_ struct{}) ui.Node {
 	viewAtom := uistate.UseTxnViewMode()
-	calendar := viewAtom.Get() == uistate.TxnViewCalendar
-	showLedger := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.TxnViewTable) }))
-	showCalendar := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.TxnViewCalendar) }))
-	return Div(css.Class("txn-viewtoggle"), Attr("role", "group"),
-		Attr("aria-label", uistate.T("txnperiod.viewLabel")),
-		Button(css.Class("txn-viewtoggle-btn"), Type("button"),
-			Attr("data-testid", "txn-view-ledger"),
-			Attr("aria-pressed", ariaBool(!calendar)), OnClick(showLedger),
-			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T("txnperiod.viewLedger"))),
-		Button(css.Class("txn-viewtoggle-btn"), Type("button"),
-			Attr("data-testid", "txn-view-calendar"),
-			Attr("aria-pressed", ariaBool(calendar)), OnClick(showCalendar),
-			uiw.Icon(icon.Calendar, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T("txnperiod.viewCal"))),
-	)
+	return uiw.RadioGroup(uiw.RadioGroupProps{
+		Label: uistate.T("txnperiod.viewLabel"),
+		Value: viewAtom.Get(),
+		Options: []uiw.RadioOption{
+			{Value: uistate.TxnViewTable, Label: uistate.T("txnperiod.viewLedger"), TestID: "txn-view-ledger"},
+			{Value: uistate.TxnViewCalendar, Label: uistate.T("txnperiod.viewCal"), TestID: "txn-view-calendar"},
+		},
+		OnChange: func(v string) { viewAtom.Set(v) },
+	})
 }
