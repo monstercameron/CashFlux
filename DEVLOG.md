@@ -35151,3 +35151,30 @@ The disposable account's session is now revoked after the first hosted sign-in, 
 ## 2026-10-21 — Gate releases on hosted corrupt-copy recovery
 
 The controlled hosted login regression is short and uses only CI's local backend and a disposable account. It now carries the deploy-gate tag so a future change that exposes financial screens or overwrites an unreadable checkpoint after session revocation prevents release. The same test remains in the full Chromium suite. No live production account or file is involved.
+## 2026-10-21 — Verify whole-device browser erasure before release
+
+The erasure audit found that the old Settings action cleared only the active dataset while leaving files, inactive workspaces, queued sync, scoped keys, and caches. The new branch coordinates open tabs, leaves Wasm before deletion, removes recognized CashFlux storage families, and verifies a second inventory before showing success. It preserves the server copy and uses a nonpersonal marker to prevent sample data from reappearing. During review, an active stamped service worker was found to route the standalone eraser to the app shell; the eraser files are now precached and navigations served directly so offline erasure works. The old `cf.artifactSalt` localStorage key was added to the removal set. A waiting tab now verifies storage itself rather than interpreting marker removal as proof. Disposable Chromium tests pass for two UI-created workspaces with real image files, two-tab deletion, offline worker control, blocked database retry, and marker removal; Node erasure and worker tests and a focused Wasm handoff test pass. The user's production account and Chrome profile were not touched. A safe post-release production check remains.
+
+## 2026-10-21 — Align the old session-erase regression with the new handoff
+
+The existing ENC39 Wasm test still asserted that a session-delete failure must prevent erasure and that the household is wiped in memory before navigation. Whole-device erasure now leaves Wasm and verifies browser stores on its own page, so those assertions checked the removed design. The test uses an isolated localStorage shim and observes the standalone eraser navigation after either a failed server revoke or a failed local credential delete. It confirms that in-memory household data is unchanged before the handoff and that a failed credential delete retains the credential for the eraser to remove. The focused Wasm test passes.
+
+## 2026-10-21 — Reconcile the sync privacy review with the erasure branch
+
+The file-sync review still described the old in-memory wipe as current after the standalone eraser was implemented on the draft branch. It now records the disposable-browser evidence for whole-device deletion while keeping deployment and browser-engine validation open. The independent gap remains per-artifact blob garbage collection across snapshots and workspaces.
+
+## 2026-10-21 — Keep device erasure within its service-worker scope
+
+Review found that the standalone eraser matched any worker script named `sw.js` on the origin. On a shared origin, that could remove another application's registration. It now resolves CashFlux's own worker URL from the eraser document and compares both origin and path, allowing its build query parameter while leaving other registrations alone. A Node test verifies both cases, and the offline Chromium erasure test still passes with a controlled CashFlux worker.
+
+## 2026-10-21 — Require confirmed intent before automatic erasure
+
+The standalone eraser originally started whenever a browser opened its `#start` URL, including through a direct external link. The Settings confirmation now creates a random 128-bit ticket in localStorage and passes that ticket in the navigation fragment. The standalone page automatically erases only when the ticket in its fragment matches the locally stored one. A disposable Chromium test verifies that both a direct link without a ticket and a guessed ticket with an unmatched pending marker leave local data intact. The five existing browser cases passed in the same run; after correcting a same-document navigation in the new test, its focused rerun passed too. The focused Wasm session test passed. No production browser storage was accessed.
+
+## 2026-10-21 — Gate releases on device-erasure privacy behavior
+
+The required CI workflow previously ran only the service-worker unit suite, and its `@prod` browser subset omitted the new erasure cases. It now runs the device-erasure unit suite alongside the worker checks and includes two Chromium cases in the deploy gate: real image files created in two workspaces are removed, and an unconfirmed direct link cannot delete local data. These cases use disposable contexts and do not access production storage.
+
+## 2026-10-21 — Keep the at-rest write guard aligned with the erasure ticket
+
+The native CI job on an earlier draft commit failed because the storage guard still allowed only the fixed `pending` value for the eraser's localStorage coordination marker. The confirmed erasure flow now writes a random ticket. The guard exception remains limited to `markDeviceErasePending`, that exact marker key, and its `ticket` identifier; other direct browser-storage writes still fail. The local at-rest package tests pass after the update.

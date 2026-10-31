@@ -26,6 +26,24 @@
     </script>
 
     <script>
+      // A device erase is completed outside Wasm. Every other open app tab
+      // leaves its IndexedDB connections before the erasing tab deletes them.
+      (function () {
+        var marker = "cashflux:erase-in-progress";
+        function leave() {
+          window.__cashfluxErasePending = true;
+          location.replace(new URL("./erase-device.html#wait", document.baseURI));
+        }
+        try {
+          if (localStorage.getItem(marker)) leave();
+          window.addEventListener("storage", function (event) {
+            if (event.key === marker && event.newValue) leave();
+          });
+        } catch (e) { /* the erasure page reports unavailable storage */ }
+      })();
+    </script>
+
+    <script>
       /* GX9-F3: apply the saved theme synchronously BEFORE the boot splash paints, so
          a light-mode user never sees a dark flash on cold start (WASM applies the theme
          too late, after mount). Mirrors uistate.resolveTheme: theme field on the
@@ -313,6 +331,7 @@
     <script src="./wasm_exec.js"></script>
     <script>
       (function () {
+        if (window.__cashfluxErasePending) return;
         const boot = document.getElementById("boot");
         const app = document.getElementById("app");
         const errorBox = document.getElementById("boot-error");

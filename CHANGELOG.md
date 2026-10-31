@@ -7,15 +7,22 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The deploy gate now runs device-erasure storage unit tests and browser cases for two-workspace file removal and direct-link safety.
 - The hosted corrupt-checkpoint and revoked-session browser regression now runs in the required deploy gate against CI's disposable local server.
 - The hosted corrupt-checkpoint regression now revokes the disposable account's session, reloads, and verifies that sign-in returns without exposing the financial shell or changing the unreadable bytes.
 - An isolated hosted-browser regression now verifies that sign-in with an unreadable local checkpoint keeps the financial shell hidden and preserves the exact checkpoint bytes through the empty-account recovery choice.
 - Authenticated server AI calls now record daily estimated USD cost alongside token usage. The operator console shows per-account estimates and marks historical or unpriced activity as incomplete; server logs contain model and usage totals without prompts or responses.
 
 ### Documentation
+- The sync privacy review now distinguishes the verified but undeployed whole-device erase from the still-open per-artifact garbage-collection gap.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The protected-storage guard now recognizes only the eraser's random coordination ticket as an allowed direct localStorage write, restoring the native CI gate.
+- Opening the standalone eraser URL directly can no longer start deletion. Automatic erasure requires the unguessable ticket written by the confirmed Settings action.
+- Device erasure now unregisters only the CashFlux service worker for its app path, leaving other workers on a shared origin alone.
+- The existing session-erasure Wasm regression now checks the standalone eraser handoff when server revocation or local credential removal fails, matching the verified browser flow.
+- Device erasure now leaves the app before deleting browser storage, coordinates open tabs, removes recognized CashFlux databases and caches plus legacy local records, and acknowledges completion only after a fresh storage inventory. Offline erasure and blocked-deletion retry are covered in disposable browsers.
 - AI Settings now owns the server/direct route switch and the corresponding key controls. Server mode accepts a separate key only when explicitly saved to the server; direct mode shows the device key and endpoint. Cloud settings no longer duplicates server AI setup, and the route switch leaves encrypted sync connected.
 - Hosted Cloud settings now rely on the account gate and show only protection or first sync tasks. An authentication rejection triggers a fresh account check, and an old check cannot validate a replacement session. Portable server choices sit under Advanced while the selected destination remains visible.
 - In server AI mode, the assistant and AI settings load the server's allowed models through authenticated gRPC instead of fetching directly from OpenAI in the browser. The settings text now describes the selected route and does not claim a device key is required when server AI is active.
