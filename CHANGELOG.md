@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Institutions save and validate through one appstate path with tests for the write and the refusal.
 - Account documents attach through one appstate call that checks the file, the account and the reference, and cancel cleanly on failure.
 - The flip panel moves focus into a new panel even where requestAnimationFrame is missing, such as the Node runner the wasm tests use.
 - The calendar liability test checks the current due-day copy and a pinned date, so it passes on every day of the month.

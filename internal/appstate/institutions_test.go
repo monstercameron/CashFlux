@@ -5,6 +5,7 @@ package appstate
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/acctproject"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 func TestInstitutionReassignOnDelete(t *testing.T) {
@@ -282,5 +284,30 @@ func TestProjectAccountReturnsReadErrorInsteadOfFlatProjection(t *testing.T) {
 	p, err := app.ProjectAccount("checking", asOf, 30)
 	if err == nil {
 		t.Fatalf("ProjectAccount returned %+v with no error although storage reads failed", p)
+	}
+}
+
+func TestProjectAccountReturnsRecurringReadError(t *testing.T) {
+	app := newApp(t, false)
+	ac := domain.Account{ID: "chk", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, OpeningBalance: money.New(100000, "USD")}
+	if err := app.PutAccount(ac); err != nil {
+		t.Fatal(err)
+	}
+	asOf := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := app.ProjectAccount(ac.ID, asOf, 30); err != nil {
+		t.Fatalf("ProjectAccount with a readable recurring table: %v", err)
+	}
+	// A recurring row that is valid JSON but not a recurring record makes only that table unreadable.
+	bad := []store.RecordChange{{Table: "recurring", ID: "bad", After: []byte(`[]`)}}
+	if err := app.Store().ReplayChanges(bad); err != nil {
+		t.Fatalf("inject unreadable recurring row: %v", err)
+	}
+	if _, err := app.AccountsChecked(); err != nil {
+		t.Fatalf("accounts must stay readable: %v", err)
+	}
+	p, err := app.ProjectAccount(ac.ID, asOf, 30)
+	if err == nil || !strings.Contains(err.Error(), "recurring") {
+		t.Fatalf("ProjectAccount = %+v, %v; want the recurring read error", p, err)
 	}
 }

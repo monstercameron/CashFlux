@@ -137,7 +137,11 @@ func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) 
 	if err != nil {
 		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s balance: %w", accountID, err)
 	}
-	return accountview.PrepareProjectionInputs(a.Recurring()).ProjectFor(acc, bal, asOf, horizonDays)
+	recurring, err := a.store.ListRecurring()
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s recurring flows: %w", accountID, err)
+	}
+	return accountview.PrepareProjectionInputs(withoutServices(recurring)).ProjectFor(acc, bal, asOf, horizonDays)
 }
 
 // --- AC17: document expiry reminders (reconciled against tasks) ---
