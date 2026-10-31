@@ -21,13 +21,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/idlecash"
 	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
-	"github.com/monstercameron/CashFlux/internal/provisional"
-	"github.com/monstercameron/CashFlux/internal/reconcile"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -107,7 +104,7 @@ type acctRowCallbacks struct {
 	OnArchive               func(domain.Account)
 	OnRefresh               func(domain.Account)
 	OnSave                  func(domain.Account)
-	OnSetBalance            func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
+	OnSetBalance            func(ac domain.Account, newBalStr, catID, asOfISO string)
 	OnTransfer              func(fromID, toID, amountStr, dateStr, desc string)
 	OnSetDefaultHousehold   func(string)
 	OnClearDefaultHousehold func()
@@ -241,59 +238,37 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			uistate.RequestPersist()
 			uistate.PostNotice(uistate.T("defaultAccount.memberCleared", name), false)
 		},
-		OnSetBalance: func(ac domain.Account, currentBal money.Money, newStr, catID, asOfISO string) {
-			dec := currency.Decimals(ac.Currency)
-			typed, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
+		OnSetBalance: func(ac domain.Account, newStr, catID, asOfISO string) {
+			typed, err := money.ParseMinor(strings.TrimSpace(newStr), currency.Decimals(ac.Currency))
 			if err != nil {
 				uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
 				return
 			}
-			// The figure is typed in the stated convention (negative is money owed), so convert
-			// it to the way this account holds balances at rest before it is posted.
-			conv, _ := reconcile.ConventionOf(ac, currentBal.Amount)
-			target := reconcile.Stored(typed, conv)
-			// The difference is posted as a provisional balance checkpoint, not as an
-			// ordinary adjustment. It moves the balance but is left out of reports, because
-			// the money was not earned or spent: the account simply held more than the
-			// ledger knew. Leaving the user to tag and delete these by hand produced
-			// adjustments that counted as income.
-			//
-			// Only one checkpoint per account stands at a time. A previous one is replaced,
-			// so checking a balance twice does not leave two entries explaining one gap.
-			now := time.Now()
-			// The date the balance was true as of. A figure read on Friday and
-			// entered on Monday belongs to Friday; an unparseable or absent one
-			// falls back to now rather than refusing the update over a date field.
-			asOf := now
+			// The date the balance was true as of. A figure read on Friday and entered on Monday
+			// belongs to Friday; an unparseable or absent one falls back to today.
+			asOf := time.Now()
 			if parsed, perr := dateutil.ParseDate(asOfISO); perr == nil && !parsed.IsZero() {
 				asOf = parsed
 			}
-			if cp, ok := provisional.New(id.New(), ac.ID, uistate.T("accounts.balanceCheckpointDesc"),
-				currentBal.Amount, target, ac.Currency, asOf, now); ok {
-				cp.CategoryID = catID
-				replaced := 0
-				app.BulkMutate(func() {
-					for _, old := range provisional.Of(ac.ID, app.Transactions()) {
-						if err := app.DeleteTransaction(old.ID); err == nil {
-							replaced++
-						}
-					}
-					if err := app.PutTransaction(cp); err != nil {
-						uistate.PostNotice(err.Error(), true)
-					}
-				})
-				if replaced > 0 {
-					uistate.PostNotice(uistate.T("accounts.balanceCheckpointReplaced", replaced), false)
-				}
-			}
-			ac.BalanceAsOf = time.Now()
+			// The account's own edits are saved first, so the preview reads the account as it now is.
 			if err := app.PutAccount(ac); err != nil {
 				uistate.PostNotice(err.Error(), true)
 				return
 			}
+			// The difference is posted as one provisional balance checkpoint, which replaces any
+			// earlier checkpoint for the account in the same atomic commit. It moves the balance but
+			// stays out of reports, because the money was not earned or spent.
+			preview, err := app.PreviewAccountReconciliation(ac.ID, typed, asOf)
+			if err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			if _, err := app.CommitAccountReconciliation(preview.WithCategory(catID), uistate.T("accounts.balanceCheckpointDesc")); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
 			uistate.BumpDataRevision()
-			// The balance set is posted as a provisional checkpoint. It moves the balance, stays
-			// out of reports, and is retired once a statement covers its date. The toast offers undo.
+			// The toast offers undo.
 			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(typed, ac.Currency))))
 		},
 		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) {

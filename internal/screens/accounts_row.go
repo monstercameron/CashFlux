@@ -69,7 +69,7 @@ type accountRowProps struct {
 	// OnSetBalance posts a balance adjustment that brings the account to newBalStr, the
 	// typed target. catID is the optional category (empty = uncategorized), and asOfISO
 	// is the date the balance was true as of (empty = today).
-	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
+	OnSetBalance func(ac domain.Account, newBalStr, catID, asOfISO string)
 	OnTransfer   func(fromID, toID string, amountStr string, dateStr string, desc string)
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
 	// When SmartSettings is zero-value the badge simply renders nothing (safe default).

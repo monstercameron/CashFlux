@@ -507,7 +507,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		// one write — so we must NOT also call OnSave (that would double-write the account and
 		// clobber the adjustment's freshness). When the value field is blank, it's a plain edit.
 		if strings.TrimSpace(setBalAmtS.Get()) != "" {
-			cbs.OnSetBalance(cp, curBal, setBalAmtS.Get(), setBalCatS.Get(), strings.TrimSpace(setBalAsOfS.Get()))
+			cbs.OnSetBalance(cp, setBalAmtS.Get(), setBalCatS.Get(), strings.TrimSpace(setBalAsOfS.Get()))
 		} else {
 			cbs.OnSave(cp)
 		}

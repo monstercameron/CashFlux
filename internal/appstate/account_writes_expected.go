@@ -35,6 +35,8 @@ type AccountReconciliationPreview struct {
 	CheckpointAmountMinor int64
 	CheckpointCount       int
 	CheckpointAction      string
+	// CategoryID files the balance checkpoint under a budget category. It is empty for no category.
+	CategoryID string
 
 	account              domain.Account
 	currentStated        int64
@@ -129,6 +131,13 @@ func (a *App) PreviewAccountReconciliation(accountID string, targetStatedMinor i
 	}, nil
 }
 
+// WithCategory returns the preview with its balance checkpoint filed under categoryID. Commit uses
+// the category when it writes the checkpoint.
+func (p AccountReconciliationPreview) WithCategory(categoryID string) AccountReconciliationPreview {
+	p.CategoryID = categoryID
+	return p
+}
+
 // CommitAccountReconciliation atomically replaces balance checkpoints and
 // updates BalanceAsOf only if the previewed account and its complete ledger
 // slice remain unchanged. A zero-delta confirmation is a no-op.
@@ -170,6 +179,7 @@ func (a *App) CommitAccountReconciliation(preview AccountReconciliationPreview, 
 		return domain.Transaction{}, fmt.Errorf("balance update: %w", err)
 	}
 	if create {
+		checkpoint.CategoryID = preview.CategoryID
 		accounts, err := a.store.ListAccounts()
 		if err != nil {
 			return domain.Transaction{}, fmt.Errorf("balance update: read accounts: %w", err)
