@@ -8396,7 +8396,7 @@ func registerGenerated() {
 	// popover paints over sibling cards instead of being covered by a later card in the
 	// grid (the hover transform makes each card its own stacking context). The card is
 	// position:relative, so z-index applies.
-	rule(".bento-goals .goal-card:has(.add-wrap [aria-expanded=\"true\"])",
+	rule(".bento-goals .goal-card:has(.add-wrap > .add-menu:not(.hidden-menu))",
 		zIndex("30"),
 	)
 	rule(".bento-goals .goal-card.is-soon",
@@ -11013,16 +11013,17 @@ func registerGenerated() {
 	rule(".add-item:hover, .add-item:focus-visible",
 		background("var(--hover)"),
 	)
-	// A bento tile whose overflow ("⋯ More") menu is open must rise above its neighbours,
-	// or the dropdown is painted UNDER the next tile and its items can't be clicked (each
-	// tile is its own stacking context). Scope to the open state via the trigger's
-	// aria-expanded so closed tiles keep their normal stacking.
-	rule(".w:has(.add-wrap button[aria-expanded=\"true\"])",
+	// A bento tile whose overflow ("⋯ More") menu is showing must rise above its neighbours,
+	// or the dropdown is painted UNDER the next tile and its items cannot be clicked (each
+	// tile is its own stacking context). Key on the menu being present, not on aria-expanded:
+	// the menu fades out after aria-expanded has turned false, and it keeps its stacking until
+	// it is gone. Closed tiles keep their normal stacking.
+	rule(".w:has(.add-wrap > .add-menu:not(.hidden-menu))",
 		position("relative"),
 		zIndex("40"),
 	)
 	// The open menu itself sits above sibling content within the raised tile.
-	rule(".add-wrap button[aria-expanded=\"true\"] + .add-menu",
+	rule(".add-wrap > .add-menu:not(.hidden-menu)",
 		zIndex("41"),
 	)
 	// Destructive overflow-menu item (e.g. Delete account): red text, red hover.
