@@ -22,9 +22,9 @@ func registerTxnControls() {
 	)
 	rule(".txn-responsive-toolbar .filter-toolbar-primary .fctrl-search",
 		boxSizing("border-box"),
-		minHeight("44px"),
+		minHeight("var(--field-h)"),
 		padding("0 .85rem"),
-		borderRadius("var(--radius-md)"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
 	)
