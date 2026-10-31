@@ -121,3 +121,26 @@ func TestParseDocExpiry(t *testing.T) {
 		t.Fatalf("invalid: %v", err)
 	}
 }
+
+func TestRemoveAccountDocumentReturnsStorageErrorAndKeepsArtifact(t *testing.T) {
+	app := newApp(t, false)
+	ac := docTestAccount(t, app)
+	if err := app.AttachAccountDocument(ac.ID, AccountDocumentInput{Name: "a.png", MIME: "image/png", Data: pngTestBytes}); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	artID := app.Artifacts()[0].ID
+	if err := app.Store().Close(); err != nil {
+		t.Fatal(err)
+	}
+	// With every read failing, the artifact must not be judged unreferenced.
+	if referenced, err := app.artifactStillReferenced(artID, ac); err == nil || referenced {
+		t.Fatalf("artifactStillReferenced = (%v, %v), want (false, storage error)", referenced, err)
+	}
+	err := app.RemoveAccountDocument(ac.ID, artID)
+	if err == nil {
+		t.Fatal("RemoveAccountDocument succeeded although storage reads failed")
+	}
+	if errors.Is(err, ErrAccountNotFound) {
+		t.Fatalf("a storage failure was reported as a missing account: %v", err)
+	}
+}

@@ -8,6 +8,24 @@ package styles
 // .acct-row rules still give the wrapper its column flow and indent the lines under the
 // name. Registered after the shared component rules.
 func registerAccountsS1() {
+	// The Budgets button rules give buttons a card background, a minimum size and padding. The
+	// account figure is a plain amount, so it drops those; the compound selector outranks them.
+	rule(".acct-row-figure.budget-limit-btn",
+		background("transparent"),
+		minWidth("0"),
+		minHeight("0"),
+		padding("0"),
+		borderRadius("0"),
+	)
+	// The balance figure is a button that also carries the Budgets limit-button class, whose
+	// own text colour would otherwise win over the amount tone. The compound selectors keep the
+	// tone for the account figure only: positive balances green, negative red.
+	rule(".acct-row-figure.amount-income",
+		color("var(--money-positive)"),
+	)
+	rule(".acct-row-figure.amount-expense",
+		color("var(--money-negative)"),
+	)
 	// The wrapper carries what the single .row used to: the divider above, the vertical
 	// padding and the hover wash.
 	rule(".acct-entity",

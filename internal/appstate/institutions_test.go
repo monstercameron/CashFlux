@@ -272,3 +272,15 @@ func TestReadersOnAnAppWithoutAStoreReturnNothing(t *testing.T) {
 		t.Errorf("BuildEmergencyPack = %+v, want an empty pack for the owner", pack)
 	}
 }
+
+func TestProjectAccountReturnsReadErrorInsteadOfFlatProjection(t *testing.T) {
+	app := newApp(t, false)
+	asOf := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	if err := app.Store().Close(); err != nil {
+		t.Fatal(err)
+	}
+	p, err := app.ProjectAccount("checking", asOf, 30)
+	if err == nil {
+		t.Fatalf("ProjectAccount returned %+v with no error although storage reads failed", p)
+	}
+}
