@@ -2481,7 +2481,7 @@ func registerGenerated() {
 	)
 	rule(".filter-toolbar-primary",
 		display("flex"),
-		alignItems("center"),
+		alignItems("stretch"),
 		gap("0.5rem"),
 	)
 	// The search pill grows to fill the WHOLE line; the Filters trigger holds its natural
