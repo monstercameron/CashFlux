@@ -2647,25 +2647,26 @@ func registerGenerated() {
 		marginBottom("0.8rem"),
 		overflow("hidden"),
 	)
-	// The panel fades in when it opens and fades out when it closes, both over 250ms, which
-	// matches filterPanelFadeMs. Its height grows and collapses over the same time, so the
-	// content below moves with it rather than jumping. Height runs to auto through
-	// interpolate-size, which browsers without it skip, leaving the fade alone. The panel
-	// stays mounted for the fade-out. Reduced motion turns all of this off.
-	keyframes("filter-panel-in",
-		at("0%", prop("opacity", "0"), prop("height", "0px")),
+	// Fading panels (the Filters panel and the More menu) fade in while they grow and fade out
+	// while they collapse, over 250ms to match panelFadeMs. Content is clipped while they move
+	// so nothing spills out; the open animation fills only forwards, so each panel returns to
+	// its own overflow rule (the More menu's submenus stay unclipped). Reduced motion turns
+	// all of this off.
+	keyframes("panel-fade-in",
+		at("0%", prop("opacity", "0"), prop("height", "0px"), prop("overflow", "hidden")),
+		at("99%", prop("overflow", "hidden")),
 		at("100%", prop("opacity", "1"), prop("height", "auto")),
 	)
-	keyframes("filter-panel-out",
-		at("0%", prop("opacity", "1"), prop("height", "auto")),
-		at("100%", prop("opacity", "0"), prop("height", "0px")),
+	keyframes("panel-fade-out",
+		at("0%", prop("opacity", "1"), prop("height", "auto"), prop("overflow", "hidden")),
+		at("100%", prop("opacity", "0"), prop("height", "0px"), prop("overflow", "hidden")),
 	)
-	ruleMedia("(prefers-reduced-motion: no-preference)", ".filter-inline-panel",
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".fade-panel",
 		prop("interpolate-size", "allow-keywords"),
-		prop("animation", "filter-panel-in 250ms ease-out both"),
+		prop("animation", "panel-fade-in 250ms ease-out backwards"),
 	)
-	ruleMedia("(prefers-reduced-motion: no-preference)", ".filter-inline-panel.is-leaving",
-		prop("animation", "filter-panel-out 250ms ease-in both"),
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".fade-panel.is-leaving",
+		prop("animation", "panel-fade-out 250ms ease-in both"),
 		prop("pointer-events", "none"),
 	)
 	// Transactions can opt into a right-side sheet without changing the shared

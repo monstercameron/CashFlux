@@ -116,7 +116,7 @@ func usePickerPlacement(open bool, id string, setPosition func(pickerPosition)) 
 		}
 		place()
 		window := js.Global().Get("window")
-		if !window.Truthy() {
+		if !window.Truthy() || window.Get("addEventListener").Type() != js.TypeFunction {
 			return nil
 		}
 		frame := js.Undefined()

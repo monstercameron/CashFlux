@@ -93,6 +93,7 @@ func OverflowMenu(props OverflowMenuProps) uic.Node {
 
 func overflowMenu(props OverflowMenuProps) uic.Node {
 	open := uic.UseState(false)
+	panelMounted := usePanelFade(open.Get())
 	// Stable per-instance id on the wrapper so the document-level dismissal
 	// listeners can tell clicks inside THIS menu from clicks in another instance
 	// (many overflow menus can be on a page at once).
@@ -162,9 +163,14 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		triggerArgs = append(triggerArgs, Attr("data-testid", props.TriggerTestID))
 	}
 
-	menuClass := "add-menu"
+	shown := open.Get() || panelMounted
+	menuClass := "add-menu fade-panel"
 	if !open.Get() {
-		menuClass += " hidden-menu"
+		if panelMounted {
+			menuClass += " is-leaving"
+		} else {
+			menuClass += " hidden-menu"
+		}
 	}
 	menuArgs := []any{ClassStr(menuClass), Attr("role", "menu")}
 	// Sections (C572): a heading is emitted the first time a section name appears.
@@ -178,7 +184,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	// which is both valid ARIA and what the existing keyboard handling expects.
 	// Items with no Section stay unlabelled at the top, which is what an unsectioned
 	// menu (every other caller) renders today.
-	if open.Get() {
+	if shown {
 		lastSection := ""
 		for _, item := range props.Items {
 			if item.Hidden {
@@ -213,7 +219,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		wrapClass += " overflow-menu-open"
 	}
 	var menu uic.Node = Fragment()
-	if open.Get() || props.ExtraContent != nil {
+	if shown || props.ExtraContent != nil {
 		menu = Div(menuArgs...)
 	}
 	return Div(css.Class(wrapClass), Attr("id", id), Button(triggerArgs...), menu)
@@ -384,7 +390,10 @@ func anchorOverflowMenu(isOpen bool, wrapID string) {
 			if r.Get("right").Float() > vw-margin {
 				cl.Call("add", "open-left")
 			}
-			if r.Get("bottom").Float() > boundaryBottom {
+			// The menu grows in over its fade, so judge its flip and height by the height it
+			// settles at, not the height it has reached.
+			fullHeight := max(r.Get("height").Float(), menu.Get("scrollHeight").Float())
+			if r.Get("top").Float()+fullHeight > boundaryBottom {
 				cl.Call("add", "open-up")
 			}
 			wr := w.Call("getBoundingClientRect")
@@ -392,7 +401,7 @@ func anchorOverflowMenu(isOpen bool, wrapID string) {
 			if cl.Get("contains").Type() == js.TypeFunction && cl.Call("contains", "open-up").Bool() {
 				avail = wr.Get("top").Float() - boundaryTop - 6
 			}
-			if r.Get("height").Float() > avail && avail > 80 {
+			if fullHeight > avail && avail > 80 {
 				st.Set("maxHeight", fmt.Sprintf("%.0fpx", avail))
 				st.Set("overflowY", "auto")
 			}

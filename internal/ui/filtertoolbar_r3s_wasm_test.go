@@ -5,6 +5,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
@@ -41,7 +42,7 @@ func TestR3SFilterSheetFooterClearsAndCloses(t *testing.T) {
 	doneButton.Click()
 	f.Stabilize()
 	for _, node := range f.AllByTag("div") {
-		if node.Attr("id") == "filter-inline-panel" {
+		if node.Attr("id") == "filter-inline-panel" && !strings.Contains(node.Attr("class"), "is-leaving") {
 			t.Fatal("Done left the filter sheet open")
 		}
 	}

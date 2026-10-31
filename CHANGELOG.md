@@ -30,6 +30,7 @@ and every commit updates this file under `Unreleased`.
 - The multi-select is a shared component: a standard field trigger and a sheet that opens beside it. It closes when focus leaves it, and it re-renders only when the sheet actually moves.
 - The filter field and the Archived choice use the Filters button's border and active tints, and sit at the same height so they line up.
 - The Filters panel fades and grows in over 250ms when it opens, and fades and collapses over the same time when it closes, so the content below moves with it. Reduced motion turns this off.
+- The More menu fades and grows in the same way, and it anchors by the height it settles at, so it flips up or left correctly while it is still growing.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.

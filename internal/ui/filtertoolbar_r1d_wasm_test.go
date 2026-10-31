@@ -36,8 +36,8 @@ func TestR1DFilterSheetIsOptIn(t *testing.T) {
 		sheet bool
 		want  string
 	}{
-		{name: "existing inline default", want: "filter-inline-panel"},
-		{name: "opt-in right sheet", sheet: true, want: "filter-inline-panel filter-sheet"},
+		{name: "existing inline default", want: "filter-inline-panel fade-panel"},
+		{name: "opt-in right sheet", sheet: true, want: "filter-inline-panel fade-panel filter-sheet"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := render.New(t)
