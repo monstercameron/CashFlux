@@ -134,6 +134,10 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	if trigClass == "" {
 		trigClass = "btn"
 	}
+	// An open menu keeps its trigger highlighted, the same state the Filters button shows.
+	if open.Get() {
+		trigClass += " is-open"
+	}
 	trigIcon := props.TriggerIcon
 	if trigIcon == "" {
 		trigIcon = icon.MoreH
