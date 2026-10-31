@@ -72,6 +72,13 @@ func accountVarEntities(as []domain.Account) []varEntity {
 	return out
 }
 
+// textField is one text value the variable-name helper reads and writes. A ui.State[string] is one,
+// and so is a field of a form draft (see draftTextOf), so the helper serves both kinds of form.
+type textField interface {
+	Get() string
+	Set(string)
+}
+
 // entityVarState is what useEntityVarField hands back: the live variable-name value plus
 // the input handlers to wire onto the name field and the var-name field, and a Reset for
 // add forms to clear both the value and the touched flag after a successful add.
@@ -95,7 +102,7 @@ func (s entityVarState) Reset() {
 // the user edits the var field — keeps the variable field auto-filled with the slug of the
 // name. initialVar seeds the field (an existing entity's VarName); a non-empty seed counts
 // as "touched" so a saved handle isn't clobbered by a later rename.
-func useEntityVarField(kind entityVarKind, nameS ui.State[string], initialVar string) entityVarState {
+func useEntityVarField(kind entityVarKind, nameS textField, initialVar string) entityVarState {
 	varS := ui.UseState(initialVar)
 	touchedS := ui.UseState(initialVar != "")
 	onName := ui.UseEvent(func(v string) {

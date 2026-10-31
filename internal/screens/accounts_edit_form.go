@@ -1070,7 +1070,7 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				// "Other" is the catch-all type with no natural asset/liability class, so let the
 				// user say whether it's a debt — that's what the net-worth and debt formulas read.
 				If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), css.Class(css.New(tw.CursorPointer)),
-					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiabS.Get())...)...),
+					Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), CheckedIf(asLiabS.Get()), OnChange(onToggleAsLiab)),
 					Div(css.Class("row-main"),
 						Span(uistate.T("accounts.countAsLiability")),
 						Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint"))))),
@@ -1163,13 +1163,13 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 					P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("-0.35rem 0 0")))), uistate.T("accounts.beneficiaryNoteHint")),
 					// Keep this account visible in its class views but out of net worth.
 					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), css.Class(css.New(tw.CursorPointer)),
-						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
+						Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), CheckedIf(x.exclNWS.Get()), OnChange(x.onToggleExclNW)),
 						Div(css.Class("row-main"),
 							Span(uistate.T("accountsstmt.excludeNetWorth")),
 							Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
 					// Stale-balance reminders: opt out for good, or snooze until a date.
 					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), css.Class(css.New(tw.CursorPointer)),
-						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), OnChange(x.onToggleFreshExempt)}, checkedAttr(x.freshExemptS.Get())...)...),
+						Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), CheckedIf(x.freshExemptS.Get()), OnChange(x.onToggleFreshExempt)),
 						Div(css.Class("row-main"),
 							Span(uistate.T("accounts.freshExempt")),
 							Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.freshExemptHint")))),
