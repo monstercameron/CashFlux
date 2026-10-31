@@ -1208,17 +1208,20 @@ func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
 				Button(css.Class("row-desc-text txn-description-edit"), Type("button"), Attr("data-testid", "txn-description-edit"), Title(r.Desc),
 					Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), r.Desc, r.Date, r.Amount)), OnClick(edit), r.Desc),
 				Span(ClassStr("txn-desc-account"), r.Account),
-				txnRowDescriptionBadge(r),
-				If(r.Cleared, txnRowClearedGlyph()),
-				If(r.HasNote, ui.CreateElement(txnRowNote, txnRowNoteProps{Note: r.Note})),
-				If(props.SaveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), props.SaveStatus)),
-				If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0, FollowUps: r.FollowUps,
-					OnReceipt: func() {
-						if r.OnViewReceipt != nil {
-							r.OnViewReceipt(r.Attachment)
-						}
-					}, OnFollowUps: r.OnOpenFollowUps})),
 				ui.CreateElement(txnRowTags, r),
+				// The status glyphs share one fixed column at the right of the cell, so the same
+				// marks line up down the ledger whatever the length of the description.
+				Span(css.Class("txn-desc-status"),
+					txnRowDescriptionBadge(r),
+					If(r.Cleared, txnRowClearedGlyph()),
+					If(r.HasNote, ui.CreateElement(txnRowNote, txnRowNoteProps{Note: r.Note})),
+					If(props.SaveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), props.SaveStatus)),
+					If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0, FollowUps: r.FollowUps,
+						OnReceipt: func() {
+							if r.OnViewReceipt != nil {
+								r.OnViewReceipt(r.Attachment)
+							}
+						}, OnFollowUps: r.OnOpenFollowUps}))),
 			),
 		),
 	)

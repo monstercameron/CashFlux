@@ -19,10 +19,10 @@ func registerUXT5() {
 		flexDirection("column"), alignItems("stretch"), gap("0"),
 	)
 	rule(".txn-table td.row-desc-cell .txn-desc-mainline",
-		display("flex"), flexWrap("wrap"), alignItems("center"), gap("0.4rem"), minWidth("0"), width("100%"),
+		display("flex"), flexWrap("nowrap"), alignItems("center"), gap("0.4rem"), minWidth("0"), width("100%"),
 	)
 	rule(".txn-table td.row-desc-cell .txn-desc-tags",
-		alignSelf("flex-start"), maxWidth("100%"), width("100%"), height("19px"), flex("0 0 19px"),
+		alignSelf("center"), minWidth("0"), maxWidth("100%"), flex("0 1 auto"),
 	)
 	rule(".txn-row-info:hover, .txn-row-info:focus-visible",
 		background("var(--hover)"), color("var(--text)"),

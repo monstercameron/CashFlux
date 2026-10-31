@@ -8,6 +8,20 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// The description takes the spare width and truncates. The status marks sit in one fixed,
+	// right-aligned column so the same marks line up down the ledger.
+	rule(".bento-ledger .txn-table .txn-desc-mainline > .row-desc-text",
+		flex("1 1 auto"),
+	)
+	rule(".bento-ledger .txn-table .txn-desc-status",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("flex-end"),
+		gap("0.35rem"),
+		flex("0 0 auto"),
+		minWidth("7.5rem"),
+		whiteSpace("nowrap"),
+	)
 	// Every ledger row is one line high. Secondary detail (follow-ups, the note, the automatic
 	// category line) opens from the row's info or note popover, so nothing grows a row. The
 	// description clips and its tags truncate on the main line.
