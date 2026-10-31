@@ -1358,7 +1358,7 @@ func registerGenerated() {
 		borderColor("#e4e2dd !important"),
 		color("#1c1c1e"),
 	)
-	rule("[data-theme=\"light\"] .add-item:hover, [data-theme=\"light\"] .notify-item:hover",
+	rule("[data-theme=\"light\"] .notify-item:hover",
 		background("#efede8 !important"),
 		color("#1c1c1e"),
 	)
@@ -11003,15 +11003,20 @@ func registerGenerated() {
 		textAlign("left"),
 		padding(".5rem .7rem"),
 		borderRadius("5px"),
+		width("100%"),
+		boxSizing("border-box"),
 		background("transparent"),
-		border("0"),
+		border("1px solid transparent"),
 		color("var(--text)"),
 		cursor("pointer"),
 		font("inherit"),
 		fontSize("13px"),
 	)
+	// Hover and keyboard focus take the Filters button's active tints, so the menu highlights in
+	// the same colour as the control that opened it.
 	rule(".add-item:hover, .add-item:focus-visible",
-		background("var(--hover)"),
+		background("color-mix(in srgb, var(--accent) 12%, var(--bg-elev))"),
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
 	)
 	// A bento tile whose overflow ("⋯ More") menu is showing must rise above its neighbours,
 	// or the dropdown is painted UNDER the next tile and its items cannot be clicked (each
