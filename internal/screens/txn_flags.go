@@ -292,6 +292,8 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 		}
 	}))
 	closePopover := func() { open.Set(false) }
+	// Handler options register hooks, so this one sits ahead of the early return.
+	toggleClick := OnClick(toggle)
 	if !props.HasReceipt && !hasDetail {
 		return Fragment()
 	}
@@ -310,7 +312,7 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 		Button(css.Class("txn-row-info"), ID(popoverID), Type("button"),
 			Attr("data-testid", "txn-row-info"), Attr("aria-label", uistate.T("uxt5.info", props.Text)),
 			Attr("aria-haspopup", hasPopup),
-			Attr("aria-expanded", ariaBool(open.Get())), Title(props.Text), OnClick(toggle), "i"),
+			Attr("aria-expanded", ariaBool(open.Get())), Title(props.Text), toggleClick, "i"),
 		popover,
 	)
 }
@@ -320,6 +322,8 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 // row has one.
 func txnRowInfoPreview(props txnRowInfoProps, viewReceipt, openFollowUps ui.Handler) ui.Node {
 	const maxShown = 5
+	// Handler options register hooks, so they sit at a fixed position ahead of every branch.
+	viewReceiptClick, openFollowUpsClick := OnClick(viewReceipt), OnClick(openFollowUps)
 	kids := []any{css.Class("txn-row-info-popover"), Attr("data-testid", "txn-row-info-preview")}
 	if !props.HasFollowUps {
 		if strings.TrimSpace(props.Text) != "" {
@@ -344,10 +348,10 @@ func txnRowInfoPreview(props txnRowInfoProps, viewReceipt, openFollowUps ui.Hand
 	}
 	exits := []any{css.Class("txnfu-pop-foot")}
 	if props.HasFollowUps {
-		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), OnClick(openFollowUps), uistate.T("uxt5.openFollowUpsAction")))
+		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), openFollowUpsClick, uistate.T("uxt5.openFollowUpsAction")))
 	}
 	if props.HasReceipt {
-		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-receipt"), OnClick(viewReceipt), uistate.T("uxt5.viewReceipt")))
+		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-receipt"), viewReceiptClick, uistate.T("uxt5.viewReceipt")))
 	}
 	if len(exits) > 1 {
 		kids = append(kids, Div(exits...))

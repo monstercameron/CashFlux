@@ -131,6 +131,7 @@ and every commit updates this file under `Unreleased`.
 - Quick add reports a failed save even when its panel has closed during the write.
 - Bulk Transactions actions: Escape and an outside click cancel the owner picker, and only Done applies it. A failed ledger read reports itself, an action with nothing to change says so, and the delete prompt counts transfer partners. The category picker's panel can be attached to a test fixture, and a row's busy state comes from its save state.
 - Modal footer buttons take their colours from the theme tokens, so Cancel and Save read in light mode as well as dark.
+- The Transactions row info popover keeps its handlers ahead of every branch, so the hook-order check passes again.
 
 ### Changed
 - The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.
