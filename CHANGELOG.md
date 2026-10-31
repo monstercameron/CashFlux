@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- One z-index scale on `:root`, for every layer above the page content: `--z-base`, `--z-raised`, `--z-sticky`, `--z-dropdown`, `--z-overlay`, `--z-popover`, `--z-modal`, `--z-dialog`, `--z-toast`, `--z-banner` and `--z-lock`. The app lock gate, the save-failure and update banners, the help and shortcut overlays, and the widget builder's status note now use these tokens instead of literal values. The app lock gate and banners keep a fallback value so they still stack without the stylesheet.
+
 ### Fixed
 - A confirm or prompt that opens from inside another modal now sits above it. The confirm host's panel sets `Topmost`, which lifts its backdrop to the `--z-dialog` layer. Before, it shared the modal layer, so the page's own modal could cover it.
 

@@ -275,7 +275,7 @@ func closeHelpOverlay() {
 func buildHelpOverlay(doc js.Value) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", helpOverlayID)
-	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:rgba(0,0,0,0.55);")
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:var(--z-modal);display:grid;place-items:center;background:rgba(0,0,0,0.55);")
 
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;padding:1.1rem 1.35rem;max-width:min(92vw,440px);box-shadow:0 12px 40px rgba(0,0,0,0.5);font-size:0.9rem;line-height:1.5;")
@@ -596,7 +596,7 @@ func openCommandPalette(doc, ov js.Value) {
 func buildCommandPalette(doc js.Value) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", cmdPaletteID)
-	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:210;display:grid;place-items:start center;padding-top:12vh;background:rgba(0,0,0,0.5);")
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:calc(var(--z-modal) + 1);display:grid;place-items:start center;padding-top:12vh;background:rgba(0,0,0,0.5);")
 	// GM4-3: label the backdrop so screen readers can identify the modal region.
 	ov.Call("setAttribute", "aria-label", uistate.T("cmd.search"))
 

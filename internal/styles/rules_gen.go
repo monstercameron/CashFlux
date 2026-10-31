@@ -43,7 +43,11 @@ func registerGenerated() {
 		// should follow the user's theme use var(--radius), everything else uses
 		// the fixed --radius-xs…xl scale below.
 		customProp("--radius", "0px"),
-		// Z-index scale — one place to reason about stacking order. Higher layer wins.
+		// Z-index scale — one place to reason about stacking order. Higher layer wins. Use these
+		// tokens for any layer that sits above the page content, so the order is the same across
+		// the app. A value local to one component (a fill behind its figures, a tick inside a bar)
+		// may stay a literal, since it only orders siblings inside that component.
+		customProp("--z-base", "0"),       // in-flow content
 		customProp("--z-raised", "5"),     // lifted-in-card fills / figs
 		customProp("--z-sticky", "20"),    // sticky headers / action bars
 		customProp("--z-dropdown", "50"),  // row ⋯ menus, selects
@@ -52,6 +56,8 @@ func registerGenerated() {
 		customProp("--z-modal", "3000"),   // flip-panel modals + their backdrop
 		customProp("--z-dialog", "3500"),  // confirm/prompt dialogs — above modals so they're answerable from within one
 		customProp("--z-toast", "4000"),   // toasts / notices (above everything)
+		customProp("--z-banner", "9000"),  // full-width app banners: save failure, update available
+		customProp("--z-lock", "9500"),    // app lock gate (above banners and everything)
 		colorScheme("dark"),
 		customProp("--font-ui", "Inter"),
 		customProp("--font-display", "'Fraunces'"),
