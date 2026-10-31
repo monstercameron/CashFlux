@@ -235,31 +235,17 @@ func setTxFilterOn(atom state.Atom[uistate.TxFilter], mut func(*uistate.TxFilter
 func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.AttachmentRef]) ui.Node {
 	dismiss := func() { previewAtom.Set(domain.AttachmentRef{}) }
 	ref := previewAtom.Get()
-	open := ref.ArtifactID != ""
 	art := domain.Artifact{}
-	if found := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); open && found != nil {
+	if found := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); ref.ArtifactID != "" && found != nil {
 		art = *found
 	}
 	url := useArtifactImageURL(app, art)
-	var dialog ui.Node
-	if open {
-		var body ui.Node
-		if url != "" {
-			body = Img(Attr("src", url), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
-		} else {
-			body = uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("transactions.previewMissing"))})
-		}
-		dialog = uiw.Card(uiw.CardProps{
-			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-				H2(css.Class("card-title"), Attr("id", "receipt-preview-title"), uistate.T("transactions.previewReceipt")),
-				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.previewClose")), Attr("data-testid", "receipt-preview-close"), closeOption, uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
-			),
-			Body: body,
-		})
+	if ref.ArtifactID == "" {
+		return Fragment()
 	}
 	var body ui.Node
-	if art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); art != nil && len(art.Bytes) > 0 {
-		body = Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
+	if url != "" {
+		body = Img(Attr("src", url), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
 	} else {
 		body = uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("transactions.previewMissing"))})
 	}

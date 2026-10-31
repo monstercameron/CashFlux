@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The receipt preview shows the synced image from the encrypted blob store again. It keeps the flip panel the Transactions modals now use, after the rebase onto main.
 - Goal write and FX display tests now compare with a saved goal baseline, so UTC runners still detect real persisted-money changes after JSON normalizes the original local timestamp.
 - Assistant browser tests now queue background model callbacks onto the fixture render scheduler and wait for the committed scroll result, preventing timing-dependent failures under the v7 runtime.
 - Server-model discovery now validates the document base URL before starting its worker and reports a connection error instead of crashing on an invalid URL.
