@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountedit"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -19,7 +20,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
-	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -476,87 +476,28 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		if entityVarCollision(accountVarKind, accountVarEntities(app.Accounts()), a.ID, varField.VarName.Get(), nameS.Get()) != "" {
 			return
 		}
-		cp := a
-		cp.Name = strings.TrimSpace(nameS.Get())
-		cp.VarName = strings.TrimSpace(varField.VarName.Get())
-		cp.OwnerID = ownerS.Get()
+		fields := accountedit.Fields{
+			Name: nameS.Get(), Type: typeS.Get(), Owner: ownerS.Get(), Currency: a.Currency,
+			Opening: balS.Get(), AsLiability: asLiabS.Get(), CreditLimit: climS.Get(), APR: aprS.Get(), APY: apyS.Get(),
+			MinPayment: minpS.Get(), DueDay: dueS.Get(), StatementDay: stmtDayS.Get(), Lender: lenderS.Get(),
+			ExpectedReturn: retS.Get(), Liquidity: liqS.Get(), Stability: stabS.Get(), LockUntil: lockS.Get(),
+			Institution: institutionS.Get(), InstitutionID: instIDS.Get(), Notes: notesS.Get(),
+			BeneficiaryNote: beneficiaryNoteS.Get(), RevalueDays: revalueDaysS.Get(), FreshnessExempt: freshExemptS.Get(),
+			SnoozeUntil: freshSnoozeS.Get(), ExcludeNetWorth: exclNWS.Get(), VarName: varField.VarName.Get(),
+		}
 		if splitOwnS.Get() {
-			cp.OwnershipShares = cloneSharesMap(sharesMapS.Get())
-		} else {
-			cp.OwnershipShares = nil
+			fields.Shares = sharesMapS.Get()
 		}
-		if ownerS.Get() == domain.GroupOwnerID {
-			cp.Scope = domain.ScopeShared
-		} else {
-			cp.Scope = domain.ScopeIndividual
+		cp, issues := accountedit.Apply(a, fields)
+		if len(issues) > 0 {
+			customErrS.Set(accountIssueMessage(issues[0]))
+			return
 		}
-		if amt, err := money.ParseMinor(strings.TrimSpace(balS.Get()), dec); err == nil {
-			cp.OpeningBalance = money.New(amt, a.Currency)
-		}
-		// Account type is editable (e.g. a line of credit → credit card, or an asset
-		// reclassified as a liability). The class follows the type, and the fields
-		// that don't belong to the new class are cleared so a reclassified account
-		// doesn't carry stale credit-limit/lock-until data.
-		selType := domain.AccountType(typeS.Get())
-		cp.Type = selType
-		cp.Class = selType.Class()
-		// "Other" accounts can be explicitly counted as a liability (debt) via the toggle,
-		// overriding the type's natural class so the liability formulas include them.
-		if selType == domain.TypeOther && asLiabS.Get() {
-			cp.Class = domain.ClassLiability
-		}
-		if cp.Class == domain.ClassLiability {
-			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
-			cp = applyRateAPR(cp, aprS.Get())
-			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
-			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
-			cp.StatementDay = textutil.ParseInt(stmtDayS.Get())
-			cp.Lender = strings.TrimSpace(lenderS.Get())
-			cp.ExpectedReturnAPR = 0
-			cp.APY = 0
-			cp.LiquidityScore = 0
-			cp.StabilityScore = 0
-			cp.LockUntil = time.Time{}
-		} else {
-			cp.ExpectedReturnAPR = textutil.ParseFloat(retS.Get())
-			cp.APY = textutil.ParseFloat(apyS.Get())
-			cp.LiquidityScore = textutil.ParseInt(liqS.Get())
-			cp.StabilityScore = textutil.ParseInt(stabS.Get())
-			if lu := strings.TrimSpace(lockS.Get()); lu != "" {
-				if d, err := dateutil.ParseDate(lu); err == nil {
-					cp.LockUntil = d
-				}
-			} else {
-				cp.LockUntil = time.Time{}
-			}
-			cp.CreditLimit = money.Money{}
-			cp = cp.WithoutRateAPR()
-			cp.MinPayment = money.Money{}
-			cp.DueDayOfMonth = 0
-			cp.StatementDay = 0
-			cp.Lender = ""
-		}
-		// Excluding from net worth applies to any account class.
-		cp.ExcludeFromNetWorth = exclNWS.Get()
-		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
-		cp.InstitutionID = instIDS.Get()
-		cp.Notes = strings.TrimSpace(notesS.Get())
-		// Beneficiary note: plain text, never a password.
-		cp.BeneficiaryNote = strings.TrimSpace(beneficiaryNoteS.Get())
-		// Revaluation cadence override in days (0 = the account type's default).
-		cp.RevalueDays = textutil.ParseInt(revalueDaysS.Get())
-		// Stale-balance controls: exemption + snooze-until (blank = no snooze).
-		cp.FreshnessExempt = freshExemptS.Get()
-		cp.FreshnessSnoozeUntil = time.Time{}
-		if s := strings.TrimSpace(freshSnoozeS.Get()); s != "" {
-			if d, derr := dateutil.ParseDate(s); derr == nil {
-				cp.FreshnessSnoozeUntil = d
-			}
-		}
+		customErrS.Set("")
 		if defs := app.CustomFieldDefsFor("account"); len(defs) > 0 {
-			custom, issues := customValuesToMap(defs, customEditVals.Get())
-			if len(issues) > 0 {
-				customErrS.Set(strings.Join(issues, " "))
+			custom, customIssues := customValuesToMap(defs, customEditVals.Get())
+			if len(customIssues) > 0 {
+				customErrS.Set(strings.Join(customIssues, " "))
 				return
 			}
 			cp.Custom = custom

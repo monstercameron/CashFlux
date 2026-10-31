@@ -9,13 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountedit"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -126,80 +125,42 @@ func copiedDraft(d accountDraft, ac domain.Account, baseCur string) accountDraft
 	return d
 }
 
-// accountFromDraft turns a draft into the account to save. It returns the message to show, or "" when
-// the draft is good. The message is a translated string, so the caller can show it as it is.
-func accountFromDraft(d accountDraft, accDefs []customfields.Def, varName string, now time.Time) (domain.Account, string) {
-	c := strings.ToUpper(strings.TrimSpace(d.Currency))
-	amt, err := money.ParseMinor(strings.TrimSpace(d.Amount), currency.Decimals(c))
-	if err != nil {
-		return domain.Account{}, uistate.T("accounts.invalidOpening")
+// accountFromDraft turns the draft into the account to save, using the shared account builder. It
+// returns the message to show, or "" when the draft is good.
+func accountFromDraft(d accountDraft, split bool, accDefs []customfields.Def, varName string, now time.Time) (domain.Account, string) {
+	acc, issues := accountedit.Apply(domain.Account{ID: id.New(), BalanceAsOf: now}, draftFields(d, split, varName))
+	if len(issues) > 0 {
+		return domain.Account{}, accountIssueMessage(issues[0])
 	}
-	typ := domain.AccountType(d.Type)
-	class := typ.Class()
-	if typ == domain.TypeOther && d.AsLiability {
-		class = domain.ClassLiability
-	}
-	scope := domain.ScopeIndividual
-	if d.Owner == domain.GroupOwnerID {
-		scope = domain.ScopeShared
-	}
-	acc := domain.Account{
-		ID: id.New(), Name: strings.TrimSpace(d.Name), OwnerID: d.Owner, Scope: scope,
-		Class: class, Type: typ, Currency: c,
-		OpeningBalance: money.New(amt, c), BalanceAsOf: now,
-		VarName: strings.TrimSpace(varName),
-	}
-	if class == domain.ClassLiability {
-		if cl, e := money.ParseMinor(strings.TrimSpace(d.CreditLimit), currency.Decimals(c)); e == nil && cl > 0 {
-			acc.CreditLimit = money.New(cl, c)
-		}
-		acc = applyRateAPR(acc, d.APR)
-		if mp, e := money.ParseMinor(strings.TrimSpace(d.MinPayment), currency.Decimals(c)); e == nil && mp > 0 {
-			acc.MinPayment = money.New(mp, c)
-		}
-		if dd, e := strconv.Atoi(strings.TrimSpace(d.DueDay)); e == nil {
-			acc.DueDayOfMonth = dd
-		}
-		acc.Lender = strings.TrimSpace(d.Lender)
-	} else {
-		if r, e := strconv.ParseFloat(strings.TrimSpace(d.ExpectedReturn), 64); e == nil {
-			acc.ExpectedReturnAPR = r
-		}
-		if l, e := strconv.Atoi(strings.TrimSpace(d.Liquidity)); e == nil {
-			acc.LiquidityScore = l
-		}
-		if s, e := strconv.Atoi(strings.TrimSpace(d.Stability)); e == nil {
-			acc.StabilityScore = s
-		}
-		if lu := strings.TrimSpace(d.LockUntil); lu != "" {
-			if date, e := dateutil.ParseDate(lu); e == nil {
-				acc.LockUntil = date
-			}
-		}
-	}
-	// MIA-extend (#445-10): normalise institution; pre-fill from lender when blank.
-	inst := titleCaseWords(strings.TrimSpace(d.Institution))
-	if inst == "" && acc.Lender != "" {
-		inst = titleCaseWords(acc.Lender)
-	}
-	acc.Institution = inst
 	custom, customIssues := customValuesToMap(accDefs, d.Custom)
 	if len(customIssues) > 0 {
 		return domain.Account{}, strings.Join(customIssues, " ")
 	}
 	acc.Custom = custom
-	if len(d.OwnerShares) > 0 {
-		shares := cloneSharesMap(d.OwnerShares)
-		sum := 0
-		for _, v := range shares {
-			sum += v
-		}
-		if sum != 100 {
-			return domain.Account{}, uistate.T("account.shareSumError", sum)
-		}
-		acc.OwnershipShares = shares
-	}
 	return acc, ""
+}
+
+// draftFields is the add form's draft as the shared account builder reads it.
+func draftFields(d accountDraft, split bool, varName string) accountedit.Fields {
+	return accountedit.Fields{
+		Name: d.Name, Type: d.Type, Owner: d.Owner, Currency: d.Currency, Opening: d.Amount,
+		AsLiability: d.AsLiability, CreditLimit: d.CreditLimit, APR: d.APR, MinPayment: d.MinPayment,
+		DueDay: d.DueDay, Lender: d.Lender, Institution: d.Institution,
+		ExpectedReturn: d.ExpectedReturn, Liquidity: d.Liquidity, Stability: d.Stability, LockUntil: d.LockUntil,
+		VarName: varName, Shares: sharesOrNil(d.OwnerShares, split),
+	}
+}
+
+// sharesOrNil returns the split-ownership map while the split is on, even when no share is entered yet,
+// so the builder can report a total that is not 100. It returns nil while the split is off.
+func sharesOrNil(shares map[string]int, split bool) map[string]int {
+	if !split {
+		return nil
+	}
+	if shares == nil {
+		return map[string]int{}
+	}
+	return shares
 }
 
 // draftTextOf binds one text field of the draft. It satisfies the get and set shape the shared
@@ -366,7 +327,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			form.SetFormError(warn)
 			return
 		}
-		acc, msg := accountFromDraft(d, accDefs, ev.VarName.Get(), time.Now())
+		acc, msg := accountFromDraft(d, splitOwn.Get(), accDefs, ev.VarName.Get(), time.Now())
 		if msg != "" {
 			form.SetFormError(msg)
 			return
