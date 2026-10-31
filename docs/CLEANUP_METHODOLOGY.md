@@ -85,6 +85,58 @@ These are the rules a new change should follow. Most are already in the code.
 - **Unused CSS is removed when found.** Dead dialog-scrim and dialog-backdrop rules were removed
   once nothing used them (`2119d707`).
 
+### Shared UI elements
+
+Build a page from these, not from a copy of one. Each lives in `internal/ui` and has a native or
+wasm test where its logic can be tested on its own.
+
+- **`FlipPanel`** (`flippanel.go`): every modal. See the Modals section.
+- **`ToolButton`** (`toolbutton.go`): every page action and toolbar button. The Filters button is the
+  reference, so every button shares one height, radius and text size (`b3e84e9a`, `ced94b7f`).
+- **`RadioGroup`** (`radiogroup.go`, with `radiogroup_pure.go`): one choice from a short list. It has
+  radiogroup semantics, a roving tab stop, and arrow-key movement. `RadioKeyTarget` is pure and
+  tested natively. The selection slides between options, and the slide stops under reduced motion
+  (`58529b4a`, `8b87e5e3`, `79411bed`).
+- **Multi-select** (`picker.go`): several choices from a list, styled from tokens and kept open
+  across picks (`e6878dc9`). The sheet's position comes from `pickerPanelPlacement`.
+- **`UseMenu` and `MenuControl`** (`menushell.go`): the state of every popover menu. The More menu,
+  the kebabs and the row menus share it (`b9a9245b`). The menu stays mounted through its fade-out.
+- **`UsePanelFade` and `FadeClass`** (`panelfade.go`): open and close animations for panels, with
+  reduced motion respected.
+- **`PageHeadline`, `PageHeadlineTrend`, `PageHeadlineFigure`, `PageHeadlineFact`**
+  (`pageheadline.go`): the summary that opens a list page. It reads in the same order on every page:
+  one large figure with a plain sentence beside it, then an optional gauge and supporting facts.
+  Budgets and Accounts share it (`31d144e8`).
+- **GWC DOM helpers** (`gwcdom.go`): `domNode`, `domValue`, `domSet`, `domDocument`. Use them for any
+  lookup in the browser, so the code does not touch raw JS.
+
+When a new control is needed, look here first. If a shared element nearly fits, extend it rather than
+making a second one.
+
+### Typed CSS
+
+Styles are Go, not strings.
+
+- **Rules live in `internal/styles/rules_*.go`**, one file per area. A rule is `rule(selector, decls...)`.
+  Responsive rules use `ruleMedia(query, selector, decls...)`, and `ruleContentMax` is for the
+  content-width breakpoints.
+- **Declarations use the typed constructors in `props_gen.go`**, such as `display`, `gap`,
+  `zIndex` and `gridTemplateColumns`. Use `prop("name", "value")` only for a property that has no
+  constructor yet, and add a constructor when a second file needs it.
+- **Unused constructors are removed** when their last use goes (`2119d707`).
+- **`rawBlock` is for CSS the typed helpers cannot say**, such as print rules. Do not use it for
+  ordinary declarations.
+- **Sizes come from tokens.** Text sizes are `--type-*` (`a8db1584`), headings are `--heading-*`
+  (`ba423ee0`), and controls use the shared button tokens (`ced94b7f`). Colours and sizes are not
+  hard-coded where a token exists.
+- **Z-index comes from the scale** (see the Z-index section).
+- **Only plain hex colours reach the stylesheet** from data. Institution colours are validated first
+  (`711beb4a`), so user data cannot inject CSS.
+
+**Still open:** inline `style` attributes and `cssText` strings are still in 46 non-test files (94
+occurrences). The Accounts sites are `accountaddform.go`, `budgets_row.go` and
+`budgets_income_alloc.go`, among others. Move them to typed rules as each area is touched.
+
 ### Render helpers
 
 Markup is built with the framework's helpers, not with Go `if` blocks around a variable.
