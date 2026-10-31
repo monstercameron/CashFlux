@@ -61,9 +61,10 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 			errMsg.Set(uistate.T("acctSweepCfg.pickTwo"))
 			return
 		}
-		keepMinor, _ := money.ParseMinor(keep.Get(), currency.Decimals(curOf[source]))
-		if keepMinor < 0 {
-			keepMinor = 0
+		keepMinor, err := money.ParseMinor(keep.Get(), currency.Decimals(curOf[source]))
+		if err != nil || keepMinor < 0 {
+			errMsg.Set(uistate.T("acctSweepCfg.keepInvalid"))
+			return
 		}
 		if _, err := app.PutSweepRule(domain.SweepRule{
 			SourceAccountID: source, DestAccountID: dest, KeepMinor: keepMinor,
@@ -135,7 +136,7 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 						Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), optionNodes(sweepFromOpts, src.Get()))),
 				labeledField(uistate.T("acctSweepCfg.keepAmount"),
 					Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
-						AriaLabel(uistate.T("acctSweepCfg.keepAmount")), Placeholder("3,000"),
+						AriaLabel(uistate.T("acctSweepCfg.keepAmount")), Placeholder("3000"),
 						Attr("data-testid", "sweep-cfg-keep"), OnInput(onKeep), uiw.FieldValue(keep.Get()))),
 				labeledField(uistate.T("accountsRedesign.sweepMoveTo"),
 					Select(css.Class("field"), AriaLabel(uistate.T("acctSweepCfg.dest")),

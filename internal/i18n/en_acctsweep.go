@@ -30,6 +30,7 @@ var acctSweepKeys = Catalog{
 	"acctSweepCfg.cadence":     "How often",
 	"acctSweepCfg.pickAccount": "Choose an account…",
 	"acctSweepCfg.pickTwo":     "Pick two different accounts.",
+	"acctSweepCfg.keepInvalid": "Enter the amount to keep as a plain number, such as 3000.",
 	"acctSweepCfg.add":         "Add sweep rule",
 	"acctSweepCfg.remove":      "Remove",
 	"acctSweepCfg.cadence7":    "Weekly",

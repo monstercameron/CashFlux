@@ -120,11 +120,9 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 		OnDelete: func(accountID string) {
 			// Refuse to delete an account that still has transactions, including the far
 			// leg of a transfer, because deleting it would orphan them. Archiving keeps history.
-			for _, t := range app.Transactions() {
-				if t.AccountID == accountID || t.TransferAccountID == accountID {
-					uistate.PostNotice(uistate.T("accounts.deleteHasTxns"), true)
-					return
-				}
+			if app.AccountHasTransactions(accountID) {
+				uistate.PostNotice(uistate.T("accounts.deleteHasTxns"), true)
+				return
 			}
 			name := ""
 			for _, ac := range app.Accounts() {

@@ -1031,6 +1031,22 @@ func (a *App) validateCustom(entityType string, custom map[string]any) error {
 	}
 	return is
 }
+
+// AccountHasTransactions reports whether any transaction books to the account, or runs a transfer leg through
+// it. Such an account cannot be deleted.
+func (a *App) AccountHasTransactions(accountID string) bool {
+	for _, t := range a.Transactions() {
+		if t.AccountID == accountID || t.TransferAccountID == accountID {
+			return true
+		}
+	}
+	return false
+}
+
+// ErrAccountHasTransactions is returned by DeleteAccount for an account that still has transactions,
+// including the far leg of a transfer. Deleting it would orphan them, so the account is archived instead.
+var ErrAccountHasTransactions = errors.New("appstate: account still has transactions")
+
 func (a *App) DeleteAccount(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
@@ -1038,6 +1054,11 @@ func (a *App) DeleteAccount(id string) error {
 	ds, err := a.store.Snapshot()
 	if err != nil {
 		return fmt.Errorf("appstate: snapshot before deleting account %q: %w", id, err)
+	}
+	for _, t := range ds.Transactions {
+		if t.AccountID == id || t.TransferAccountID == id {
+			return ErrAccountHasTransactions
+		}
 	}
 	accounts := ds.Accounts[:0]
 	found := false

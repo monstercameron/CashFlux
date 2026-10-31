@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/accountview"
@@ -53,11 +54,16 @@ func Accounts() ui.Node {
 	// whose document has since been renewed. It runs on mount only; per-change
 	// reconciles happen in accounts_docs.go when a document is attached or removed.
 	ui.UseEffect(func() func() {
-		if created, resolved, err := app.ReconcileDocExpiryTasks(time.Now(), docexpiry.DefaultLeadDays); err == nil && (created > 0 || resolved > 0) {
+		created, resolved, err := app.ReconcileDocExpiryTasks(time.Now(), docexpiry.DefaultLeadDays)
+		if err != nil {
+			slog.Warn("reconcile document expiry tasks", "err", err)
+			return nil
+		}
+		if created > 0 || resolved > 0 {
 			uistate.BumpDataRevision()
 		}
 		return nil
-	})
+	}, app)
 
 	filterAtom := uistate.UseAccountsFilter()
 	formulasAtom := uistate.UseAcctShowFormulas()
