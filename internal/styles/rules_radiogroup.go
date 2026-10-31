@@ -52,7 +52,9 @@ func registerRadioGroup() {
 	rule(".radio-option.is-disabled",
 		opacity("0.5"), cursor("not-allowed"),
 	)
-	ruleMedia("(prefers-reduced-motion: reduce)", ".radio-indicator, .radio-option",
+	// The sliding indicator is the selection itself, so it still moves under reduced motion.
+	// Only the option hover and colour transitions stop.
+	ruleMedia("(prefers-reduced-motion: reduce)", ".radio-option",
 		prop("transition", "none"),
 	)
 }
