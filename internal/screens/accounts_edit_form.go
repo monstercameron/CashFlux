@@ -582,8 +582,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// projected, and how the balance most recently moved. Adjustments are
 	// identified by the update-balance description (they're marked at the UI
 	// layer, not structurally).
-	var balancesNode ui.Node = Fragment()
-	if app != nil {
+	balancesNode := ui.If(app != nil, func() ui.Node {
 		provKind, provAt := ledger.BalanceProvenance(a.ID, app.Transactions(), isBalanceAdjustment)
 		provKey := map[ledger.ProvenanceKind]string{
 			ledger.ProvenanceOpening:  "accounts.provOpening",
@@ -613,7 +612,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 				Span(css.Class("t-caption", tw.TextDim), uistate.T(key)),
 				Span(Attr("data-testid", testid), val))
 		}
-		balancesNode = Div(css.Class("acct-bal-strip"), Attr("data-testid", "acct-bal-4way"),
+		return Div(css.Class("acct-bal-strip"), Attr("data-testid", "acct-bal-4way"),
 			css.Class(css.New(css.Display.Flex, tw.FlexWrap, css.Gap(css.Length("0.4rem 1.25rem")), css.Padding(css.Length("0.5rem 0.65rem")), css.Border(css.Px(1), css.Color("var(--border)")), css.Rounded(css.Px(8)), css.Margin(css.Length("0 0 0.6rem")))),
 			stat("accounts.balCurrent", fmtMoney(curBalStated), "acct-bal-current"),
 			stat("accounts.balCleared", fmtMoney(curCleared), "acct-bal-cleared"),
@@ -622,7 +621,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			Div(css.Class(css.New(css.Flex(css.Num(1), css.Num(1), css.Length("100%")))),
 				Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-bal-provenance"), provText)),
 		)
-	}
+	})
 
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
@@ -694,25 +693,27 @@ func signedDiffLabel(minor int64, sym string, dec int) string {
 func setBalanceNote(a domain.Account, curStated, targetStated int64) ui.Node {
 	delta := targetStated - curStated
 	isDebt := a.Class == domain.ClassLiability
-	var line ui.Node
-	switch {
-	case delta == 0:
-		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-			uistate.T("accounts.setBalanceNoAdjNeeded"))
-	case isDebt && reconcile.ClassifyChange(curStated, targetStated) == reconcile.ShapeDebtFalls:
-		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-			uistate.T("accounts.setBalanceDebtFalls", fmtMoney(money.New(delta, a.Currency))))
-	case isDebt && reconcile.ClassifyChange(curStated, targetStated) == reconcile.ShapeDebtRises:
-		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-			uistate.T("accounts.setBalanceDebtRises", fmtMoney(money.New(-delta, a.Currency))))
-	default:
-		signed := fmtMoney(money.New(delta, a.Currency))
-		if delta > 0 {
-			signed = "+" + signed
-		}
-		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
-			uistate.T("accounts.setBalanceDeltaPreview", signed))
-	}
+	line := ui.Match().
+		When(delta == 0, func() ui.Node {
+			return P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+				uistate.T("accounts.setBalanceNoAdjNeeded"))
+		}).
+		When(isDebt && reconcile.ClassifyChange(curStated, targetStated) == reconcile.ShapeDebtFalls, func() ui.Node {
+			return P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+				uistate.T("accounts.setBalanceDebtFalls", fmtMoney(money.New(delta, a.Currency))))
+		}).
+		When(isDebt && reconcile.ClassifyChange(curStated, targetStated) == reconcile.ShapeDebtRises, func() ui.Node {
+			return P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+				uistate.T("accounts.setBalanceDebtRises", fmtMoney(money.New(-delta, a.Currency))))
+		}).
+		Default(func() ui.Node {
+			signed := fmtMoney(money.New(delta, a.Currency))
+			if delta > 0 {
+				signed = "+" + signed
+			}
+			return P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
+				uistate.T("accounts.setBalanceDeltaPreview", signed))
+		})
 	warning := If(isDebt && reconcile.LooksLikeUnsignedDebt(curStated, targetStated), P(css.Class("t-caption"), Attr("data-testid", "setbal-unsigned-warning"),
 		uistate.T("accounts.setBalanceUnsignedDebt", fmtMoney(money.New(-targetStated, a.Currency)))))
 	return Div(line, warning)

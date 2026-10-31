@@ -47,8 +47,10 @@ These are the rules a new change should follow. Most are already in the code.
 - **One backdrop.** The backdrop comes from `flipBackdropClass`, and its look lives in one
   `.flip-backdrop` rule set (`2119d707`). The card's shadow sits on the wrapper, because the
   flip's 3D layer clips a shadow on the face into a hard-edged box.
-- **Confirms sit above modals.** `FlipPanelProps.Topmost` lifts a backdrop to `--z-dialog`. The
-  confirm host sets it (`5334b72c`).
+- **Stacking comes from GWC's overlay stack, not from CSS.** A managed overlay's backdrop gets its
+  z-index inline from the stack, and a deeper overlay (a confirm opened from a modal) sits above
+  the one below it. The `Topmost` flag added in `5334b72c` had no effect, because the inline
+  z-index wins over any class. It was removed afterwards. FlipPanel does not set z-index.
 - **Cancel is not an empty answer.** `PromptModalResult` returns an ok flag, so cancelling the
   set-institution prompt no longer clears the institution.
 
@@ -58,6 +60,11 @@ These are the rules a new change should follow. Most are already in the code.
   `--z-overlay`, `--z-popover`, `--z-modal`, `--z-dialog`, `--z-toast`, `--z-banner`, `--z-lock`.
 - **Use a token for any layer above the page.** A value local to one component (ordering
   siblings inside one card, for example) may stay a literal.
+- **Managed overlays are the exception.** FlipPanel and the other GWC overlays take their z-index
+  from GWC's stack, so a token on them does nothing. The `--z-modal` and `--z-dialog` values only
+  apply to layers the app positions itself, such as the app-level banners and the lock gate.
+  Verify with `getComputedStyle` in the browser; an inline `z-index` on the element overrides the
+  class.
 
 ### Browser and GWC
 
@@ -133,9 +140,13 @@ Styles are Go, not strings.
 - **Only plain hex colours reach the stylesheet** from data. Institution colours are validated first
   (`711beb4a`), so user data cannot inject CSS.
 
-**Still open:** inline `style` attributes and `cssText` strings are still in 46 non-test files (94
-occurrences). The Accounts sites are `accountaddform.go`, `budgets_row.go` and
-`budgets_income_alloc.go`, among others. Move them to typed rules as each area is touched.
+**Done on the Accounts pages:** the static inline styles in `accountaddform.go` are typed rules
+(`.acct-add-wide` and `.acct-liab-toggle` in `rules_accounts.go`). One inline style remains on
+purpose: the row's left border in `accounts_row.go` takes the institution's colour from data.
+
+**Still open outside the Accounts pages:** inline `style` attributes and `cssText` strings remain in
+46 non-test files (94 occurrences), for example `budgets_row.go` and `budgets_income_alloc.go`.
+Move them to typed rules as each area is touched.
 
 ### Render helpers
 
@@ -158,10 +169,10 @@ Anti-pattern: `var x ui.Node = Fragment()`, then `if cond { x = ... }`, then `x`
 Replace it with `ui.If` or `If`. This was done for the Accounts row and its notes, valuation change
 and delta (`22b9fedb`, `78c67d88`).
 
-**Still open:** about 11 sites on the Accounts pages keep the assign-in-an-`if` pattern:
-`accounts_edit_form.go` (balances, line), `accounts_forward.go` (read),
-`accounts_recurring.go` (body), `accounts_row.go` (projection, driver, details, chart) and
-`accounts_tiles.go` (body content, class segment). Each needs a browser check after it changes.
+**Done on the Accounts pages:** the assign-in-an-`if` sites in `accounts_edit_form.go`,
+`accounts_forward.go`, `accounts_recurring.go`, `accounts_row.go` and `accounts_tiles.go` now use
+`ui.If` or `ui.Match()`. The switch that chose the body in `accounts_tiles.go` is a `Match` too.
+Each was checked by the screens tests; the browser check is still to run.
 
 ### Comments
 
@@ -186,15 +197,17 @@ and delta (`22b9fedb`, `78c67d88`).
 | Overlay tests failed with "call to released function" | The renderer does not unmount between tests; `unmountFlipPanel` added to the FlipPanel tests |
 | FlipPanel initial focus landed on the header close button | Focus checked after open in the browser; bounded retry added |
 | Shadow around the flip modal clipped to a hard edge | Zoomed in the browser; a probe showed the 3D layer clipping the shadow |
-| Confirms could sit under a modal opened from another modal | Read the z-index scale in code; not yet confirmed in the browser |
+| Confirms could sit under a modal opened from another modal | Found in code. The fix attempted with a `Topmost` class did nothing: the browser showed GWC's inline z-index on the backdrop. The stack already orders nested overlays, as GWC's overlay test asserts |
 
 ## Open items
 
-- **Browser checks not completed.** The nested-confirm stacking and the final Set institution prompt
-  after the shadow fix were not checked in the browser. The dev page stopped responding to clicks
-  after hot reloads. A clean restart of the dev server would be the first step.
-- **Overflow menu section names** are not part of the item's accessible name. This is an
-  accessibility gap for a decision by the user.
+- **Nested-confirm stacking is not checked in the browser.** The stack's order is covered by GWC's
+  overlay test, not by a nested confirm in the app. A confirm opened from inside a modal should be
+  checked by hand.
+- **Overflow menu section names** were not part of an entry's accessible name, so a screen reader
+  could not tell which group an entry was in. Each entry now names its section as its accessible
+  description (`aria-describedby`), and each run of entries gets its own heading id. The heading
+  stays hidden from the accessibility tree, so it is not read twice.
 - **Ticket-tagged test files and ids** remain: `overflowmenu_tc4n11_wasm_test.go`,
   `overflowmenu_uxt4_wasm_test.go`, `flippanel_imv2_wasm_test.go`, `flippanel_tv8f_wasm_test.go`
   and the test id `tv8f-flip-body`. Renaming needs `git mv`.

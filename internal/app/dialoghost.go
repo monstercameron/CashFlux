@@ -125,6 +125,19 @@ func DialogHost() uic.Node {
 			OnInputHandler(onInput)))
 	}
 
+	// Quick picks fill the entry when one is chosen. Each pick is its own keyed component, so
+	// its click handler sits at a stable position however many picks there are.
+	if req.Kind == uistate.DialogPrompt && len(req.Choices) > 0 {
+		picks := MapKeyedComponent(req.Choices, func(c string) any { return c }, func(c string) uic.Node {
+			return Button(css.Class("btn btn-sm cf-dialog-choice"), Type("button"), Attr("data-testid", "cf-dialog-choice"),
+				OnClick(func() {
+					entry.Set(c)
+					ui.SetFieldValue(dialogInputID, c)
+				}), c)
+		})
+		fields = append(fields, Div(css.Class("cf-dialog-choices"), Attr("role", "group"), Attr("aria-label", uistate.T("dialog.quickPicks")), picks))
+	}
+
 	// Cancel is first in the bar and in tab order, so on a destructive confirm the safe choice
 	// comes first.
 	return ui.FlipPanel(ui.FlipPanelProps{
@@ -133,8 +146,6 @@ func DialogHost() uic.Node {
 		Height:    ui.FlipSmallH,
 		NoFooter:  true,
 		FlushBody: true,
-		// A confirm can open on top of another modal, so it sits in the confirm layer.
-		Topmost: true,
 		// Enter reaches OnSave. Escape, a backdrop click and the header close button reach
 		// OnClose, which is a cancel. finish ignores every answer after the first.
 		OnSave:  func() { finish(true) },

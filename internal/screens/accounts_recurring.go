@@ -87,8 +87,7 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 		Span(uistate.T("sm6.hint", len(cands))),
 		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
 
-	var body ui.Node = Fragment()
-	if open || listMounted {
+	body := ui.If(open || listMounted, func() ui.Node {
 		rows := make([]ui.Node, 0, len(cands))
 		for _, c := range cands {
 			rows = append(rows, ui.CreateElement(accountRecurRow, accountRecurRowProps{
@@ -97,8 +96,8 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 				Base:      base,
 			}))
 		}
-		body = Div(css.Class(uiw.FadeClass("acct-recur-list", open)), Attr("id", listID), rows)
-	}
+		return Div(css.Class(uiw.FadeClass("acct-recur-list", open)), Attr("id", listID), rows)
+	})
 	return Div(css.Class("acct-recur"), Attr("data-testid", "acct-recur-"+props.Account.ID), head, body)
 }
 

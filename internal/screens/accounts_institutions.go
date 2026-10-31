@@ -31,6 +31,23 @@ const defaultSwatchColor = "#7c83ff"
 
 // sortedInstitutions returns the household's institutions sorted by display name, so
 // the manager list and the edit-form picker present a stable, predictable order.
+// institutionChoices returns the names of the household's institutions, sorted and without
+// duplicates, for the quick picks in the set-institution prompt.
+func institutionChoices(insts map[string]domain.Institution) []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, in := range insts {
+		name := strings.TrimSpace(in.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func sortedInstitutions(app *appstate.App) []domain.Institution {
 	if app == nil {
 		return nil

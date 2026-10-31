@@ -74,19 +74,20 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 
 	// The reading comes first and the chart supports it. A shape alone leaves the
 	// reader to find the trough themselves, which is the one thing they came for.
-	var read ui.Node
-	switch {
-	case goesNegative:
-		read = Span(css.Class("row-meta", "acct-fwd-warn"),
-			Attr("data-testid", "acct-fwd-negative-"+a.ID),
-			uistate.T("accountsFwd.negative", fmtShortDate(negAt), fmtMoney(low)))
-	case p.Low < balance.Amount:
-		read = Span(css.Class("row-meta"), Attr("data-testid", "acct-fwd-low-"+a.ID),
-			uistate.T("accountsFwd.low", fmtMoney(low), fmtShortDate(p.LowDate), fmtMoney(end)))
-	default:
-		read = Span(css.Class("row-meta"), Attr("data-testid", "acct-fwd-rising-"+a.ID),
-			uistate.T("accountsFwd.rising", fmtMoney(end)))
-	}
+	read := ui.Match().
+		When(goesNegative, func() ui.Node {
+			return Span(css.Class("row-meta", "acct-fwd-warn"),
+				Attr("data-testid", "acct-fwd-negative-"+a.ID),
+				uistate.T("accountsFwd.negative", fmtShortDate(negAt), fmtMoney(low)))
+		}).
+		When(p.Low < balance.Amount, func() ui.Node {
+			return Span(css.Class("row-meta"), Attr("data-testid", "acct-fwd-low-"+a.ID),
+				uistate.T("accountsFwd.low", fmtMoney(low), fmtShortDate(p.LowDate), fmtMoney(end)))
+		}).
+		Default(func() ui.Node {
+			return Span(css.Class("row-meta"), Attr("data-testid", "acct-fwd-rising-"+a.ID),
+				uistate.T("accountsFwd.rising", fmtMoney(end)))
+		})
 
 	points := accountflow.Polyline(series, sparklineW, sparklineH, 2)
 	fig := If(points != "", Svg(css.Class("acct-spark acct-fwd-spark"), Attr("data-testid", "acct-fwd-spark-"+a.ID),

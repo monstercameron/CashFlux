@@ -1238,21 +1238,23 @@ func acctListWidget(props acctListProps) ui.Node {
 		)
 	}
 
-	var bodyContent ui.Node
-	switch {
-	case len(active) == 0:
-		bodyContent = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
-	case len(shown) == 0 && f.HasNarrowing():
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noMatch"))
-	case len(shown) == 0 && classView == string(domain.ClassLiability):
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noLiabilities"))
-	case len(shown) == 0:
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noAssets"))
-	case len(groups) > 0:
-		bodyContent = groupedBody()
-	default:
-		bodyContent = Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
-	}
+	bodyContent := ui.Match().
+		When(len(active) == 0, func() ui.Node {
+			return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
+		}).
+		When(len(shown) == 0 && f.HasNarrowing(), func() ui.Node {
+			return P(css.Class("empty"), uistate.T("accounts.noMatch"))
+		}).
+		When(len(shown) == 0 && classView == string(domain.ClassLiability), func() ui.Node {
+			return P(css.Class("empty"), uistate.T("accounts.noLiabilities"))
+		}).
+		When(len(shown) == 0, func() ui.Node {
+			return P(css.Class("empty"), uistate.T("accounts.noAssets"))
+		}).
+		When(len(groups) > 0, groupedBody).
+		Default(func() ui.Node {
+			return Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
+		})
 
 	// Collapsed-stale state: one summary line leads the list, its Mark-all reusing the
 	// toolbar action. Prepended so it sits above the (grouped or flat) rows.
@@ -1281,9 +1283,8 @@ func acctListWidget(props acctListProps) ui.Node {
 		}
 	}
 
-	var classSeg ui.Node = Fragment()
-	if hasLiab {
-		classSeg = uiw.RadioGroup(uiw.RadioGroupProps{
+	classSeg := ui.If(hasLiab, func() ui.Node {
+		return uiw.RadioGroup(uiw.RadioGroupProps{
 			Label: uistate.T("accounts.classFilterLabel"),
 			Value: classView,
 			Options: []uiw.RadioOption{
@@ -1300,7 +1301,7 @@ func acctListWidget(props acctListProps) ui.Node {
 				uistate.PersistAcctClass(v)
 			},
 		})
-	}
+	})
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: title,
@@ -1405,12 +1406,11 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 			BillPayment: snapshot.BillPayments[ac.ID], OnViewBills: viewBills,
 		})
 	}
-	var bodyContent ui.Node
-	if len(shown) == 0 {
-		bodyContent = P(css.Class("empty"), uistate.T("accounts.noMatch"))
-	} else {
-		bodyContent = Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
-	}
+	bodyContent := ui.If(len(shown) == 0, func() ui.Node {
+		return P(css.Class("empty"), uistate.T("accounts.noMatch"))
+	}, func() ui.Node {
+		return Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
+	})
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{Title: uistate.T("accounts.archived"), Body: bodyContent})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-archived", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

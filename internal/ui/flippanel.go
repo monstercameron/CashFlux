@@ -85,9 +85,6 @@ type FlipPanelProps struct {
 	// buttons, so the panel does not show two sets of buttons. The header close button,
 	// Escape and a backdrop click still dismiss via OnClose.
 	NoFooter bool
-	// Topmost lifts the backdrop above the other modals, to the confirm and prompt layer. Use it
-	// only for a dialog that can open on top of another modal, such as the app's confirm host.
-	Topmost bool
 }
 
 // FlipPanel is the settings overlay shared by per-widget and global settings and by the
@@ -176,7 +173,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		save()
 	})
 
-	backdropCls, innerCls := flipBackdropClass(shown.Get(), props.Topmost), "flip-inner"
+	backdropCls, innerCls := flipBackdropClass(shown.Get()), "flip-inner"
 	if shown.Get() {
 		innerCls += " flipped"
 	}
@@ -296,16 +293,13 @@ func flipPanel(props FlipPanelProps) uic.Node {
 
 // flipBackdropClass returns the class for the dimmed backdrop behind every FlipPanel. The look
 // lives in the one .flip-backdrop rule set in the styles package. show fades it in and blurs the
-// page behind, and topmost moves it up to the confirm layer.
-func flipBackdropClass(shown, topmost bool) string {
-	cls := "flip-backdrop"
-	if topmost {
-		cls += " flip-backdrop-top"
-	}
+// page behind. The stacking order is not set here: GWC's overlay stack sets the backdrop's z-index
+// inline, and a deeper overlay (a confirm opened from a modal) always sits above the one below it.
+func flipBackdropClass(shown bool) string {
 	if shown {
-		cls += " show"
+		return "flip-backdrop show"
 	}
-	return cls
+	return "flip-backdrop"
 }
 
 // flipPanelInitialFocusSelector returns the selector for the control that takes focus when a

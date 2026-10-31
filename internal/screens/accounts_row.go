@@ -421,7 +421,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// the same way the add form normalises it, with no modal in between.
 	setInstitution := ui.UseEvent(Prevent(func() {
 		menu.Set(false)
-		uistate.PromptModalResult(uistate.T("accounts.setInstitutionPrompt", a.Name), a.Institution, func(ok bool, v string) {
+		uistate.PromptModalChoices(uistate.T("accounts.setInstitutionPrompt", a.Name), a.Institution, institutionChoices(props.InstByID), func(ok bool, v string) {
 			if !ok {
 				return
 			}
@@ -514,37 +514,38 @@ func AccountRow(props accountRowProps) ui.Node {
 	// today's balance, it shows "→ ~$X low on <date>" with a "Why?" disclosure that lists
 	// the recurring drivers ("Rent −$1,400 on Mar 1"). Liabilities and valuation-type
 	// assets are skipped, because their balances are not cash curves.
-	var projNode ui.Node = Fragment()
 	cashCurve := a.Class != domain.ClassLiability && !isValuationType(a.Type)
-	if cashCurve && props.ProjectionErr != nil {
-		projNode = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
-	} else if cashCurve && props.Projection.HasLowDip() {
-		dec := currency.Decimals(a.Currency)
-		low := money.New(props.Projection.Low, a.Currency)
-		toggleLabel := uistate.T("accounts.projectedShow")
-		if projExpanded.Get() {
-			toggleLabel = uistate.T("accounts.projectedHide")
-		}
-		var driverNode ui.Node = Fragment()
-		if projExpanded.Get() || projMounted {
-			rows := []any{css.Class(uiw.FadeClass("acct-proj-drivers", projExpanded.Get())), Attr("data-testid", "acct-proj-drivers-"+a.ID),
-				Div(css.Class("row-meta", tw.TextDim), uistate.T("accounts.projectedDrivers"))}
-			for _, d := range props.Projection.Drivers {
-				amt := money.New(d.Amount, a.Currency)
-				rows = append(rows, Div(css.Class("row-meta"),
-					uistate.T("accounts.projectedDriver", d.Label, signedMoney(amt, dec), fmtShortDate(d.Date))))
+	projNode := ui.Match().
+		When(cashCurve && props.ProjectionErr != nil, func() ui.Node {
+			return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		}).
+		When(cashCurve && props.Projection.HasLowDip(), func() ui.Node {
+			dec := currency.Decimals(a.Currency)
+			low := money.New(props.Projection.Low, a.Currency)
+			toggleLabel := uistate.T("accounts.projectedShow")
+			if projExpanded.Get() {
+				toggleLabel = uistate.T("accounts.projectedHide")
 			}
-			driverNode = Div(rows...)
-		}
-		projNode = Div(css.Class("acct-proj"), Attr("data-testid", "acct-proj-"+a.ID),
-			Span(css.Class("row-meta"), Title(uistate.T("accounts.projectedTitle")),
-				AriaLabel(uistate.T("accounts.projectedLowAria", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
-				uistate.T("accounts.projectedLow", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
-			uiw.ToolButton(uiw.ToolButtonProps{Label: toggleLabel, Open: projExpanded.Get(), TestID: "acct-proj-toggle-" + a.ID},
-				AriaExpanded(projExpanded.Get()), OnClick(toggleProj)),
-			driverNode,
-		)
-	}
+			driverNode := ui.If(projExpanded.Get() || projMounted, func() ui.Node {
+				rows := []any{css.Class(uiw.FadeClass("acct-proj-drivers", projExpanded.Get())), Attr("data-testid", "acct-proj-drivers-"+a.ID),
+					Div(css.Class("row-meta", tw.TextDim), uistate.T("accounts.projectedDrivers"))}
+				for _, d := range props.Projection.Drivers {
+					amt := money.New(d.Amount, a.Currency)
+					rows = append(rows, Div(css.Class("row-meta"),
+						uistate.T("accounts.projectedDriver", d.Label, signedMoney(amt, dec), fmtShortDate(d.Date))))
+				}
+				return Div(rows...)
+			})
+			return Div(css.Class("acct-proj"), Attr("data-testid", "acct-proj-"+a.ID),
+				Span(css.Class("row-meta"), Title(uistate.T("accounts.projectedTitle")),
+					AriaLabel(uistate.T("accounts.projectedLowAria", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
+					uistate.T("accounts.projectedLow", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
+				uiw.ToolButton(uiw.ToolButtonProps{Label: toggleLabel, Open: projExpanded.Get(), TestID: "acct-proj-toggle-" + a.ID},
+					AriaExpanded(projExpanded.Get()), OnClick(toggleProj)),
+				driverNode,
+			)
+		}).
+		Default(nil)
 
 	// The row leads with one inline everyday action, "Transactions". The balance figure
 	// stays click-to-edit, which is the main update affordance. The explicit "Update
@@ -573,23 +574,21 @@ func AccountRow(props accountRowProps) ui.Node {
 	// The revealed block holds the extra detail. It mounts only while open, so the resting
 	// row stays a clean name-and-balance line. Child components own their hooks, so
 	// conditional mounting here is safe.
-	var detailsNode ui.Node = Fragment()
-	if detailsOpen.Get() || detailsMounted {
+	detailsNode := ui.If(detailsOpen.Get() || detailsMounted, func() ui.Node {
 		customText := customSummary(props.AccountDefs, a.Custom)
-		var chart ui.Node
 		validBalance := true
 		if props.DetailContext != nil {
 			_, validBalance = props.DetailContext.snapshot.Balances[a.ID]
 		}
-		if validBalance {
-			chart = accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange)
-		} else {
-			chart = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
-		}
+		chart := ui.If(validBalance, func() ui.Node {
+			return accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange)
+		}, func() ui.Node {
+			return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		})
 		// The panel is a grid: the period figures run across the top, the balance chart and
 		// the 90-day projection sit left, the reading and the account's facts sit right, and
 		// the documents and the institution share a footer line.
-		detailsNode = Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("id", "acct-details-"+a.ID), Attr("data-testid", "acct-details-"+a.ID),
+		return Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("id", "acct-details-"+a.ID), Attr("data-testid", "acct-details-"+a.ID),
 			flowNode,
 			Div(css.Class("acct-panel-chart"),
 				// The 90-day balance figure, with a 90d/12m/all range picker
@@ -626,7 +625,7 @@ func AccountRow(props accountRowProps) ui.Node {
 						OnClick(startEdit))),
 			),
 		)
-	}
+	})
 
 	return Div(css.Class("row acct-row"), Attr("data-testid", "acct-row-"+a.ID), Style(rowStyle),
 		// PRIMARY line: type glyph + name/badges on the left, the balance figure and the

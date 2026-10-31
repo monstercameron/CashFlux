@@ -7,6 +7,22 @@ package styles
 // sweep-rules add form. It also chains the reconcile-flow and stale-account rules.
 // Called from Register in install.go.
 func registerAccountsSurface() {
+	// The add-account form's full-width rows (the liability and ownership sub-forms, the
+	// advanced section) span both columns of the form grid.
+	rule(".acct-add-wide",
+		gridColumn("1 / -1"),
+	)
+	// The quick picks under a prompt's entry (the institutions already in the household) wrap onto
+	// as many lines as they need.
+	rule(".cf-dialog-choices",
+		display("flex"),
+		flexWrap("wrap"),
+		gap(".4rem"),
+	)
+	// The liability toggle is a label that opens a sub-form, so it reads as clickable.
+	rule(".acct-liab-toggle",
+		cursor("pointer"),
+	)
 	// --- account editor: the value group at the top of the form ---
 	// A subtly framed panel so the marquee account action (record a new value) reads as
 	// its own section, distinct from the account-detail fields below it.

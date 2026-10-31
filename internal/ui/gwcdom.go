@@ -54,6 +54,12 @@ func domValue(target interop.Value, method string, args ...any) interop.Value {
 	return result
 }
 
+// SetFieldValue sets the value of the form field with the given id, for a control whose text is
+// not bound to state. It does not fire an input event, so the caller updates its own copy.
+func SetFieldValue(id, value string) {
+	domSet(domNode(id), "value", value)
+}
+
 // domSet writes a property on a DOM value. The error is ignored, which suits style and attribute
 // writes on a node that may have already left the page.
 func domSet(target interop.Value, property string, value any) {

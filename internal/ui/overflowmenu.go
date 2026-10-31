@@ -120,20 +120,27 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	menuArgs := []any{ClassStr(menu.PanelClass()), Attr("role", "menu")}
 	if menu.Shown {
 		lastSection := ""
+		sectionID := ""
+		sectionRun := 0
 		for _, item := range props.Items {
 			if item.Hidden {
 				continue
 			}
 			if item.Section != lastSection {
 				lastSection = item.Section
+				sectionID = ""
 				if item.Section != "" {
+					// Each run of entries gets its own id, so two runs with one name never clash.
+					sectionRun++
+					sectionID = fmt.Sprintf("%s-section-%d", id, sectionRun)
 					menuArgs = append(menuArgs,
-						Div(css.Class("add-menu-section"), Attr("role", "presentation"), Attr("aria-hidden", "true"), item.Section))
+						Div(css.Class("add-menu-section"), Attr("id", sectionID), Attr("role", "presentation"), Attr("aria-hidden", "true"), item.Section))
 				}
 			}
 			menuArgs = append(menuArgs, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
 				Item:      item,
 				CloseMenu: func() { menu.Set(false) },
+				SectionID: sectionID,
 			}))
 		}
 	}
@@ -254,6 +261,10 @@ type overflowMenuItemProps struct {
 	// CloseSubmenu is set only on entries nested inside a submenu. It closes that submenu and
 	// returns focus to the parent entry.
 	CloseSubmenu func()
+	// SectionID is the id of the section heading this entry sits under. The entry names it as its
+	// accessible description, so a screen reader hears which group the entry is in. Empty for an
+	// entry with no section.
+	SectionID string
 }
 
 func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
@@ -320,8 +331,11 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	if len(item.Submenu) > 0 {
 		btnArgs = append(btnArgs, Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(submenuOpen.Get())))
 	}
-	// The visible label is also the accessible name. Section headings are visual only and are not
-	// part of the name.
+	// The visible label is the accessible name. The section heading is visual only, so it is not
+	// part of the name; the entry describes itself with the heading instead.
+	if props.SectionID != "" {
+		btnArgs = append(btnArgs, Attr("aria-describedby", props.SectionID))
+	}
 	if item.TestID != "" {
 		btnArgs = append(btnArgs, Attr("data-testid", item.TestID))
 	}

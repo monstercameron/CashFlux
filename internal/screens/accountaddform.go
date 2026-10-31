@@ -320,12 +320,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		// Name leads the form — the main path. (The "Copy an existing account…"
 		// shortcut is a secondary convenience, so it sits BELOW the name, not above
 		// it: an edge case shouldn't be the first field a new user meets.)
-		Div(Attr("style", "grid-column:1 / -1"),
+		Div(css.Class("acct-add-wide"),
 			labeledField(uistate.T("common.name"),
 				Input(append(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
 		// G5: the copy-existing starter (only once accounts exist to copy), demoted
 		// below the name field.
-		If(len(app.Accounts()) > 0, Div(Attr("style", "grid-column:1 / -1"),
+		If(len(app.Accounts()) > 0, Div(css.Class("acct-add-wide"),
 			labeledField(uistate.T("accounts.copyExisting"),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options: acctCopyOptions(app.Accounts()), Selected: "", TestID: "account-copy-existing",
@@ -340,8 +340,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			})),
 		// "Other" has no natural class — let the user mark it a liability (debt) so the
 		// net-worth/debt formulas count it.
-		If(isOther, Div(Attr("style", "grid-column:1 / -1"),
-			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+		If(isOther, Div(css.Class("acct-add-wide"),
+			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiab.Get())...)...),
 				Div(css.Class("row-main"),
 					Span(uistate.T("accounts.countAsLiability")),
@@ -446,7 +446,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			IfElse(advOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
 		// Optional explicit variable name for formulas/widgets — engine plumbing, behind
 		// the disclosure (same convention as the budgets and goals add forms).
-		If(advOpen.Get(), Div(Attr("style", "grid-column:1 / -1"),
+		If(advOpen.Get(), Div(css.Class("acct-add-wide"),
 			labeledField(uistate.T("accounts.varNameLabel"),
 				entityVarField(accountVarKind, accountVarEntities(app.Accounts()), "", "account-add-varname", "account-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),

@@ -30,7 +30,9 @@ type DialogRequest struct {
 	ConfirmLabel string // optional; defaults to Confirm, or Save for a prompt
 	Destructive  bool   // tint the confirm button as a destructive action
 	Secret       bool   // mask a prompt's entry, for a passcode
-	OnResult     func(ok bool, value string)
+	// Choices are quick-pick values shown under a prompt's entry. Choosing one fills the entry.
+	Choices  []string
+	OnResult func(ok bool, value string)
 }
 
 // UseDialog returns the shared atom holding the current dialog request, or nil when none
@@ -98,6 +100,17 @@ func PromptModal(message, def string, onResult func(string)) {
 // deliberately cleared the field.
 func PromptModalResult(message, def string, onResult func(ok bool, value string)) {
 	openPrompt(&DialogRequest{Kind: DialogPrompt, Message: message, Default: def}, func(ok bool, v string) {
+		if ok {
+			v = strings.TrimSpace(v)
+		}
+		onResult(ok, v)
+	})
+}
+
+// PromptModalChoices is PromptModalResult with quick-pick values shown under the entry. Choosing
+// one fills the entry, so a person can pick an existing name or type a new one.
+func PromptModalChoices(message, def string, choices []string, onResult func(ok bool, value string)) {
+	openPrompt(&DialogRequest{Kind: DialogPrompt, Message: message, Default: def, Choices: choices}, func(ok bool, v string) {
 		if ok {
 			v = strings.TrimSpace(v)
 		}
