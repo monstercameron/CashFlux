@@ -124,6 +124,7 @@ and every commit updates this file under `Unreleased`.
 - Template chips on the Transactions page have their delete control beside the pick button, not nested inside it, and the recategorise offer keeps its buttons outside its live status message.
 - Transaction modals (Add, Edit, the receipt preview, the bulk owner and category pickers, Duplicates, Import and Transfer review) and the Filters panel now use the standard flip panel. The category picker is a titled panel that sits above the form it opened from.
 - The Transactions calendar day hover card no longer dims the page or blocks the cells under it, and it is titled with its date. Week-total and moved amounts stay on one line, so every day cell keeps the same height.
+- Choosing the Ledger view while a calendar day is picked keeps that day, so clearing its filter returns to the calendar as it does from the day filter.
 
 ### Changed
 - The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.

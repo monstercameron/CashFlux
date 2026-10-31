@@ -309,7 +309,11 @@ func txnViewToggle(_ struct{}) ui.Node {
 			{Value: uistate.TxnViewCalendar, Label: uistate.T("txnperiod.viewCal"), TestID: "txn-view-calendar"},
 		},
 		OnChange: func(v string) {
-			drillAtom.Set(false)
+			// Choosing Ledger keeps a picked day open, so clearing its filter still returns to
+			// the calendar. Only choosing the calendar itself ends the day drill.
+			if v == uistate.TxnViewCalendar {
+				drillAtom.Set(false)
+			}
 			viewAtom.Set(v)
 		},
 	})
