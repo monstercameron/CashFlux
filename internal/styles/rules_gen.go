@@ -2647,6 +2647,17 @@ func registerGenerated() {
 		marginBottom("0.8rem"),
 		overflow("hidden"),
 	)
+	// The panel opens by unrolling from its top edge while it fades in and settles, so the
+	// controls arrive as one surface rather than popping in. It only runs on mount, which is
+	// when the panel opens; closing stays instant. Reduced motion turns it off.
+	keyframes("filter-panel-open",
+		at("0%", prop("clip-path", "inset(0 0 100% 0)"), prop("opacity", "0"), prop("transform", "translateY(-6px)")),
+		at("60%", prop("opacity", "1")),
+		at("100%", prop("clip-path", "inset(0 0 0 0)"), prop("opacity", "1"), prop("transform", "none")),
+	)
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".filter-inline-panel",
+		prop("animation", "filter-panel-open 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
+	)
 	// Transactions can opt into a right-side sheet without changing the shared
 	// toolbar's default inline disclosure on other pages.
 	rule(".filter-inline-panel.filter-sheet",
