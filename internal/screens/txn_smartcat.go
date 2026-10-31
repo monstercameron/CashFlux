@@ -85,19 +85,19 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	})
 }
 
-// applySmartCatCategories persists each selected category using the existing write path.
+// applySmartCatCategories creates the picked categories in one atomic write. A refused write
+// keeps the panel open with its reason, so no category is left half created.
 func applySmartCatCategories(app *appstate.App, s smartcatview.State, cats []domain.Category, close func()) {
-	created := 0
-	for _, c := range smartcatview.CategoryDrafts(s.Suggestions, s.Picked, cats) {
-		c.ID = id.New()
-		if err := app.PutCategory(c); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			continue
-		}
-		created++
+	drafts := smartcatview.CategoryDrafts(s.Suggestions, s.Picked, cats)
+	for i := range drafts {
+		drafts[i].ID = id.New()
 	}
-	if created > 0 {
-		uistate.PostNotice(uistate.T("smartcat.createdToast", textutil.Plural(created, "category")), false)
+	if err := app.PutCategoriesAtomic(drafts); err != nil {
+		uistate.PostNotice(err.Error(), true)
+		return
+	}
+	if len(drafts) > 0 {
+		uistate.PostNotice(uistate.T("smartcat.createdToast", textutil.Plural(len(drafts), "category")), false)
 	}
 	uistate.BumpDataRevision()
 	close()

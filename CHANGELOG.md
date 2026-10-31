@@ -127,6 +127,8 @@ and every commit updates this file under `Unreleased`.
 - Choosing the Ledger view while a calendar day is picked keeps that day, so clearing its filter returns to the calendar as it does from the day filter.
 - Month-end presets resolve from the first of the month. Last month and the last three months no longer roll into the current month on the 31st, and a stored September range is recognised as last month.
 - The Transactions calendar runs its hooks before the missing-rate branch, so the hook order holds when a rate goes missing.
+- Smart categorisation creates its picked categories in one atomic write. A refused write keeps the panel open with its reason, so no category is left half created.
+- Quick add reports a failed save even when its panel has closed during the write.
 
 ### Changed
 - The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.

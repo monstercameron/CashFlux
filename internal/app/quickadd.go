@@ -109,7 +109,6 @@ type quickAddSaveProps struct {
 func useQuickAddSave(p quickAddSaveProps) (func(func()), bool) {
 	saving := uic.UseState(false)
 	generation := uic.UseRef(uint64(0))
-	notice := uistate.UseNotice()
 	uic.UseEffect(func() func() {
 		generation.Set(generation.Get() + 1)
 		saving.Set(false)
@@ -144,14 +143,19 @@ func useQuickAddSave(p quickAddSaveProps) (func(func()), bool) {
 			}
 			return nil
 		}, func(err error) {
+			// A failed write is reported even if the panel closed while it was pending; only the
+			// form's own follow-up (close, or reset for save-and-add-another) depends on the panel.
+			if err != nil {
+				uistate.PostNotice(uistate.T("txint.transactionNotSaved"), true)
+				if generation.Get() == current {
+					saving.Set(false)
+				}
+				return
+			}
 			if generation.Get() != current {
 				return
 			}
 			saving.Set(false)
-			if err != nil {
-				notice.Set(notice.Get().With(uistate.T("txint.transactionNotSaved"), true))
-				return
-			}
 			if after != nil {
 				after()
 			}
