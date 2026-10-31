@@ -194,20 +194,21 @@ var (
 )
 
 // --- typography ---------------------------------------------------------------
-// Type-scale tokens carry Tailwind's font-size + line-height pair; arbitrary
+// Every size here reads the app's --type-* scale, so Go and CSS share one set of steps and all of them
+// follow the UI-scale setting. Type-scale tokens carry Tailwind's font-size + line-height pair; arbitrary
 // text-[..px] sets font-size only (Tailwind's arbitrary behavior).
 var (
-	TextXs   = []css.Rule{css.FontSize(css.Rem(0.75)), raw("line-height", "1rem")}
-	TextBase = []css.Rule{css.FontSize(css.Rem(1)), raw("line-height", "1.5rem")}
-	TextLg   = []css.Rule{css.FontSize(css.Rem(1.125)), raw("line-height", "1.75rem")}
+	TextXs   = []css.Rule{css.FontSize(css.Length("var(--type-12)")), raw("line-height", "1rem")}
+	TextBase = []css.Rule{css.FontSize(css.Length("var(--type-16)")), raw("line-height", "1.5rem")}
+	TextLg   = []css.Rule{css.FontSize(css.Length("var(--type-18)")), raw("line-height", "1.75rem")}
 
-	Text11  = css.FontSize(css.Px(11))
-	Text12  = css.FontSize(css.Px(12))
-	Text13  = css.FontSize(css.Px(13))
+	Text11  = css.FontSize(css.Length("var(--type-11)"))
+	Text12  = css.FontSize(css.Length("var(--type-12)"))
+	Text13  = css.FontSize(css.Length("var(--type-13)"))
 	Text135 = raw("font-size", "13.5px")
-	Text14  = css.FontSize(css.Px(14))
+	Text14  = css.FontSize(css.Length("var(--type-14)"))
 	Text15  = css.FontSize(css.Px(15))
-	Text18  = css.FontSize(css.Px(18))
+	Text18  = css.FontSize(css.Length("var(--type-18)"))
 	Text28  = css.FontSize(css.Px(28))
 
 	TextCenter = raw("text-align", "center")

@@ -51,6 +51,7 @@ and every commit updates this file under `Unreleased`.
 - The account row's details, projected-drivers, recurring-charges and documents disclosures fade and grow in, and fade out when they close, with the shared panel animation.
 - Every account row reserves its recurring-charges line, so rows with and without charges are the same height. The row's text sizes come from the type scale.
 - Expanding a row's recurring charges no longer overlaps the row below. The reserved line is a minimum height, so it grows to fit the list.
+- The shared tw text sizes read the --type-* scale, so the app's Go and CSS type steps match and follow the UI-scale setting. Sizes with no token (15, 28 and 13.5px) are unchanged.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.
