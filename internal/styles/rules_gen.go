@@ -7962,9 +7962,23 @@ func registerGenerated() {
 		flex("1 1 10rem"),
 		maxWidth("22rem"),
 		minWidth("9rem"),
+		minHeight("var(--field-h)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		background("var(--bg-elev)"),
+		transition("border-color .12s ease, box-shadow .12s ease"),
 	)
 	rule(".todo-ctrl-search.is-active, .fctrl-search.is-active",
 		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+	)
+	// Focus shows on the search box, not on the borderless input inside it, so the
+	// field reads as one edge with the accent ring the other inputs use.
+	rule(".fctrl-search:focus-within",
+		boxShadow("0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)"),
+	)
+	rule(".fctrl-input:focus, .fctrl-input:focus-visible",
+		outline("0"),
+		borderRadius("0"),
 	)
 	rule(".todo-search-input, .fctrl-input",
 		flex("1 1 auto"),
@@ -7974,11 +7988,6 @@ func registerGenerated() {
 		background("transparent"),
 		color("var(--text)"),
 		fontSize("0.9rem"),
-	)
-	rule(".fctrl-input:focus-visible",
-		outline("2px solid var(--accent)"),
-		outlineOffset("2px"),
-		borderRadius("var(--radius-xs)"),
 	)
 	rule(".todo-search-input::placeholder, .fctrl-input::placeholder",
 		color("var(--text-faint)"),

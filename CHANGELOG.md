@@ -32,6 +32,7 @@ and every commit updates this file under `Unreleased`.
 - Toolbar buttons (.btn-tool) take their height, padding and text size from the shared control and button tokens, matching the other buttons.
 - Transfer money moves into the Accounts settings menu, which reads More beside the dots icon.
 - The More menu sits on the Accounts search row beside Filters.
+- The toolbar search is a standard field: the same --border as the Filters button, the field radius and height, and an accent focus ring on the box rather than on the input inside it.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
