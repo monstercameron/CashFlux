@@ -2,25 +2,38 @@
 
 package styles
 
-// registerRadioGroup styles the shared radio group: a quiet track of choices where the
-// chosen one lifts in with a short settle, hover and press states respond at once, and
-// every transition stops under reduced motion.
+// registerRadioGroup styles the shared radio group. The options share equal columns, and
+// a single indicator slides between them as the choice changes, so the selection travels
+// from one radio to the next. Hover and press respond at once, and every motion stops
+// under reduced motion.
 func registerRadioGroup() {
-	keyframes("radioSettle",
-		at("from", transform("scale(0.94)")),
-		at("to", transform("scale(1)")),
-	)
 	rule(".radio-group",
-		display("inline-flex"), alignItems("center"), gap("2px"), padding("3px"),
+		position("relative"), display("inline-grid"), alignItems("stretch"), gap("2px"), padding("3px"),
+		prop("grid-template-columns", "repeat(var(--radio-count, 1), minmax(0, 1fr))"),
 		border("1px solid var(--border)"), borderRadius("var(--radius-md)"), background("var(--bg-card)"),
 	)
+	rule(".radio-indicator",
+		position("absolute"), top("3px"), bottom("3px"), left("3px"),
+		width("calc((100% - 6px) / var(--radio-count, 1))"),
+		borderRadius("calc(var(--radius-md) - 2px)"),
+		background("color-mix(in srgb, var(--accent) 22%, var(--bg-card))"),
+		border("1px solid var(--accent)"),
+		boxShadow("0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent)"),
+		zIndex("0"), pointerEvents("none"),
+		prop("transform", "translateX(calc(var(--radio-index, 0) * 100%))"),
+		prop("transition", "transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 180ms ease"),
+	)
+	rule(".radio-group.is-empty .radio-indicator",
+		opacity("0"),
+	)
 	rule(".radio-option",
+		position("relative"), zIndex("1"),
 		display("inline-flex"), alignItems("center"), justifyContent("center"),
 		minHeight("2.25rem"), padding("0 0.9rem"),
 		border("1px solid transparent"), borderRadius("calc(var(--radius-md) - 2px)"),
 		background("transparent"), color("var(--text-dim)"),
 		fontSize("var(--fs-body)"), fontWeight("500"), lineHeight("1"), cursor("pointer"),
-		prop("transition", "background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 120ms ease"),
+		prop("transition", "color 220ms ease, background-color 180ms ease, border-color 180ms ease, transform 120ms ease"),
 	)
 	rule(".radio-option:hover:not(.is-checked):not(.is-disabled)",
 		background("var(--bg-elev)"), borderColor("var(--border)"), color("var(--text)"),
@@ -32,15 +45,12 @@ func registerRadioGroup() {
 		outline("2px solid var(--accent)"), outlineOffset("2px"),
 	)
 	rule(".radio-option.is-checked",
-		background("color-mix(in srgb, var(--accent) 22%, var(--bg-card))"),
-		borderColor("var(--accent)"), color("var(--text)"), fontWeight("600"),
-		boxShadow("0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent)"),
-		prop("animation", "radioSettle 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
+		color("var(--text)"), fontWeight("600"),
 	)
 	rule(".radio-option.is-disabled",
 		opacity("0.5"), cursor("not-allowed"),
 	)
-	ruleMedia("(prefers-reduced-motion: reduce)", ".radio-option, .radio-option.is-checked",
-		prop("transition", "none"), prop("animation", "none"),
+	ruleMedia("(prefers-reduced-motion: reduce)", ".radio-indicator, .radio-option",
+		prop("transition", "none"),
 	)
 }

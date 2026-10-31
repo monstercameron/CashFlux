@@ -27,8 +27,9 @@ type RadioGroupProps struct {
 
 // RadioGroup renders a single-choice group with radiogroup semantics: each option is a
 // radio with aria-checked, only the chosen option sits in the tab order, and the arrow
-// keys, Home and End move and choose. The look lives in the radio-group styles, so every
-// page that uses it gets the same hover, focus and selection motion.
+// keys, Home and End move and choose. One indicator slides behind the chosen option, so
+// the selection travels from one choice to the next rather than fading in place. The
+// look lives in the radio-group styles, so every page gets the same motion.
 func RadioGroup(props RadioGroupProps) uic.Node {
 	return uic.CreateElement(radioGroup, props)
 }
@@ -39,7 +40,15 @@ func radioGroup(props RadioGroupProps) uic.Node {
 	if props.Class != "" {
 		class += " " + props.Class
 	}
+	index := radioIndex(props.Options, props.Value)
+	if index < 0 {
+		class += " is-empty"
+	}
 	return Div(ClassStr(class), Attr("role", "radiogroup"), Attr("aria-label", props.Label),
+		// Custom properties are written as a raw style attribute: the Style helper only sets
+		// standard properties, so the indicator would never see its index.
+		Attr("style", "--radio-count:"+strconv.Itoa(len(props.Options))+";--radio-index:"+strconv.Itoa(max(index, 0))),
+		Span(ClassStr("radio-indicator"), Attr("aria-hidden", "true")),
 		MapKeyed(props.Options, func(option RadioOption) any { return option.Value }, func(option RadioOption) uic.Node {
 			return uic.CreateElement(radioOption, radioOptionProps{Option: option, Group: props, GroupID: groupID})
 		}),
@@ -101,14 +110,19 @@ func radioOptionClass(checked, disabled bool) string {
 	return class
 }
 
-// anyChecked reports whether the group's value names an enabled option.
-func anyChecked(group RadioGroupProps) bool {
-	for _, option := range group.Options {
-		if option.Value == group.Value && !option.Disabled {
-			return true
+// radioIndex is the position of the chosen option, or -1 when none is chosen.
+func radioIndex(options []RadioOption, value string) int {
+	for i, option := range options {
+		if option.Value == value && !option.Disabled {
+			return i
 		}
 	}
-	return false
+	return -1
+}
+
+// anyChecked reports whether the group's value names an enabled option.
+func anyChecked(group RadioGroupProps) bool {
+	return radioIndex(group.Options, group.Value) >= 0
 }
 
 // firstEnabled is the value of the first enabled option, which takes the tab stop when
