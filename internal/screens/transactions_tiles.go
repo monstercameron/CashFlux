@@ -449,15 +449,6 @@ func txnBulkTagEditor(props txnBulkTagEditorProps) ui.Node {
 		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("r1c.addTag"), TestID: "bulk-apply-tag"}, OnClick(props.Add)))
 }
 
-// toolbarIconBtn renders one transactions-toolbar action as a standard labeled
-// button (.btn-tool): a slightly-grayed leading glyph followed by an always-visible
-// text label, so the action reads at a glance instead of needing a hover to decode a
-// bare icon. The label also serves as the aria-label. variant is "" (neutral),
-// "primary" (accent — the Add action), or "danger" (delete).
-func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, variant string) ui.Node {
-	return toolbarIconBtnOpen(testID, ic, label, onClick, variant, false)
-}
-
 func toolbarIconLink(testID string, ic icon.Name, label, href string) ui.Node {
 	return uiw.ToolButton(uiw.ToolButtonProps{Label: label, Icon: ic, TestID: testID, Href: href})
 }
@@ -493,20 +484,6 @@ func txnHasTag(tags []string, tag string) bool { return txntoolbar.HasTag(tags, 
 // ("Filed 12 under Housing > Mortgage"), or "" when the id no longer resolves.
 func bulkCatLabel(app *appstate.App, id string) string {
 	return txntoolbar.CategoryLabel(app.Categories(), id)
-}
-
-// toolbarIconBtnOpen is toolbarIconBtn with an explicit open flag: when true the button
-// stays highlighted (the .is-open state) — used for the buttons that open a flip modal /
-// panel so the trigger reads as "currently open" until it's dismissed.
-func toolbarIconBtnOpen(testID string, ic icon.Name, label string, onClick ui.Handler, variant string, open bool) ui.Node {
-	props := uiw.ToolButtonProps{Label: label, Icon: ic, TestID: testID, Open: open}
-	switch variant {
-	case "primary":
-		props.Variant = "primary"
-	case "danger":
-		props.Class = "bt-danger"
-	}
-	return uiw.ToolButton(props, Attr("aria-expanded", boolStr(open)), OnClick(onClick))
 }
 
 // txnToolbarProps carries the data the toolbar tile reads to build its filter
@@ -709,30 +686,29 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 	})
 }
 
+// txnToolbarAdd is the one primary action that starts a new transaction. Its menu holds
+// the kinds it can start, so the label stays a plain "Add".
 func txnToolbarAdd(_ txnToolbarRenderProps) ui.Node {
 	transferOpenAtom := uistate.UseAcctTransferOpen()
 	importPanelAtom := uistate.UseImportPanelOpen()
-	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
 	addExpense := func() { uistate.OpenQuickAddAs(uistate.QuickAddExpense) }
 	addIncome := func() { uistate.OpenQuickAddAs(uistate.QuickAddIncome) }
 	addTransfer := func() { transferOpenAtom.Set(true) }
 	return Div(ClassStr("txn-toolbar-add"),
-		Div(css.Class("btn-split"),
-			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
-			uiw.OverflowMenu(uiw.OverflowMenuProps{
-				TriggerLabel:  uistate.T("transactions.addKindLabel"),
-				TriggerIcon:   icon.ChevronDown,
-				TriggerTestID: "txn-add-kind-btn",
-				TriggerClass:  "btn btn-primary btn-split-caret",
-				Items: []uiw.OverflowMenuItem{
-					{Label: uistate.T("transactions.addExpense"), Icon: icon.ArrowDown, TestID: "txn-add-expense", OnSelect: addExpense},
-					{Label: uistate.T("transactions.addIncome"), Icon: icon.ArrowUp, TestID: "txn-add-income", OnSelect: addIncome},
-					{Label: uistate.T("transactions.addTransfer"), Icon: icon.Repeat, TestID: "txn-add-transfer", OnSelect: addTransfer},
-					{Label: uistate.T("transactions.importBtn"), Icon: icon.Upload, TestID: "txn-add-import", Section: uistate.T("transactions.addFromFile"),
-						OnSelect: func() { importPanelAtom.Set(true) }},
-				},
-			}),
-		),
+		uiw.OverflowMenu(uiw.OverflowMenuProps{
+			TriggerLabel:   uistate.T("transactions.addTitle"),
+			TriggerText:    uistate.T("action.add"),
+			TriggerIcon:    icon.Plus,
+			TriggerTestID:  "txn-add-btn",
+			TriggerVariant: "primary",
+			Items: []uiw.OverflowMenuItem{
+				{Label: uistate.T("transactions.addExpense"), Icon: icon.ArrowDown, TestID: "txn-add-expense", OnSelect: addExpense},
+				{Label: uistate.T("transactions.addIncome"), Icon: icon.ArrowUp, TestID: "txn-add-income", OnSelect: addIncome},
+				{Label: uistate.T("transactions.addTransfer"), Icon: icon.Repeat, TestID: "txn-add-transfer", OnSelect: addTransfer},
+				{Label: uistate.T("transactions.importBtn"), Icon: icon.Upload, TestID: "txn-add-import", Section: uistate.T("transactions.addFromFile"),
+					OnSelect: func() { importPanelAtom.Set(true) }},
+			},
+		}),
 	)
 }
 
@@ -997,7 +973,7 @@ func txnToolbarFoot(countLine ui.Node) ui.Node {
 // txnTopActions is the row of the two actions that open the page's work: add a
 // transaction, and review the ones waiting for a look.
 func txnTopActions(props txnToolbarRenderProps) ui.Node {
-	return Div(css.Class("txn-top-actions"), ui.CreateElement(txnToolbarAdd, props), ui.CreateElement(txnToolbarReview, props))
+	return Div(css.Class("txn-top-actions"), ui.CreateElement(txnToolbarReview, props), ui.CreateElement(txnToolbarAdd, props))
 }
 
 func txnUserColumnVisible(enabled bool, memberScope string, memberCount int) bool {

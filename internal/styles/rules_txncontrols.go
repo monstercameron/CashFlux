@@ -255,29 +255,6 @@ func registerTxnControls() {
 		outline("2px solid var(--accent)"),
 		outlineOffset("-2px"),
 	)
-	rule(".txn-responsive-toolbar .txn-toolbar-add .btn-split",
-		gap("3px"),
-	)
-	rule(".txn-responsive-toolbar .txn-toolbar-add .btn-split > .btn, .txn-responsive-toolbar .txn-toolbar-add .btn-split .btn-split-caret",
-		boxSizing("border-box"),
-		minHeight("44px"),
-		background("var(--accent)"),
-		borderColor("var(--accent)"),
-		color("var(--primary-button-ink, #102318)"),
-		boxShadow("none"),
-	)
-	rule(".txn-responsive-toolbar .txn-toolbar-add .btn-split > .btn:first-child",
-		padding("0 .9rem"),
-		gap(".5rem"),
-		borderRadius("var(--radius-md)"),
-	)
-	rule(".txn-responsive-toolbar .txn-toolbar-add .btn-split .btn-split-caret",
-		borderLeft("0"),
-		borderRadius("var(--radius-md)"),
-	)
-	rule(".txn-responsive-toolbar .txn-toolbar-add .btn-split .btn:hover",
-		background("color-mix(in srgb, var(--accent) 84%, var(--text))"),
-	)
 	rule(".txn-responsive-toolbar .txn-review-callout",
 		boxSizing("border-box"),
 		minHeight("44px"),
@@ -343,12 +320,6 @@ func registerTxnControls() {
 	)
 	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-add",
 		gridColumn("1 / -1"),
-	)
-	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-add .btn-split",
-		width("100%"),
-	)
-	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-add .btn-split > .btn:first-child",
-		flex("1 1 auto"),
 	)
 	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-review-callout",
 		justifyContent("space-between"),
