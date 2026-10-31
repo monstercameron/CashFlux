@@ -19,11 +19,12 @@ func TestTC3W4RowInfoWithoutActionsIsVisibleTextNotNoOpButton(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: "Category added automatically"}))
-	if byTestID(f, "button", "txn-row-info") != nil {
-		t.Fatal("informational text rendered as a no-op button")
+	trigger := byTestID(f, "button", "txn-row-info")
+	if trigger == nil || trigger.Attr("aria-haspopup") != "true" {
+		t.Fatal("row information has no disclosure trigger; its text belongs behind the info popover")
 	}
-	if byTestID(f, "span", "txn-row-info-text") == nil {
-		t.Fatal("row information is not visible when no action is available")
+	if byTestID(f, "span", "txn-row-info-text") != nil {
+		t.Fatal("row information is inline; it would add a line to the row")
 	}
 }
 

@@ -92,8 +92,8 @@ func TestCSTABLEDescriptionCellOwnsEditAndInfoActions(t *testing.T) {
 			button.Click()
 		}
 	}
-	if receipts != 1 {
-		t.Fatalf("receipt actions=%d", receipts)
+	if receipts != 0 {
+		t.Fatalf("receipt opened from the info button; it belongs in the popover: %d", receipts)
 	}
 }
 

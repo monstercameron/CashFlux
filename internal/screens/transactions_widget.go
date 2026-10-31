@@ -1218,8 +1218,8 @@ func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
 							r.OnViewReceipt(r.Attachment)
 						}
 					}, OnFollowUps: r.OnOpenFollowUps})),
+				ui.CreateElement(txnRowTags, r),
 			),
-			ui.CreateElement(txnRowTags, r),
 		),
 	)
 }

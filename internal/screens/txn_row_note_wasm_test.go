@@ -5,16 +5,16 @@
 package screens
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// TestRowNoteGlyphRevealsNoteWithoutOpeningEditor checks that the note glyph shows the note text
-// when clicked and leaves the row's editor closed.
-func TestRowNoteGlyphRevealsNoteWithoutOpeningEditor(t *testing.T) {
+// TestRowNoteGlyphOpensNoteWithoutOpeningEditor checks that the note glyph toggles its note
+// popover and leaves the row's editor closed. The popover is portalled, so the wasm renderer
+// cannot read its text; the toggle's expanded state is what it can show.
+func TestRowNoteGlyphOpensNoteWithoutOpeningEditor(t *testing.T) {
 	p := r4cRow("row-note")
 	p.Note, p.HasNote, p.Cleared = "Split the bill with Sam", true, true
 	opened := 0
@@ -25,18 +25,17 @@ func TestRowNoteGlyphRevealsNoteWithoutOpeningEditor(t *testing.T) {
 	if byTestID(f, "span", "txn-row-cleared") == nil {
 		t.Fatal("cleared row has no check glyph")
 	}
-	if byTestID(f, "div", "txn-row-note") != nil {
-		t.Fatal("note text shows before the glyph is clicked")
-	}
 	toggle := byTestID(f, "button", "txn-row-note-toggle")
 	if toggle == nil {
 		t.Fatal("row with a note has no note glyph")
 	}
+	if toggle.Attr("aria-expanded") != "false" {
+		t.Fatal("note glyph starts expanded")
+	}
 	toggle.Click()
 	f.Stabilize()
-	note := byTestID(f, "div", "txn-row-note")
-	if note == nil || !strings.Contains(note.Text(), "Split the bill with Sam") {
-		t.Fatal("clicking the note glyph does not reveal the note text")
+	if got := byTestID(f, "button", "txn-row-note-toggle"); got == nil || got.Attr("aria-expanded") != "true" {
+		t.Fatal("clicking the note glyph does not open the note")
 	}
 	if opened != 0 {
 		t.Fatalf("note glyph opened the editor %d times, want none", opened)

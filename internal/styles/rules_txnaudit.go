@@ -8,6 +8,50 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// Every ledger row is one line high. Secondary detail (follow-ups, the note, the automatic
+	// category line) opens from the row's info or note popover, so nothing grows a row. The
+	// description clips and its tags truncate on the main line.
+	rule(".bento-ledger .txn-table tbody tr.row",
+		height("3rem"),
+	)
+	rule(".bento-ledger .txn-table tbody tr.row > td",
+		verticalAlign("middle"),
+	)
+	rule(".bento-ledger .txn-table tbody tr.row > td.row-desc-cell",
+		overflow("hidden"),
+	)
+	rule(".bento-ledger .txn-table .txn-desc-mainline",
+		flexWrap("nowrap"),
+		alignItems("center"),
+		minWidth("0"),
+		overflow("hidden"),
+	)
+	rule(".bento-ledger .txn-table .txn-desc-mainline > *",
+		flexShrink("0"),
+	)
+	rule(".bento-ledger .txn-table .txn-desc-mainline > .row-desc-text, .bento-ledger .txn-table .txn-desc-mainline > .txn-desc-account",
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		flexShrink("1"),
+	)
+	rule(".bento-ledger .txn-table .txn-desc-tags",
+		display("inline-flex"),
+		flexWrap("nowrap"),
+		minWidth("0"),
+		overflow("hidden"),
+	)
+	rule(".txn-row-info-line, .txn-row-note-pop",
+		fontSize("var(--fs-meta)"),
+		color("var(--text-dim)"),
+		lineHeight("1.45"),
+		whiteSpace("pre-wrap"),
+		maxWidth("22rem"),
+	)
+	rule(".txn-row-note-pop",
+		padding("0.4rem 0.6rem"),
+	)
 	// The row's Edit and ⋯ buttons sit in one group with the Accounts row gap between them.
 	rule(".txn-row-actions",
 		display("flex"),

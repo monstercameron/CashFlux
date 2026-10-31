@@ -263,14 +263,15 @@ type txnRowInfoProps struct {
 	OnFollowUps  func()
 }
 
-// txnRowInfo is the row's info button. A row with follow-ups opens a preview of its open to-dos
-// first. The preview carries the way on to the page: "Open in To-do", and "View receipt" when the
-// row has one. A row with only a receipt opens the receipt directly.
+// txnRowInfo is the row's info button. Any extra detail for the row (follow-ups, the receipt, the
+// automatic category note) opens in one popover from this button, so the row itself stays one line.
+// A row with only a receipt and no other detail opens the receipt directly.
 func txnRowInfo(props txnRowInfoProps) ui.Node {
 	open := ui.UseState(false)
 	popoverID := ui.UseId()
+	hasDetail := props.HasFollowUps || strings.TrimSpace(props.Text) != ""
 	toggle := ui.UseEvent(Prevent(func() {
-		if props.HasFollowUps {
+		if hasDetail {
 			open.Set(!open.Get())
 			return
 		}
@@ -291,24 +292,20 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 		}
 	}))
 	closePopover := func() { open.Set(false) }
-	if !props.HasReceipt && !props.HasFollowUps {
-		if strings.TrimSpace(props.Text) == "" {
-			return Fragment()
-		}
-		return Span(css.Class("txn-row-info-text"), Attr("data-testid", "txn-row-info-text"), props.Text)
+	if !props.HasReceipt && !hasDetail {
+		return Fragment()
 	}
-	var popover ui.Node = Fragment()
 	hasPopup := "false"
-	if props.HasFollowUps {
+	if hasDetail {
 		hasPopup = "true"
-		popover = uiw.Overlay(uiw.OverlayProps{
-			Open: open.Get(), Kind: uiw.OverlayPopover,
-			Title: uistate.T("uxt5.info", props.Text), AnchorID: popoverID,
-			OnClose: closePopover,
-			TestID:  "txn-row-info-popover",
-			Body:    txnRowInfoPreview(props, viewReceipt, openFollowUps),
-		})
 	}
+	popover := uiw.Overlay(uiw.OverlayProps{
+		Open: open.Get(), Kind: uiw.OverlayPopover,
+		Label: uistate.T("uxt5.info", props.Text), AnchorID: popoverID,
+		OnClose: closePopover,
+		TestID:  "txn-row-info-popover",
+		Body:    txnRowInfoPreview(props, viewReceipt, openFollowUps),
+	})
 	return Div(css.Class("txn-row-info-wrap"),
 		Button(css.Class("txn-row-info"), ID(popoverID), Type("button"),
 			Attr("data-testid", "txn-row-info"), Attr("aria-label", uistate.T("uxt5.info", props.Text)),
@@ -318,33 +315,43 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 	)
 }
 
-// txnRowInfoPreview lists the row's open to-dos, each with its check-off, then the exits: to the
-// To-do page, and to the receipt when there is one. Done items stay on the To-do page.
+// txnRowInfoPreview shows the row's detail: its open to-dos, each with its check-off, or the plain
+// note line when there are none. The exits follow: to the To-do page, and to the receipt when the
+// row has one.
 func txnRowInfoPreview(props txnRowInfoProps, viewReceipt, openFollowUps ui.Handler) ui.Node {
 	const maxShown = 5
-	open := 0
 	kids := []any{css.Class("txn-row-info-popover"), Attr("data-testid", "txn-row-info-preview")}
-	for _, it := range props.FollowUps {
-		if it.Done {
-			continue
+	if !props.HasFollowUps {
+		if strings.TrimSpace(props.Text) != "" {
+			kids = append(kids, Div(css.Class("txn-row-info-line"), props.Text))
 		}
-		open++
-		if open <= maxShown {
-			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due}))
+	} else {
+		open := 0
+		for _, it := range props.FollowUps {
+			if it.Done {
+				continue
+			}
+			open++
+			if open <= maxShown {
+				kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due}))
+			}
+		}
+		if open == 0 {
+			kids = append(kids, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutOK, Body: Span(uistate.T("transactions.followUpsAllDone"))}))
+		} else if open > maxShown {
+			kids = append(kids, Div(css.Class("txnfu-more"), uistate.T("transactions.followUpsMore", open-maxShown)))
 		}
 	}
-	if open == 0 {
-		kids = append(kids, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutOK, Body: Span(uistate.T("transactions.followUpsAllDone"))}))
-	} else if open > maxShown {
-		kids = append(kids, Div(css.Class("txnfu-more"), uistate.T("transactions.followUpsMore", open-maxShown)))
-	}
-	exits := []any{css.Class("txnfu-pop-foot"),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), OnClick(openFollowUps), uistate.T("uxt5.openFollowUpsAction")),
+	exits := []any{css.Class("txnfu-pop-foot")}
+	if props.HasFollowUps {
+		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), OnClick(openFollowUps), uistate.T("uxt5.openFollowUpsAction")))
 	}
 	if props.HasReceipt {
 		exits = append(exits, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-receipt"), OnClick(viewReceipt), uistate.T("uxt5.viewReceipt")))
 	}
-	kids = append(kids, Div(exits...))
+	if len(exits) > 1 {
+		kids = append(kids, Div(exits...))
+	}
 	return Div(kids...)
 }
 
@@ -431,26 +438,27 @@ type txnRowNoteProps struct {
 	Note string
 }
 
-// txnRowNote is the note glyph. A click shows or hides the note text under the description. It
-// owns its open state and stops the click, so the row's editor does not open with it.
+// txnRowNote is the note glyph. A click opens the note in a popover anchored to the glyph, so the
+// note never adds height to the row. The popover owns its open state and stops the click, so the
+// row's editor does not open with it.
 func txnRowNote(props txnRowNoteProps) ui.Node {
 	open := ui.UseState(false)
+	anchorID := ui.UseId()
 	toggle := ui.UseEvent(func(e ui.Event) {
 		e.StopPropagation()
 		e.PreventDefault()
 		open.Set(!open.Get())
 	})
-	title := uistate.T("transactions.showNote")
-	var body ui.Node = Fragment()
-	if open.Get() {
-		title = uistate.T("transactions.hideNote")
-		body = Div(css.Class("txn-row-note"), Attr("data-testid", "txn-row-note"), props.Note)
-	}
+	close := func() { open.Set(false) }
 	return Fragment(
 		uiw.ToolButton(uiw.ToolButtonProps{
-			Icon: icon.FileText, AriaLabel: uistate.T("uxt5.hasNote"), Title: title,
+			Icon: icon.FileText, AriaLabel: uistate.T("uxt5.hasNote"), Title: uistate.T("transactions.showNote"),
 			TestID: "txn-row-note-toggle", Open: open.Get(),
-		}, Attr("aria-expanded", ariaBool(open.Get())), OnClick(toggle)),
-		body,
+		}, ID(anchorID), Attr("aria-expanded", ariaBool(open.Get())), OnClick(toggle)),
+		uiw.Overlay(uiw.OverlayProps{
+			Open: open.Get(), Kind: uiw.OverlayPopover, Label: uistate.T("uxt5.hasNote"),
+			AnchorID: anchorID, OnClose: close, TestID: "txn-row-note",
+			Body: Div(css.Class("txn-row-note-pop"), props.Note),
+		}),
 	)
 }
