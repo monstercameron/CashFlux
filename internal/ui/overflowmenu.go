@@ -397,12 +397,15 @@ func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
 					boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-margin)
 				}
 			}
-			openLeft := r.Get("right").Float() > vw-margin
+			// Decide the side from where the menu sits by default, not where it is now. The flip
+			// classes are already applied, so measuring the current rect would flip the answer on
+			// every open.
+			wr := w.Call("getBoundingClientRect")
+			openLeft := wr.Get("left").Float()+r.Get("width").Float() > vw-margin
 			// The menu grows in over its fade, so judge its flip and height by the height it
 			// settles at, not the height it has reached.
 			fullHeight := max(r.Get("height").Float(), menu.Get("scrollHeight").Float())
-			openUp := r.Get("top").Float()+fullHeight > boundaryBottom
-			wr := w.Call("getBoundingClientRect")
+			openUp := wr.Get("bottom").Float()+6+fullHeight > boundaryBottom
 			avail := boundaryBottom - wr.Get("bottom").Float() - 6
 			if openUp {
 				avail = wr.Get("top").Float() - boundaryTop - 6
