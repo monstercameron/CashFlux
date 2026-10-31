@@ -45,7 +45,9 @@ func registerRadioGroup() {
 		outline("2px solid var(--accent)"), outlineOffset("2px"),
 	)
 	rule(".radio-option.is-checked",
-		color("var(--text)"), fontWeight("600"),
+		// The weight stays the same in every state: a bolder label is wider, and a wider label
+		// would resize the whole group each time the selection moves.
+		color("var(--text)"),
 	)
 	rule(".radio-option.is-disabled",
 		opacity("0.5"), cursor("not-allowed"),

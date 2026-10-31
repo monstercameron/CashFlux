@@ -26,6 +26,7 @@ and every commit updates this file under `Unreleased`.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.
+- The radio group keeps the same label weight in every state, so changing the selection no longer resizes the group or its options.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
