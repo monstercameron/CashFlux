@@ -2647,16 +2647,26 @@ func registerGenerated() {
 		marginBottom("0.8rem"),
 		overflow("hidden"),
 	)
-	// The panel opens by unrolling from its top edge while it fades in and settles, so the
-	// controls arrive as one surface rather than popping in. It only runs on mount, which is
-	// when the panel opens; closing stays instant. Reduced motion turns it off.
-	keyframes("filter-panel-open",
-		at("0%", prop("clip-path", "inset(0 0 100% 0)"), prop("opacity", "0"), prop("transform", "translateY(-6px)")),
-		at("60%", prop("opacity", "1")),
-		at("100%", prop("clip-path", "inset(0 0 0 0)"), prop("opacity", "1"), prop("transform", "none")),
+	// The panel fades in when it opens and fades out when it closes, both over 250ms, which
+	// matches filterPanelFadeMs. Its height grows and collapses over the same time, so the
+	// content below moves with it rather than jumping. Height runs to auto through
+	// interpolate-size, which browsers without it skip, leaving the fade alone. The panel
+	// stays mounted for the fade-out. Reduced motion turns all of this off.
+	keyframes("filter-panel-in",
+		at("0%", prop("opacity", "0"), prop("height", "0px")),
+		at("100%", prop("opacity", "1"), prop("height", "auto")),
+	)
+	keyframes("filter-panel-out",
+		at("0%", prop("opacity", "1"), prop("height", "auto")),
+		at("100%", prop("opacity", "0"), prop("height", "0px")),
 	)
 	ruleMedia("(prefers-reduced-motion: no-preference)", ".filter-inline-panel",
-		prop("animation", "filter-panel-open 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
+		prop("interpolate-size", "allow-keywords"),
+		prop("animation", "filter-panel-in 250ms ease-out both"),
+	)
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".filter-inline-panel.is-leaving",
+		prop("animation", "filter-panel-out 250ms ease-in both"),
+		prop("pointer-events", "none"),
 	)
 	// Transactions can opt into a right-side sheet without changing the shared
 	// toolbar's default inline disclosure on other pages.

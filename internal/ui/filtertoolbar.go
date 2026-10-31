@@ -208,6 +208,26 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		}
 		open.Set(false)
 	}
+	// The panel stays mounted for the length of its fade-out, so closing can fade rather
+	// than vanish. Opening mounts it at once; the timer only runs after a close. Reduced
+	// motion skips the fade, so the panel leaves at once.
+	panelMounted := uic.UseState(false)
+	uic.UseEffect(func() func() {
+		if open.Get() {
+			if !panelMounted.Get() {
+				panelMounted.Set(true)
+			}
+			return nil
+		}
+		if !panelMounted.Get() {
+			return nil
+		}
+		if prefersReducedMotion() {
+			panelMounted.Set(false)
+			return nil
+		}
+		return afterDelay(filterPanelFadeMs, func() { panelMounted.Set(false) })
+	}, open.Get(), panelMounted.Get())
 	// Stable ids for the two nodes the keystroke has to touch before the app can
 	// re-render (C628).
 	searchID, pendingID := "fctrl-search-"+uid, "fctrl-pending-"+uid
@@ -445,7 +465,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		// C52: inline collapsible filter panel — no backdrop, no occlusion. The table
 		// remains visible below while the user adjusts filters. The panel mounts/unmounts
 		// with the open state (same as before for the FlipPanel) so it is keyed correctly.
-		If(open.Get(), Div(ClassStr(filterPanelClass(props.FilterSheet)),
+		If(open.Get() || panelMounted.Get(), Div(ClassStr(filterPanelClass(props.FilterSheet, !open.Get())),
 			Attr("id", "filter-inline-panel"),
 			Attr("role", "region"), Attr("aria-label", panelTitle),
 			// Escape from anywhere inside the panel, not just from the trigger.
@@ -480,11 +500,46 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	)
 }
 
-func filterPanelClass(sheet bool) string {
+func filterPanelClass(sheet, leaving bool) string {
+	class := "filter-inline-panel"
 	if sheet {
-		return "filter-inline-panel filter-sheet"
+		class += " filter-sheet"
 	}
-	return "filter-inline-panel"
+	if leaving {
+		class += " is-leaving"
+	}
+	return class
+}
+
+// filterPanelFadeMs is how long the panel takes to fade in or out. It matches the CSS.
+const filterPanelFadeMs = 250
+
+// prefersReducedMotion reports whether the reader has asked for less motion.
+func prefersReducedMotion() bool {
+	match := js.Global().Get("matchMedia")
+	return match.Truthy() && match.Invoke("(prefers-reduced-motion: reduce)").Get("matches").Bool()
+}
+
+// afterDelay runs fn once after ms milliseconds. The returned cancel stops it if it has
+// not run yet, and releases the callback either way.
+func afterDelay(ms int, fn func()) func() {
+	window := js.Global().Get("window")
+	done := false
+	var timer js.Value
+	var callback js.Func
+	callback = js.FuncOf(func(js.Value, []js.Value) any {
+		done = true
+		callback.Release()
+		fn()
+		return nil
+	})
+	timer = window.Call("setTimeout", callback, ms)
+	return func() {
+		if !done {
+			window.Call("clearTimeout", timer)
+			callback.Release()
+		}
+	}
 }
 
 // filterChipProps configures one chip. It is its own component so the remove
