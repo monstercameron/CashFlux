@@ -425,7 +425,10 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		// would re-merge the two kinds of state this row exists to keep apart. When
 		// only PreChips are present the lead-in and the reset are both absent, so
 		// nothing on the row claims to be a filter.
-		If(n > 0 || len(props.PreChips) > 0, Div(css.Class("filter-chips"), Attr("data-testid", "filter-summary"),
+		// IfElse keeps one node in this slot whether or not chips exist. When the chips came and
+		// went through a bare If, the inline panel below was remounted, and a multi-select sheet
+		// inside it closed on its first pick.
+		IfElse(n > 0 || len(props.PreChips) > 0, Div(css.Class("filter-chips"), Attr("data-testid", "filter-summary"),
 			preChips,
 			If(n > 0, Span(css.Class("filter-chips-lead"), Text(uistate.T("filters.summaryLead")))),
 			chips,
@@ -438,7 +441,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					}
 				}),
 				props.ClearAllLabel)),
-		)),
+		), Span(Attr("hidden", ""))),
 		// C52: inline collapsible filter panel — no backdrop, no occlusion. The table
 		// remains visible below while the user adjusts filters. The panel mounts/unmounts
 		// with the open state (same as before for the FlipPanel) so it is keyed correctly.

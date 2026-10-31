@@ -29,7 +29,7 @@ var (
 )
 
 type pickerPosition struct {
-	Top, Left, MaxHeight int
+	Top, Left, MaxHeight, Width int
 }
 
 func pickerPopoverRules(position pickerPosition) []css.Rule {
@@ -65,6 +65,78 @@ func pickerViewportPosition(top, bottom, panelHeight, viewportHeight float64) pi
 		}
 	}
 	return pickerPosition{Top: int(math.Round(popoverTop)), MaxHeight: maxHeight}
+}
+
+// pickerPanelPlacement measures the trigger and the open panel, found by element id, and
+// returns where the panel sits beside the trigger. ok is false when the trigger is missing.
+func pickerPanelPlacement(triggerID, panelID string) (placement pickerPosition, ok bool) {
+	document := js.Global().Get("document")
+	if !document.Truthy() || document.Get("getElementById").Type() != js.TypeFunction {
+		return pickerPosition{}, false
+	}
+	trigger := document.Call("getElementById", triggerID)
+	if !trigger.Truthy() || trigger.Get("getBoundingClientRect").Type() != js.TypeFunction {
+		return pickerPosition{}, false
+	}
+	bounds := trigger.Call("getBoundingClientRect")
+	panelHeight := 420.0
+	panel := document.Call("getElementById", panelID)
+	if panel.Truthy() && panel.Get("getBoundingClientRect").Type() == js.TypeFunction {
+		measuredHeight := panel.Call("getBoundingClientRect").Get("height").Float()
+		contentHeight := panel.Get("scrollHeight")
+		if contentHeight.Type() == js.TypeNumber && contentHeight.Float() > measuredHeight {
+			measuredHeight = contentHeight.Float()
+		}
+		if measuredHeight > 0 {
+			panelHeight = measuredHeight
+		}
+	}
+	viewportHeight := js.Global().Get("window").Get("innerHeight").Float()
+	placement = pickerViewportPosition(bounds.Get("top").Float(), bounds.Get("bottom").Float(), panelHeight, viewportHeight)
+	placement.Left = int(math.Round(bounds.Get("left").Float()))
+	placement.Width = int(math.Round(bounds.Get("width").Float()))
+	return placement, true
+}
+
+// usePickerPlacement keeps an open panel beside its trigger. It measures on open and
+// again on resize or scroll, and hands each placement to setPosition.
+func usePickerPlacement(open bool, id string, setPosition func(pickerPosition)) {
+	uic.UseEffect(func() func() {
+		if !open {
+			return nil
+		}
+		reposition := func() {
+			if placement, ok := pickerPanelPlacement(id, id+"-surface"); ok {
+				setPosition(placement)
+			}
+		}
+		reposition()
+		window := js.Global().Get("window")
+		if !window.Truthy() {
+			return nil
+		}
+		listener := js.FuncOf(func(js.Value, []js.Value) any { reposition(); return nil })
+		window.Call("addEventListener", "resize", listener)
+		window.Call("addEventListener", "scroll", listener, true)
+		return func() {
+			window.Call("removeEventListener", "resize", listener)
+			window.Call("removeEventListener", "scroll", listener, true)
+			listener.Release()
+		}
+	}, open, id)
+}
+
+// multiSheetSurfaceStyle places the multi-select sheet beside its trigger, as wide as the
+// trigger but never narrower than a readable list, and scrolls inside the room it has.
+func multiSheetSurfaceStyle(place pickerPosition) map[string]string {
+	return map[string]string{
+		"position":   "fixed",
+		"top":        strconv.Itoa(place.Top) + "px",
+		"left":       strconv.Itoa(place.Left) + "px",
+		"width":      strconv.Itoa(max(place.Width, 200)) + "px",
+		"max-height": strconv.Itoa(place.MaxHeight) + "px",
+		"overflow-y": "auto",
+	}
 }
 
 // PickerProps configures a searchable, explicit-commit picker.
@@ -171,52 +243,7 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 		}
 		return nil
 	}, open.Get())
-	uic.UseEffect(func() func() {
-		if !open.Get() {
-			return nil
-		}
-		reposition := func() {
-			document := js.Global().Get("document")
-			if !document.Truthy() || document.Get("getElementById").Type() != js.TypeFunction {
-				return
-			}
-			trigger := document.Call("getElementById", props.ID)
-			if !trigger.Truthy() || trigger.Get("getBoundingClientRect").Type() != js.TypeFunction {
-				return
-			}
-			bounds := trigger.Call("getBoundingClientRect")
-			panelHeight := 420.0
-			panel := document.Call("getElementById", props.ID+"-surface")
-			if panel.Truthy() && panel.Get("getBoundingClientRect").Type() == js.TypeFunction {
-				measuredHeight := panel.Call("getBoundingClientRect").Get("height").Float()
-				contentHeight := panel.Get("scrollHeight")
-				if contentHeight.Type() == js.TypeNumber && contentHeight.Float() > measuredHeight {
-					measuredHeight = contentHeight.Float()
-				}
-				if measuredHeight > 0 {
-					panelHeight = measuredHeight
-				}
-			}
-			window := js.Global().Get("window")
-			viewportHeight := window.Get("innerHeight").Float()
-			placement := pickerViewportPosition(bounds.Get("top").Float(), bounds.Get("bottom").Float(), panelHeight, viewportHeight)
-			placement.Left = int(math.Round(bounds.Get("left").Float()))
-			position.Set(placement)
-		}
-		reposition()
-		window := js.Global().Get("window")
-		if !window.Truthy() {
-			return nil
-		}
-		listener := js.FuncOf(func(js.Value, []js.Value) any { reposition(); return nil })
-		window.Call("addEventListener", "resize", listener)
-		window.Call("addEventListener", "scroll", listener, true)
-		return func() {
-			window.Call("removeEventListener", "resize", listener)
-			window.Call("removeEventListener", "scroll", listener, true)
-			listener.Release()
-		}
-	}, open.Get(), props.ID)
+	usePickerPlacement(open.Get(), props.ID, position.Set)
 
 	triggerLabel := props.SelectedLabel
 	if triggerLabel == "" {
@@ -377,6 +404,8 @@ func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	open := uic.UseState(false)
 	listID := props.ID + "-listbox"
 	active := uic.UseState(0)
+	place := uic.UseState(pickerPosition{MaxHeight: 420})
+	usePickerPlacement(open.Get(), props.ID, place.Set)
 	closePicker := func() { open.Set(false); focusPickerID(props.ID) }
 	onTrigger := OnClick(func() { active.Set(0); open.Set(true) })
 	trigger := Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
@@ -422,7 +451,8 @@ func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	}
 	overlay := uic.AccessibleOverlay(uic.AccessibleOverlayProps{
 		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget}, SurfaceID: props.ID + "-surface",
-		Kind: uic.OverlayKindSheet, Role: "dialog", LabelledBy: props.ID + "-title", Modal: true,
+		SurfaceStyle: multiSheetSurfaceStyle(place.Get()),
+		Kind:         uic.OverlayKindSheet, Role: "dialog", LabelledBy: props.ID + "-title", Modal: true,
 		TrapFocus: true, RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
 		InitialFocusSelector: initialFocus, Child: panel, OnDismiss: closePicker,
 	})

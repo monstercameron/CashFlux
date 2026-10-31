@@ -897,15 +897,32 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		types = append(types, t)
 	}
 	sort.Strings(types)
-	typeOpts := withAllOption(uistate.T("accounts.allTypes"),
-		uiw.OptionsFrom(types, func(s string) string { return s }, func(s string) string { return humanizeType(s) }, ""))
+	typeOpts := make([]uiw.PickerOption, 0, len(types))
+	for _, t := range types {
+		typeOpts = append(typeOpts, uiw.PickerOption{Value: t, Label: humanizeType(t)})
+	}
+	typeSummary := uistate.T("accounts.allTypes")
+	switch n := len(f.Types); {
+	case n > 2:
+		typeSummary = plural(n, "type")
+	case n > 0:
+		names := make([]string, 0, n)
+		for _, t := range f.Types {
+			names = append(names, humanizeType(t))
+		}
+		typeSummary = strings.Join(names, ", ")
+	}
+	toggleType := func(v string) { setFilter(func(x *uistate.AccountsFilter) { *x = x.ToggleType(v) }) }
 
 	archivedValue := "hide"
 	if f.ShowArchived {
 		archivedValue = "show"
 	}
 	filtersBody := Div(css.Class("filter-fields"),
-		filterSelect(uistate.T("accounts.filterType"), f.Type, typeOpts, func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Type = v }) }),
+		withFieldLabel(uistate.T("accounts.filterType"), uiw.MultiPicker(uiw.MultiPickerProps{
+			ID: "acct-filter-type", Label: uistate.T("accounts.filterType"), Placeholder: typeSummary,
+			Options: typeOpts, Selected: f.Types, OnToggle: toggleType, TestID: "acct-type-picker",
+		})),
 		withFieldLabel(uistate.T("accounts.archived"), uiw.RadioGroup(uiw.RadioGroupProps{
 			Label: uistate.T("accounts.archived"), Value: archivedValue,
 			Options: []uiw.RadioOption{
@@ -920,8 +937,8 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	if f.Search != "" {
 		chips = append(chips, uiw.Chip{Key: "search", Label: uistate.T("accounts.chipSearch", f.Search)})
 	}
-	if f.Type != "" {
-		chips = append(chips, uiw.Chip{Key: "type", Label: uistate.T("accounts.chipType", humanizeType(f.Type))})
+	for _, t := range f.Types {
+		chips = append(chips, uiw.Chip{Key: "type:" + t, Label: uistate.T("accounts.chipType", humanizeType(t))})
 	}
 	removeChip := func(key string) { filterAtom.Set(f.Without(key).Normalize()) }
 	clearAll := func() { filterAtom.Set(uistate.AccountsFilter{ShowArchived: f.ShowArchived}.Normalize()) }

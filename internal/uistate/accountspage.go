@@ -14,6 +14,7 @@
 package uistate
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/monstercameron/GoWebComponents/v7/state"
@@ -48,10 +49,10 @@ const (
 // already handled by the top-bar active scope, so it is deliberately not duplicated
 // here.
 type AccountsFilter struct {
-	Search       string // case-insensitive substring match on the account name
-	Type         string // domain.AccountType string; "" = all types
-	Class        string // domain.AccountClass string ("asset"/"liability"); "" = both
-	ShowArchived bool   // reveal the archived-accounts tile
+	Search       string   // case-insensitive substring match on the account name
+	Types        []string // domain.AccountType strings; empty = all types
+	Class        string   // domain.AccountClass string ("asset"/"liability"); "" = both
+	ShowArchived bool     // reveal the archived-accounts tile
 }
 
 // Normalize trims the search text so a stray space never reads as an active filter.
@@ -63,14 +64,14 @@ func (f AccountsFilter) Normalize() AccountsFilter {
 // HasNarrowing reports whether a name/type narrow is active (archived visibility is
 // a view toggle, not a narrowing of the matched set, so it is excluded).
 func (f AccountsFilter) HasNarrowing() bool {
-	return f.Search != "" || f.Type != ""
+	return f.Search != "" || len(f.Types) > 0
 }
 
 // Matches reports whether an account name + type passes the active name/type narrow.
 // Archived visibility is handled by the host (which tile an account lands in), not
 // here.
 func (f AccountsFilter) Matches(name, accType string) bool {
-	if f.Type != "" && accType != f.Type {
+	if len(f.Types) > 0 && !slices.Contains(f.Types, accType) {
 		return false
 	}
 	if s := strings.TrimSpace(f.Search); s != "" {
@@ -82,14 +83,26 @@ func (f AccountsFilter) Matches(name, accType string) bool {
 }
 
 // Without returns a copy with the named field cleared, for chip removal. Keys are
-// the stable chip ids the toolbar emits ("search", "type").
+// the stable chip ids the toolbar emits ("search", "type" for all types, or "type:<value>" for one).
 func (f AccountsFilter) Without(field string) AccountsFilter {
-	switch field {
-	case "search":
+	switch {
+	case field == "search":
 		f.Search = ""
-	case "type":
-		f.Type = ""
+	case field == "type":
+		f.Types = nil
+	case strings.HasPrefix(field, "type:"):
+		f.Types = slices.DeleteFunc(slices.Clone(f.Types), func(t string) bool { return t == strings.TrimPrefix(field, "type:") })
 	}
+	return f
+}
+
+// ToggleType returns a copy with the account type added to the narrow, or removed
+// when it is already chosen. Several types may be chosen at once; none means all.
+func (f AccountsFilter) ToggleType(accType string) AccountsFilter {
+	if slices.Contains(f.Types, accType) {
+		return f.Without("type:" + accType)
+	}
+	f.Types = append(slices.Clone(f.Types), accType)
 	return f
 }
 

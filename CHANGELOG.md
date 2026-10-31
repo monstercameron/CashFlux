@@ -24,6 +24,8 @@ and every commit updates this file under `Unreleased`.
 - The accounts spinner holds for at least 700 ms and the drawn line lasts 1.1 s, so the loading state reads on screen. The spinner fades in.
 - The Investments panel is removed from the Accounts page. The Investments page is unchanged.
 - The Accounts filters use the standard select for account type, and archived accounts are a radio group with an eye glyph for showing and a crossed eye for hiding, so the choice reads without text.
+- Account type in the Accounts filters is a multi-select: pick several types and the list shows accounts of any of them. The chosen types show as one chip each. The choices open beside the field with a check mark on each chosen type.
+- Picking a filter no longer closes its open choice panel when the first filter chip appears.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.
