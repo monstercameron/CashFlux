@@ -96,4 +96,19 @@ func registerPageHeadline() {
 		display("flex"), flexDirection("column"), gap("0.6rem"), minWidth("0"),
 		background("var(--bg-card)"), border("1px solid var(--border)"), borderRadius("var(--radius-xl)"), padding("0.75rem"),
 	)
+	rule(".txn-summary-frame",
+		position("relative"),
+	)
+	rule(".txn-summary-frame > .txn-top-actions",
+		position("absolute"), top("0"), right("0"),
+	)
+	rule(".txn-summary-frame > .page-headline",
+		paddingRight("16rem"),
+	)
+	ruleMedia("(max-width: 720px)", ".txn-summary-frame > .txn-top-actions",
+		position("static"),
+	)
+	ruleMedia("(max-width: 720px)", ".txn-summary-frame > .page-headline",
+		paddingRight("0"),
+	)
 }
