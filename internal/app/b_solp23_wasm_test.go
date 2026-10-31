@@ -89,6 +89,7 @@ func solp23FailPut(t *testing.T, key string) *bool {
 }
 
 func TestSOLP23WipeJournalBoundary(t *testing.T) {
+	isolateDurableGlobals(t)
 	for _, mode := range []string{"aborted commit", "late interrupted commit", "stale generation", "success"} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := solp22Journal(t)
@@ -159,6 +160,7 @@ func TestSOLP23WipeJournalBoundary(t *testing.T) {
 }
 
 func TestSOLP23StartupWorkspaceJournalBoundary(t *testing.T) {
+	isolateDurableGlobals(t)
 	for _, mode := range []string{"success", "blob save failure", "dataset commit failure", "registry adoption failure", "invalid target"} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := solp22Journal(t)
@@ -228,6 +230,7 @@ func TestSOLP23StartupWorkspaceJournalBoundary(t *testing.T) {
 }
 
 func TestSOLP23StartupRejectsPreparedStaleGeneration(t *testing.T) {
+	isolateDurableGlobals(t)
 	fixture := solp22Journal(t)
 	generation := readDatasetGen()
 	row := fixture.row

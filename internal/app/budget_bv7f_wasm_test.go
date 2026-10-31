@@ -13,6 +13,7 @@ import (
 )
 
 func TestBV7FRepeatedBudgetUndoIsIncrementalAndReliable(t *testing.T) {
+	isolateDurableGlobals(t)
 	a, commits := bv6dJournal(t, true)
 	budget := a.Budgets()[0]
 	start := budget.Limit.Amount

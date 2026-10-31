@@ -218,6 +218,7 @@ func solp22Reload(t *testing.T, row domain.Transaction) store.Dataset {
 }
 
 func TestSOLP22JournalReplacementPaths(t *testing.T) {
+	isolateDurableGlobals(t)
 	t.Run("account replacement stash and restore", func(t *testing.T) {
 		fixture := solp22Journal(t)
 		owner := syncstate.DatasetOwner{ServerID: "solp22-previous-server", UserID: "solp22-previous-user"}
