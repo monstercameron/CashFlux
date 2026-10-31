@@ -1744,8 +1744,17 @@ var english = Catalog{
 	"settings.aiKeyExplainer":     "The AI key powers the assistant chat, spending insights, and receipt photo reading. You bring your own key and pay OpenAI directly per use — CashFlux never charges for AI. Get a key at platform.openai.com/api-keys (free to create; pay only for what you use).",
 	"settings.aiNoKey":            "AI features stay off until you add a key. Your key is stored on this device and only sent to OpenAI when you ask.",
 	"settings.rememberKey":        "Remember my key on this device",
-	"settings.rememberKeyNote":    "Off by default: your key is kept only for this session. Turn on to save it (unencrypted) in this browser so AI stays on after a reload.",
+	"settings.rememberKeyNote":    "Off by default: your key is kept only for this session. Turn on to keep it in this browser's encrypted storage across reloads.",
 	"settings.backendTitle":       "Cloud & server",
+
+	// Copy for server AI mode; the local key controls direct mode only.
+	"settings.aiServerTitle":           "AI through this server",
+	"settings.aiServerExplainer":       "This server sends AI requests when an OpenAI key is saved to your account in Cloud settings. The device key above is optional and used only when you switch to direct OpenAI.",
+	"settings.aiServerModelNote":       "Active model: %s · Server AI uses your account's key when configured. Estimated usage appears in the server console.",
+	"settings.aiServerModelLive":       "%d models available on this server.",
+	"settings.aiServerModelLoadFailed": "Couldn't load this server's models — showing the built-in defaults. Check the connection and reload.",
+	"settings.aiBaseUrlDirectOnly":     "This address applies only when using OpenAI directly from this device.",
+
 	// C304: frame the section as the subscription/connection surface, not raw infra.
 	"settings.cloudSectionIntro":   "Connect CashFlux Cloud for sync, automatic encrypted backups, and bundled AI across your devices — or point to your own self-hosted server. The rest of the app stays free and local either way.",
 	"settings.cloudDataDisclosure": "When sync is on, your encrypted financial data (accounts, transactions, budgets, and more) is sent to the server you configure. When sync is off, everything stays on this device — nothing is transmitted.",
