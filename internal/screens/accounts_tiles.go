@@ -843,7 +843,8 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 
 	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
-	openTransfer := ui.UseEvent(Prevent(func() { transferAtom.Set(true) }))
+	// Menu items take plain funcs (the item owns its click hook), so the transfer opener is one too.
+	openTransfer := func() { transferAtom.Set(true) }
 	// AC1: open the account-group manager. When at least one group exists, jump
 	// straight to editing the first (its header carries per-group edit too); with
 	// none, start a new group. Plain funcs (not UseEvent): they run from the
@@ -961,10 +962,12 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
 			If(len(accounts) >= 1, uiw.OverflowMenu(uiw.OverflowMenuProps{
 				TriggerText:   uistate.T("acctxn.acctSettingsMenu"),
+				TriggerIcon:   icon.ChevronDown,
 				TriggerLabel:  uistate.T("acctxn.acctSettingsMenuTitle"),
 				TriggerTestID: "acct-manage-btn",
 				TriggerClass:  "btn btn-tool",
 				Items: []uiw.OverflowMenuItem{
+					{Label: uistate.T("accounts.transferMoney"), Icon: icon.Repeat, TestID: "page-transfer-btn", OnSelect: openTransfer, Hidden: len(accounts) < 2},
 					// QA CF-27: the item's label matches what clicking DOES — with no
 					// groups yet it opens the creation form, so it says "New group…";
 					// with groups it opens the manager.
@@ -979,8 +982,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 					{Label: uistate.T("accounts.manageFXRates"), Icon: icon.Scale, TestID: "acct-fx-btn", OnSelect: openFX, Hidden: !showFX},
 				},
 			})),
-			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
-				uistate.T("accounts.transferMoney"), "", "modal", "", transferAtom.Get(), openTransfer)),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{

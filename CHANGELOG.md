@@ -30,6 +30,7 @@ and every commit updates this file under `Unreleased`.
 - The radio selection indicator slides between options even when reduced motion is on, since it is the selection itself. Option hover and colour transitions still stop there.
 - The Accounts "Add account" button sits in the top-right corner of the summary, over the trend graph, and leaves the toolbar row.
 - Toolbar buttons (.btn-tool) take their height, padding and text size from the shared control and button tokens, matching the other buttons.
+- Transfer money moves into the Accounts "More" menu, which replaces the "Account settings" button.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.

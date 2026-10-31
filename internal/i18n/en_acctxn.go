@@ -11,8 +11,8 @@ var acctxnKeys = Catalog{
 	// Accounts — the toolbar management menu, renamed from the vague "Manage" to
 	// "Account settings" so its contents (groups, institutions, sweep rules,
 	// exchange rates) read as configuration rather than an unspecified verb.
-	"acctxn.acctSettingsMenu":      "Account settings",
-	"acctxn.acctSettingsMenuTitle": "Account settings — groups, institutions, sweep rules, and exchange rates",
+	"acctxn.acctSettingsMenu":      "More",
+	"acctxn.acctSettingsMenuTitle": "More — transfers, groups, institutions, sweep rules, and exchange rates",
 
 	// Accounts — the one-line meaning shown as the "Mark all updated" tooltip and
 	// appended to its confirm dialog, so a powerful global action explains itself.
