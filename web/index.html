@@ -105,7 +105,7 @@
          skeleton ghosted under the fading-in app for ~4s (doubled titles, tagline
          showing through). Pure CSS fires on the first #app child. */
       body:has(#app:not(:empty)) #boot{opacity:0;transform:scale(1.015);pointer-events:none}
-      .sk-shell{display:flex;height:100%}
+      .sk-shell{display:flex;width:100%;height:100%}
       /* Rail width MUST be 15rem, matching the real shell's rail (tw.W60 = css.Rem(15)),
          not a fixed 240px. The app applies the saved theme's --ui-scale (root font-size)
          at mount, so the real rem-based rail grows/shrinks with scale while a px skeleton
