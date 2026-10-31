@@ -468,24 +468,25 @@ func AccountRow(props accountRowProps) ui.Node {
 	// investment): a single signed figure — "▲ $2,000.00 this month" — in place of
 	// the old scrolling valuation-history list, which was noise in the row (C225
 	// [F31]). Shown only when there is history to compare against. Display-only.
-	var valChange ui.Node = Fragment()
-	if isValuationType(a.Type) && len(props.ValuationHistory) >= 2 {
-		if chg, ok := valuation.MonthToDateChange(props.ValuationHistory, props.Balance, time.Now()); ok {
-			cls := "row-meta acct-val-change"
-			label := uistate.T("accounts.valuationNoChangeMonth")
-			if chg.Amount != 0 {
-				arrow := "▲"
-				if chg.IsNegative() {
-					arrow = "▼"
-				}
-				if t := figTone(chg); t != "" {
-					cls += " " + tw.ColorClass(t)
-				}
-				label = uistate.T("accounts.valuationChangeMonth", arrow+" "+fmtMoney(chg.Abs()))
-			}
-			valChange = Span(ClassStr(cls), Attr("data-testid", "val-change-"+a.ID), label)
+	valChange := uiw.IfLazy(isValuationType(a.Type) && len(props.ValuationHistory) >= 2, func() ui.Node {
+		chg, ok := valuation.MonthToDateChange(props.ValuationHistory, props.Balance, time.Now())
+		if !ok {
+			return Fragment()
 		}
-	}
+		cls := "row-meta acct-val-change"
+		label := uistate.T("accounts.valuationNoChangeMonth")
+		if chg.Amount != 0 {
+			arrow := "▲"
+			if chg.IsNegative() {
+				arrow = "▼"
+			}
+			if t := figTone(chg); t != "" {
+				cls += " " + tw.ColorClass(t)
+			}
+			label = uistate.T("accounts.valuationChangeMonth", arrow+" "+fmtMoney(chg.Abs()))
+		}
+		return Span(ClassStr(cls), Attr("data-testid", "val-change-"+a.ID), label)
+	})
 
 	// Bill-payment line: the account's most recent linked bill payment, with a drill to
 	// the payments. Shown for ANY account the user has linked a bill payment to (the
@@ -499,21 +500,21 @@ func AccountRow(props accountRowProps) ui.Node {
 	// Readable notes line: the note text itself, clamped to a couple of lines and
 	// expandable on click, so an attached note is legible in the row instead of being
 	// hidden behind a hover tooltip on a tiny glyph (replaces acct-notes-dot).
-	var notesNode ui.Node = Fragment()
-	if notes := strings.TrimSpace(a.Notes); notes != "" {
+	notes := strings.TrimSpace(a.Notes)
+	notesNode := uiw.IfLazy(notes != "", func() ui.Node {
 		notesCls := "acct-notes"
 		toggleLabel := uistate.T("accounts.notesReadMore")
 		if notesExpanded.Get() {
 			notesCls += " open"
 			toggleLabel = uistate.T("accounts.notesReadLess")
 		}
-		notesNode = Button(ClassStr(notesCls), Type("button"), Attr("data-testid", "acct-notes-"+a.ID),
+		return Button(ClassStr(notesCls), Type("button"), Attr("data-testid", "acct-notes-"+a.ID),
 			Attr("aria-expanded", ariaBool(notesExpanded.Get())), Attr("aria-label", uistate.T("accounts.notesBadge")),
 			Title(toggleLabel), OnClick(toggleNotes),
 			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-notes-text"), notes),
 		)
-	}
+	})
 
 	// AC13 projected-balance line: for cash-like asset accounts whose 30-day
 	// projection dips below today's balance, show "→ ~$X low on <date>" with a "Why?"

@@ -711,12 +711,13 @@ func setBalanceNote(a domain.Account, curStated, targetStated int64) ui.Node {
 // curStated is the current balance in the stated convention.
 func acctValueUpdateSection(a domain.Account, curStated money.Money, dec int, setBalAmtS, setBalCatS, setBalAsOfS ui.State[string], onSetBalAmt, onSetBalAsOf ui.Handler, categories []domain.Category, focusValue bool) ui.Node {
 	rawAmt := strings.TrimSpace(setBalAmtS.Get())
-	var deltaNode ui.Node = Fragment()
-	if rawAmt != "" {
-		if targetMinor, parseErr := money.ParseMinor(rawAmt, dec); parseErr == nil {
-			deltaNode = setBalanceNote(a, curStated.Amount, targetMinor)
+	deltaNode := uiw.IfLazy(rawAmt != "", func() ui.Node {
+		targetMinor, parseErr := money.ParseMinor(rawAmt, dec)
+		if parseErr != nil {
+			return Fragment()
 		}
-	}
+		return setBalanceNote(a, curStated.Amount, targetMinor)
+	})
 	catOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.setBalanceNoCategory")}}
 	for _, c := range categories {
 		catOpts = append(catOpts, uiw.SelectOption{Value: c.ID, Label: c.Name})
