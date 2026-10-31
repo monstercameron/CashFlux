@@ -12,7 +12,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnscope"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
@@ -189,13 +188,11 @@ func txnDateScope(_ struct{}) ui.Node {
 	nextDisabled := !scope.CanStepForward(now)
 	hasDateFilter := f.From != "" || f.To != ""
 
+	prevLabel, nextLabel := uistate.T("txnperiod.prev"), uistate.T("txnperiod.next")
 	return Div(css.Class("txn-scopebar"), Attr("data-testid", "txn-scopebar"),
 		Attr("role", "group"), Attr("aria-label", uistate.T("txnperiod.scopeAria", txnScopeLabel(scope))),
-		Button(css.Class("txn-scope-step"), Type("button"),
-			Attr("data-testid", "txn-scope-prev"),
-			Disabled(prevDisabled),
-			Attr("aria-label", uistate.T("txnperiod.prev")), Title(uistate.T("txnperiod.prev")),
-			OnClick(prev), uiw.Icon(icon.ChevronLeft, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+		uiw.ToolButton(uiw.ToolButtonProps{Icon: icon.ChevronLeft, AriaLabel: prevLabel, Title: prevLabel, TestID: "txn-scope-prev"},
+			Disabled(prevDisabled), OnClick(prev)),
 		Div(ClassStr(controlClass), Attr("id", controlID),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   periodOptions,
@@ -205,10 +202,8 @@ func txnDateScope(_ struct{}) ui.Node {
 				TestID:    "txn-period-select",
 				OnChange:  onPreset,
 			}),
-			If(selectedPreset == "custom", Button(css.Class("txn-period-edit"), Type("button"),
-				Attr("data-testid", "txn-period-edit"), Attr("aria-label", uistate.T("txnperiod.editDates")),
-				Title(uistate.T("txnperiod.editDates")), Attr("aria-expanded", ariaBool(custom)), Attr("aria-controls", customID),
-				OnClick(editDates), uiw.Icon(icon.Calendar, css.Class(tw.W4, tw.H4)))),
+			If(selectedPreset == "custom", uiw.ToolButton(uiw.ToolButtonProps{Icon: icon.Calendar, AriaLabel: uistate.T("txnperiod.editDates"), Title: uistate.T("txnperiod.editDates"), TestID: "txn-period-edit", Open: custom},
+				Attr("aria-expanded", ariaBool(custom)), Attr("aria-controls", customID), OnClick(editDates))),
 			If(custom, Div(css.Class("txn-period-custom"),
 				Attr("id", customID), Attr("data-testid", "txn-period-custom"), Attr("role", "group"), Attr("aria-label", uistate.T("txnperiod.chooseDates")),
 				Span(css.Class("txn-period-custom-title"), uistate.T("txnperiod.chooseDates")),
@@ -222,18 +217,12 @@ func txnDateScope(_ struct{}) ui.Node {
 					Button(css.Class("txn-period-apply"), Type("button"), Attr("data-testid", "txn-period-apply"), Disabled(!validRange), OnClick(applyDates), uistate.T("txnperiod.applyDates"))),
 			)),
 		),
-		Button(css.Class("txn-scope-step"), Type("button"),
-			Attr("data-testid", "txn-scope-next"),
-			Disabled(nextDisabled),
-			Attr("aria-label", uistate.T("txnperiod.next")), Title(uistate.T("txnperiod.next")),
-			OnClick(next), uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		If(hasDateFilter, Button(css.Class("txn-scope-clear"), Type("button"),
-			Attr("data-testid", "txn-scope-clear"),
-			Attr("aria-label", uistate.T("txnperiod.clearDates")), Title(uistate.T("txnperiod.clearDates")),
-			OnClick(clearDates), uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+		uiw.ToolButton(uiw.ToolButtonProps{Icon: icon.ChevronRight, AriaLabel: nextLabel, Title: nextLabel, TestID: "txn-scope-next"},
+			Disabled(nextDisabled), OnClick(next)),
+		If(hasDateFilter, uiw.ToolButton(uiw.ToolButtonProps{Icon: icon.Close, AriaLabel: uistate.T("txnperiod.clearDates"), Title: uistate.T("txnperiod.clearDates"), TestID: "txn-scope-clear"},
+			OnClick(clearDates))),
 	)
 }
-
 func txnScopePresetRange(value string, now time.Time) (from, to, key string, ok bool) {
 	switch value {
 	case "this-month":

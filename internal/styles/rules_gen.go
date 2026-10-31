@@ -2781,19 +2781,6 @@ func registerGenerated() {
 	rule(".filter-inline-panel.filter-sheet .filter-amount-control .field",
 		paddingLeft("1.6rem"),
 	)
-	rule(".txn-period-control",
-		width("12rem"),
-		minWidth("12rem"),
-		position("relative"),
-		display("flex"),
-		flexDirection("column"),
-		alignItems("stretch"),
-	)
-	rule(".txn-period-select",
-		width("100%"),
-		minWidth("0"),
-		fontWeight("600"),
-	)
 	rule(".txn-period-custom",
 		position("absolute"),
 		top("calc(100% + .35rem)"),

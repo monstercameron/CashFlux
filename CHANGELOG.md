@@ -37,6 +37,7 @@ and every commit updates this file under `Unreleased`.
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed
+- The Transactions period control is shared toolbar buttons around one select. The previous and next steps and the clear control are the shared ToolButton, and the select takes the same height, radius, border and fill, so the row matches Filters and More.
 - The Transactions Review button carries a check-circle glyph, the same icon its menu entry uses.
 - The Transactions summary names its category bar "Spending by category", and the overflow reads "Show N more" so it is clear it opens the rest of the list.
 - The Transactions Filters sheet opens from the right edge of the window, not from inside the toolbar tile. The shared Overlay portals it, so a tile transform no longer moves it. Escape and clicking outside close it, and focus returns to the Filters button.

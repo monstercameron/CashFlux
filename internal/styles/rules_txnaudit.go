@@ -8,6 +8,31 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// The period control is the shared toolbar buttons around one select. Its custom-range
+	// editor is positioned against the control, so the control is the anchor.
+	rule(".txn-scopebar",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+	)
+	rule(".txn-period-control",
+		display("flex"),
+		alignItems("center"),
+		position("relative"),
+		gap("0.4rem"),
+	)
+	// The period select takes the toolbar button's tokens, so it sits at the same height and
+	// weight as the buttons beside it. Scoped to beat the generic select rule.
+	rule(".txn-scopebar select.txn-period-select.field",
+		minHeight("var(--tool-h)"),
+		padding("var(--btn-py) var(--btn-px)"),
+		borderRadius("var(--radius-lg)"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		fontSize("var(--fs-body)"),
+		fontWeight("500"),
+	)
 	// C1-15: keep the transaction row that owns an open action menu visually
 	// connected to the popover, including when the menu flips above its trigger.
 	rule(".txn-table tbody tr:has(.overflow-menu-open)",
@@ -111,19 +136,6 @@ func registerTxnAudit() {
 
 	// --- C560: the ledger's own period + view bar ------------------------------
 	// One row: the month stepper on the left, the Ledger/Calendar pair on the right,
-	// wrapping to two lines on a narrow pane. It reads as part of the ledger's chrome
-	// (a quiet hairline beneath), never as a second toolbar competing with the first.
-	rule(".txn-scopebar",
-		display("flex"),
-		alignItems("center"),
-		flexWrap("wrap"),
-		gap(".5rem"),
-		paddingTop(".1rem"),
-		paddingBottom(".45rem"),
-	)
-	rule(".txn-scopebar-spacer",
-		flex("1 1 auto"),
-	)
 	// The month label is the bar's one piece of typographic weight: it is the answer
 	// to "what am I looking at", so it is set larger and tabular so stepping months
 	// does not shift the chevrons beside it.
@@ -135,27 +147,6 @@ func registerTxnAudit() {
 		fontVariantNumeric("tabular-nums"),
 		color("var(--text)"),
 		whiteSpace("nowrap"),
-	)
-	rule(".txn-scope-step",
-		display("inline-flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		width("1.75rem"),
-		height("1.75rem"),
-		padding("0"),
-		borderRadius("var(--radius-md)"),
-		border("1px solid var(--border)"),
-		background("var(--bg-card)"),
-		color("var(--text-dim)"),
-		cursor("pointer"),
-	)
-	rule(".txn-scope-step:hover, .txn-scope-step:focus-visible",
-		borderColor("var(--accent)"),
-		color("var(--text)"),
-	)
-	rule(".txn-scope-step[disabled]",
-		opacity(".45"),
-		cursor("default"),
 	)
 	// Ledger / Calendar: a segmented pair, so which view is showing is legible from
 	// the fill rather than from which one is missing. aria-pressed carries the same
