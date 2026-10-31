@@ -4,6 +4,7 @@ package appstate
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +14,8 @@ import (
 )
 
 func TestExpectedAccountReconciliationCreatesCheckpointInStatedConvention(t *testing.T) {
-	a := newApp(t, false)
+	clock := time.Date(2026, 10, 31, 9, 30, 0, 0, time.UTC)
+	a := newTestAppAt(t, clock)
 	account := domain.Account{ID: "balance", Name: "Card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
 		Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: money.New(50000, "USD")}
 	if err := a.PutAccount(account); err != nil {
@@ -35,7 +37,7 @@ func TestExpectedAccountReconciliationCreatesCheckpointInStatedConvention(t *tes
 		t.Fatalf("checkpoint = %+v", checkpoint)
 	}
 	saved, ok, err := a.Store().GetAccount(account.ID)
-	if err != nil || !ok || saved.OpeningBalance.Amount != account.OpeningBalance.Amount || !saved.BalanceAsOf.Equal(asOf) {
+	if err != nil || !ok || saved.OpeningBalance.Amount != account.OpeningBalance.Amount || !saved.BalanceAsOf.Equal(clock) {
 		t.Fatalf("saved account = %+v, ok=%v, err=%v", saved, ok, err)
 	}
 }
@@ -268,5 +270,121 @@ func TestExpectedTransferLiabilitySourcePreviewMatchesPostedFeeLeg(t *testing.T)
 	}
 	if got := balanceOf(t, a, to); got != preview.Balances.ToAfter.Amount {
 		t.Fatalf("destination booked = %d, preview = %d", got, preview.Balances.ToAfter.Amount)
+	}
+}
+
+func TestExpectedAccountReconciliationStampsTheClockAndKeepsTheStatementDateOnTheCheckpoint(t *testing.T) {
+	clock := time.Date(2026, 10, 31, 9, 30, 0, 0, time.UTC)
+	a := newTestAppAt(t, clock)
+	if err := a.PutAccount(acctCovAsset("chk", "Checking", 10000, time.Time{})); err != nil {
+		t.Fatal(err)
+	}
+	statement := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+	preview, err := a.PreviewAccountReconciliation("chk", 12000, statement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint, err := a.CommitAccountReconciliation(preview, "Statement")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !checkpoint.Date.Equal(statement) {
+		t.Fatalf("checkpoint dated %v, want the statement date %v", checkpoint.Date, statement)
+	}
+	if got := storedAccount(a, "chk").BalanceAsOf; !got.Equal(clock) {
+		t.Fatalf("BalanceAsOf = %v, want the clock %v", got, clock)
+	}
+}
+
+func TestExpectedAccountReconciliationRefusesAnAccountThatDoesNotValidate(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutAccount(acctCovAsset("chk", "Checking", 10000, time.Time{})); err != nil {
+		t.Fatal(err)
+	}
+	broken := storedAccount(a, "chk")
+	broken.Name = ""
+	if err := a.Store().PutAccount(broken); err != nil {
+		t.Skipf("store refuses an unnamed account: %v", err)
+	}
+	preview, err := a.PreviewAccountReconciliation("chk", 12000, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CommitAccountReconciliation(preview, "Statement"); err == nil {
+		t.Fatal("a balance update was committed for an account that fails validation")
+	}
+	if n := len(a.Transactions()); n != 0 {
+		t.Fatalf("a refused balance update wrote %d rows", n)
+	}
+}
+
+func TestExpectedTransferIgnoresUnrelatedSettingsWrites(t *testing.T) {
+	a := newApp(t, false)
+	from, to := seedAssetPair(t, a, 100000, 0)
+	preview, err := a.PreviewExpectedTransfer(TransferParams{OperationID: "unrelated-settings", FromAccountID: from.ID,
+		ToAccountID: to.ID, AmountMinor: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := a.Settings()
+	settings.FXUpdatedAt = map[string]time.Time{"EUR": time.Now()}
+	settings.FlexBudget = 12345
+	if err := a.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.CreateTransferPairExpected(preview); err != nil {
+		t.Fatalf("an unrelated settings write failed the transfer: %v", err)
+	}
+	if n := len(a.Transactions()); n != 2 {
+		t.Fatalf("transfer wrote %d rows, want 2", n)
+	}
+}
+
+func TestExpectedTransferReservesTheOperationReceiptWithTheRows(t *testing.T) {
+	a := newApp(t, false)
+	from, to := seedAssetPair(t, a, 100000, 0)
+	preview, err := a.PreviewExpectedTransfer(TransferParams{OperationID: "receipt-op", FromAccountID: from.ID,
+		ToAccountID: to.ID, AmountMinor: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.CreateTransferPairExpected(preview); err != nil {
+		t.Fatal(err)
+	}
+	receipts, err := a.Store().ListAllTransferReceipts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range receipts {
+		found = found || r.ID == "receipt-op"
+	}
+	if !found {
+		t.Fatalf("receipts = %+v, want one for receipt-op", receipts)
+	}
+	// The ordinary path treats the same operation and payload as a retry, not a second transfer.
+	if _, _, err := a.CreateTransferPair(preview.Params); err != nil {
+		t.Fatalf("ordinary retry of the same operation: %v", err)
+	}
+	if n := len(a.Transactions()); n != 2 {
+		t.Fatalf("%d rows after the retry, want 2", n)
+	}
+	other := preview.Params
+	other.AmountMinor = 2000
+	if _, _, err := a.CreateTransferPair(other); err == nil {
+		t.Fatal("the operation ID was reused for a different transfer")
+	}
+}
+
+func TestExpectedTransferTreatsABlankOperationIDAsMissing(t *testing.T) {
+	a := newApp(t, false)
+	from, to := seedAssetPair(t, a, 100000, 0)
+	preview, err := a.PreviewExpectedTransfer(TransferParams{OperationID: "   ", FromAccountID: from.ID,
+		ToAccountID: to.ID, AmountMinor: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(preview.Params.OperationID) == "" {
+		t.Fatal("a blank operation ID was kept")
 	}
 }

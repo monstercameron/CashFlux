@@ -19,7 +19,6 @@ func TestBV6HTypographyTargetsAndLinkContrast(t *testing.T) {
 	for _, want := range []string{
 		".bento-budgets{--fs-meta:12.5px;--fs-body:14px;--fs-section:15px;--fs-title:18px;--fs-figure:28px;",
 		".bento-budgets h1, .bento-budgets .budlist-title{font-size:var(--fs-title);font-weight:600;",
-		".bento-budgets .bud3-headline-figure{font-size:var(--fs-figure);font-weight:600;font-variant-numeric:tabular-nums;",
 		".bento-budgets .budget-crow-name, .bento-budgets .budget-name{font-size:var(--fs-body);font-weight:600;",
 		".bento-budgets .bud3-attention-link{color:#28613f;",
 		".bento-budgets .budget-agemoney-head .smart-tip-wrap button{min-width:32px;min-height:32px;",

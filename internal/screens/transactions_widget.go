@@ -76,7 +76,7 @@ func txnTableSortKey(registerActive bool, key string) string {
 func Transactions() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+		return uiw.Card(uiw.CardProps{Body: uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("common.notReady"))})})
 	}
 	return ui.CreateElement(transactionsSurface, app)
 }
@@ -126,14 +126,18 @@ func useTxnSelectionScope(f txnfilter.Criteria, selAtom state.Atom[map[string]bo
 func txnSurfaceSpecs(ids []string) []domain.WidgetSpec { return txntable.SurfaceSpecs(ids) }
 
 func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.RenderCtx {
-	accounts, categories := app.Accounts(), app.Categories()
-	base := txntable.BaseCurrency(app.Settings().BaseCurrency)
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	accounts := ui.UseMemo(func() []domain.Account { return app.Accounts() }, revKey(app))
+	categories := ui.UseMemo(func() []domain.Category { return app.Categories() }, revKey(app))
+	transactions := ui.UseMemo(func() []domain.Transaction { return app.Transactions() }, revKey(app))
+	rates := ui.UseMemo(func() currency.Rates {
+		settings := app.Settings()
+		return currency.Rates{Base: txntable.BaseCurrency(settings.BaseCurrency), Rates: settings.FXRates}
+	}, revKey(app))
+	base := rates.Base
 	index := ui.UseMemo(func() txntable.Index {
 		return txntable.BuildIndex(nil, accounts, categories, nil, nil, nil)
 	}, revKey(app))
 	accName, catName := index.AccountNames, index.CategoryNames
-	transactions := app.Transactions()
 	resolver := app.PayeeResolver()
 	derivedFilter := f
 	derivedFilter.Page, derivedFilter.PageSize = 0, 0
@@ -219,39 +223,51 @@ func setTxFilterOn(atom state.Atom[uistate.TxFilter], mut func(*uistate.TxFilter
 	uistate.PersistTxFilter(nf)
 }
 
-// txnReceiptPreviewOverlay renders the receipt preview modal (L29) when the shared
-// preview atom holds an attachment, and an empty fragment otherwise. The table's row
-// paperclip opens it; the close button clears the atom. It is a dialog overlay, not
-// a bento tile, mirroring how the edit form is a modal host rather than a widget.
+// txnReceiptPreviewOverlay renders the receipt preview modal (L29) while the shared
+// preview atom holds an attachment. The table's row paperclip opens it; the close
+// button, Escape and a backdrop click clear the atom. It is a modal dialog named by
+// its heading: focus is trapped inside while it is open and returns to the control
+// that opened it on close. It is a dialog overlay, not a bento tile, mirroring how
+// the edit form is a modal host rather than a widget.
+//
+// The overlay hooks run on every render, open or closed, so focus is restored when the
+// atom is cleared.
 func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.AttachmentRef]) ui.Node {
-	closePreview := ui.UseEvent(Prevent(func() { previewAtom.Set(domain.AttachmentRef{}) }))
+	dismiss := func() { previewAtom.Set(domain.AttachmentRef{}) }
+	closePreview := ui.UseEvent(Prevent(dismiss))
 	closeOption := OnClick(closePreview)
 	ref := previewAtom.Get()
-	artifact := domain.Artifact{}
-	if ref.ArtifactID != "" {
-		if art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); art != nil {
-			artifact = *art
+	open := ref.ArtifactID != ""
+	art := domain.Artifact{}
+	if found := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); open && found != nil {
+		art = *found
+	}
+	url := useArtifactImageURL(app, art)
+	var dialog ui.Node
+	if open {
+		var body ui.Node
+		if url != "" {
+			body = Img(Attr("src", url), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
+		} else {
+			body = uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("transactions.previewMissing"))})
 		}
-	}
-	url := useArtifactImageURL(app, artifact)
-	if ref.ArtifactID == "" {
-		return Fragment()
-	}
-	var body ui.Node
-	if url != "" {
-		body = Img(Attr("src", url), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
-	} else {
-		body = P(css.Class("empty"), uistate.T("transactions.previewMissing"))
-	}
-	return Div(css.Class("receipt-preview-overlay"), Attr("role", "dialog"), Attr("aria-label", uistate.T("transactions.previewReceipt")),
-		uiw.Card(uiw.CardProps{
+		dialog = uiw.Card(uiw.CardProps{
 			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-				H2(css.Class("card-title"), uistate.T("transactions.previewReceipt")),
+				H2(css.Class("card-title"), Attr("id", "receipt-preview-title"), uistate.T("transactions.previewReceipt")),
 				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.previewClose")), Attr("data-testid", "receipt-preview-close"), closeOption, uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
 			Body: body,
-		}),
-	)
+		})
+	}
+	return ui.AccessibleOverlay(ui.AccessibleOverlayProps{
+		Open: open, Target: ui.PortalTarget{Selector: "body"}, SurfaceID: "receipt-preview-surface",
+		Kind: ui.OverlayKindDialog, Role: "dialog", LabelledBy: "receipt-preview-title", Modal: true,
+		TrapFocus: true, RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
+		LockScroll: true, BackgroundInert: true, Backdrop: true, BaseZIndex: 3000,
+		BackdropClass:        "receipt-preview-overlay",
+		InitialFocusSelector: `[data-testid="receipt-preview-close"]`,
+		Child:                dialog, OnDismiss: dismiss,
+	})
 }
 
 // txnTableProps carries the engine-hydrated ledger frame and the data the table tile
@@ -452,7 +468,12 @@ func txnTableExcludeAction(app *appstate.App) func(string) {
 		_ = commitUndoable(uistate.T(key, txnShortLabel(live)), []string{t.ID}, func() error { return app.PutTransactionsAtomic([]domain.Transaction{live}) })
 	}
 	toggleExclude := func(id string) {
-		for _, t := range app.Transactions() {
+		rows, err := app.TransactionsChecked()
+		if err != nil {
+			uistate.PostNotice(uistate.T("transactions.readFailed"), true)
+			return
+		}
+		for _, t := range rows {
 			if t.ID != id {
 				continue
 			}
@@ -479,9 +500,14 @@ func txnTableExcludeAction(app *appstate.App) func(string) {
 
 func txnTableDeleteAction(app *appstate.App) func(string) {
 	deleteRow := func(id string) {
+		rows, err := app.TransactionsChecked()
+		if err != nil {
+			uistate.PostNotice(uistate.T("transactions.readFailed"), true)
+			return
+		}
 		var txn domain.Transaction
 		found := false
-		for _, t := range app.Transactions() {
+		for _, t := range rows {
 			if t.ID == id {
 				txn, found = t, true
 				break
@@ -492,7 +518,7 @@ func txnTableDeleteAction(app *appstate.App) func(string) {
 		}
 		linked := txntable.OpenTaskCount(app.Tasks(), id)
 
-		what := txntable.DeletePrompt(app.ExpandTransferPairs([]string{txn.ID}), app.Transactions(), app.Accounts(), linked, txntable.Labels{T: uistate.T, Money: fmtMoney})
+		what := txntable.DeletePrompt(app.ExpandTransferPairs([]string{txn.ID}), rows, app.Accounts(), linked, txntable.Labels{T: uistate.T, Money: fmtMoney})
 		uistate.ConfirmModal(what, true, func(ok bool) {
 			if !ok {
 				return
@@ -1138,12 +1164,13 @@ type txnFrameRowCellsProps struct {
 
 func txnFrameRowCells(props txnFrameRowCellsProps) ui.Node {
 	r := props.Row
-	args := []any{ClassStr(txntable.RowClass(r.Selected, r.Cleared, r.ExcludedFromReports)), Attr("data-testid", "txn-row-"+r.ID), Attr("aria-busy", strconv.FormatBool(props.SaveStatus == "Saving..."))}
+	rowClass := txntable.RowClass(r.Selected, r.Cleared, r.ExcludedFromReports)
+	if r.GroupSize > 1 {
+		rowClass += " txn-row-grouped"
+	}
+	args := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+r.ID), Attr("aria-busy", strconv.FormatBool(props.SaveStatus == "Saving..."))}
 	if r.RowIndex > 0 {
 		args = append(args, Attr("aria-rowindex", strconv.Itoa(r.RowIndex)))
-	}
-	if r.GroupSize > 1 {
-		args = append(args, Style(map[string]string{"box-shadow": "inset 3px 0 0 0 var(--accent)"}))
 	}
 	args = append(args,
 		ui.CreateElement(txnRowSelectionCell, r),
@@ -1232,7 +1259,7 @@ func txnRowCategoryCell(props txnFrameRowCellsProps) ui.Node {
 	if title != "" {
 		args = append(args, Attr("title", title))
 	}
-	args = append(args, Span(css.Class("td-cat-inner"), Style(map[string]string{"min-height": "1.5rem", "width": "100%"}),
+	args = append(args, Span(css.Class("td-cat-inner"),
 		If(r.IsTransfer, Span(css.Class("txn-transfer-category"), Attr("data-testid", "txn-transfer-category"),
 			Attr("title", txntable.TransferTooltip(r.CategoryTooltip, r.TransferWith, uistate.T)),
 			txntable.TransferDisplay(r.Category, r.TransferWith, r.AmountMoney.Amount < 0, uistate.T))),

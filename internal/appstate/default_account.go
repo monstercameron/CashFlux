@@ -35,7 +35,10 @@ func (a *App) SetDefaultAccountID(accountID string) error {
 	if account.Archived {
 		return fmt.Errorf("appstate: archived account %q cannot be the default", accountID)
 	}
-	settings := a.Settings()
+	settings, err := a.SettingsChecked()
+	if err != nil {
+		return fmt.Errorf("appstate: save default account %q: %w", accountID, err)
+	}
 	settings.DefaultAccountID = accountID
 	if err := a.PutSettings(settings); err != nil {
 		return fmt.Errorf("appstate: save default account %q: %w", accountID, err)
@@ -48,7 +51,10 @@ func (a *App) ClearDefaultAccountID() error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	settings := a.Settings()
+	settings, err := a.SettingsChecked()
+	if err != nil {
+		return fmt.Errorf("appstate: clear default account: %w", err)
+	}
 	settings.DefaultAccountID = ""
 	if err := a.PutSettings(settings); err != nil {
 		return fmt.Errorf("appstate: clear default account: %w", err)

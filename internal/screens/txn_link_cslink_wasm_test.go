@@ -23,7 +23,7 @@ func TestCSLINKSummary(t *testing.T) {
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(txnLinkSummary, txnlink.Summary{Description: "Merchant", AccountLine: "Date and account", Amount: "($6.75)", Tone: "text-down"}))
 	summary := findByTestID(f, "div", "txnlink-summary")
-	if summary == nil || summary.Attr("class") != "txnlink-summary" || !strings.Contains(summary.Text(), "Merchant") || !strings.Contains(summary.Text(), "Date and account") || !strings.Contains(summary.Text(), "($6.75)") {
+	if summary == nil || !hasClass(summary.Attr("class"), "txnlink-summary") || !strings.Contains(summary.Text(), "Merchant") || !strings.Contains(summary.Text(), "Date and account") || !strings.Contains(summary.Text(), "($6.75)") {
 		t.Fatalf("summary = %#v; class=%q text=%q", summary, summary.Attr("class"), summary.Text())
 	}
 	if len(summary.Children()) != 2 {

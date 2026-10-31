@@ -681,6 +681,14 @@ type Recurring struct {
 	// Consumers that must ignore paused items filter on this field; the domain
 	// type itself stays inert so nothing silently changes behaviour on load.
 	Paused bool `json:"paused,omitempty"`
+	// Service lists the bill on the Accounts page as a service (a utility, subscription or other
+	// recurring bill). A service is not an account, so it stays out of the asset, liability and
+	// net worth totals. Its monthly cost still counts toward budgets and reports, because it is a
+	// recurring bill. JSON round-trips with no store migration.
+	Service bool `json:"service,omitempty"`
+	// Provider names who the service comes from, such as "Comcast Xfinity". It is free text,
+	// and the add form suggests the household's institutions.
+	Provider string `json:"provider,omitempty"`
 }
 
 // Active reports whether this recurring participates in scheduling and

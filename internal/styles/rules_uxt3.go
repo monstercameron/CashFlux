@@ -23,29 +23,11 @@ func registerRulesUXT3() {
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .filter-toolbar-actions, .txn-responsive-toolbar .filter-toolbar-actions *",
 		whiteSpace("nowrap"),
 	)
-	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .txn-period-control",
-		flex("0 1 12rem"),
-		minWidth("9rem"),
-		flexDirection("row"),
-		alignItems("center"),
-		gap(".25rem"),
-	)
-	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .txn-period-control > button",
-		flex("0 0 auto"),
-		whiteSpace("nowrap"),
-	)
-	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .txn-period-select",
-		minWidth("0"),
-		whiteSpace("nowrap"),
-	)
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .txn-toolbar-add, .txn-responsive-toolbar .txn-toolbar-add *",
 		whiteSpace("nowrap"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .txn-toolbar-add",
 		flex("0 0 auto"),
-	)
-	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .txn-period-control button, .txn-responsive-toolbar .txn-period-control select",
-		boxSizing("border-box"),
 	)
 	ruleMedia("(max-width: 1180px)", ".bento-ledger .txn-table",
 		tableLayout("fixed"),
@@ -75,7 +57,7 @@ func registerRulesUXT3() {
 		display("block"),
 		flex("0 0 100%"),
 		minWidth("0"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		lineHeight("1.2"),
 		color("var(--text-dim)"),
 		overflow("hidden"),

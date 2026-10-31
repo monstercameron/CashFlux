@@ -4,6 +4,7 @@ package reconcile
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -337,5 +338,78 @@ func TestAFailedDeleteStaysInTheJournal(t *testing.T) {
 	}
 	if _, still := l.rows["adj"]; still {
 		t.Errorf("the adjustment survived the retry")
+	}
+}
+
+// A row the dialog created and then ticked has a before-image that must never be
+// written back: that would re-create the row Rollback just deleted.
+func TestRollbackNeverRecreatesARowItCreated(t *testing.T) {
+	l := newFakeLedger()
+	s := NewSession()
+	adj := row("adj", true)
+	_ = l.PutTransaction(adj)
+	s.NoteCreated(adj.ID)
+	s.NoteBefore(adj)
+	s.NoteCreated(adj.ID)
+
+	if got := s.Count(); got != 1 {
+		t.Fatalf("Count = %d, want the created-and-noted row counted once", got)
+	}
+	var order []string
+	if failed := s.Rollback(&orderedLedger{inner: l, order: &order}); failed != 0 {
+		t.Fatalf("failed = %d", failed)
+	}
+	if _, still := l.rows["adj"]; still {
+		t.Fatal("the created row was re-created by the restore pass")
+	}
+	if len(order) != 1 || order[0] != "delete:adj" {
+		t.Fatalf("calls = %v, want exactly one delete", order)
+	}
+}
+
+func TestRollbackRestoresInAscendingIDOrder(t *testing.T) {
+	ids := []string{"d", "b", "e", "a", "c"}
+	for attempt := 0; attempt < 20; attempt++ {
+		l := newFakeLedger()
+		s := NewSession()
+		for _, id := range ids {
+			s.NoteBefore(row(id, false))
+		}
+		var order []string
+		if failed := s.Rollback(&orderedLedger{inner: l, order: &order}); failed != 0 {
+			t.Fatalf("failed = %d", failed)
+		}
+		want := []string{"put:a", "put:b", "put:c", "put:d", "put:e"}
+		if !reflect.DeepEqual(order, want) {
+			t.Fatalf("restore order = %v, want %v", order, want)
+		}
+	}
+}
+
+func TestNoteBeforeIsolatesSharedStorage(t *testing.T) {
+	original := row("t1", false)
+	original.Splits = []domain.CategorySplit{{CategoryID: "c1", Amount: money.New(-1000, "USD")}}
+	original.Tags = []string{"a"}
+	original.MemberIDs = []string{"m1"}
+	original.Attachments = []domain.AttachmentRef{{ArtifactID: "x"}}
+	original.Custom = map[string]any{"k": "v"}
+
+	s := NewSession()
+	s.NoteBefore(original)
+
+	original.Splits[0].CategoryID = "changed"
+	original.Tags[0] = "changed"
+	original.MemberIDs[0] = "changed"
+	original.Attachments[0].ArtifactID = "changed"
+	original.Custom["k"] = "changed"
+
+	l := newFakeLedger(original)
+	if failed := s.Rollback(l); failed != 0 {
+		t.Fatalf("rollback failed %d rows", failed)
+	}
+	got := l.rows["t1"]
+	if got.Splits[0].CategoryID != "c1" || got.Tags[0] != "a" || got.MemberIDs[0] != "m1" ||
+		got.Attachments[0].ArtifactID != "x" || got.Custom["k"] != "v" {
+		t.Errorf("before-image shares storage with the live row: %+v", got)
 	}
 }

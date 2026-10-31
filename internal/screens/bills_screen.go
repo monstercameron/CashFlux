@@ -65,7 +65,8 @@ func prepareBillFitModel(app *appstate.App, candidates []bills.Bill, now time.Ti
 	budgets, budgetsErr := app.BudgetsChecked()
 	transactions, transactionsErr := app.TransactionsChecked()
 	links, linksErr := app.TxnLinksChecked()
-	recurring, recurringErr := st.ListRecurring()
+	recurring := app.Recurring()
+	var recurringErr error
 	sourceErr := errors.Join(settingsErr, accountsErr, transactionsErr, linksErr)
 	indexErr := errors.Join(categoriesErr, budgetsErr, recurringErr)
 	return billfit.Prepare(billfit.Input{

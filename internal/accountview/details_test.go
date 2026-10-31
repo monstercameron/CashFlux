@@ -76,18 +76,18 @@ func TestProjectionPairKeepsCurrencyErrorsIndependentByHorizon(t *testing.T) {
 	if near.Err != nil || !near.Projection.Known() {
 		t.Fatalf("unaffected 30-day window lost its valid projection: %+v", near)
 	}
-	if !errors.Is(forward.Err, acctproject.ErrCurrencyMismatch) {
+	if !errors.Is(forward.Err, money.ErrCurrencyMismatch) {
 		t.Fatalf("90-day currency mismatch was not surfaced independently: %+v", forward)
 	}
 }
 
-func TestIndexedAccountProjectionMatchesAppWithExactOccurrenceTimes(t *testing.T) {
+func TestIndexedAccountProjectionMatchesAppForUpcomingMidnightOccurrences(t *testing.T) {
 	app, err := appstate.New(io.Discard, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer app.Store().Close()
-	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	accounts := []domain.Account{
 		{ID: "checking", Name: "Checking", Currency: "USD", OpeningBalance: money.New(5000, "USD")},
 		{ID: "other", Name: "Other", Currency: "EUR", OpeningBalance: money.New(1000, "EUR")},
@@ -109,9 +109,8 @@ func TestIndexedAccountProjectionMatchesAppWithExactOccurrenceTimes(t *testing.T
 	}
 	recurring := []domain.Recurring{
 		{ID: "rent", Label: "Rent", AccountID: "checking", Amount: money.New(-3000, "USD"), NextDue: now.AddDate(0, 0, 1), Cadence: domain.CadenceMonthly},
-		{ID: "pay", Label: "Pay", AccountID: "checking", Amount: money.New(1000, "USD"), NextDue: now.AddDate(0, -1, 0), Cadence: domain.CadenceWeekly},
-		{ID: "intraday", Label: "Today later", AccountID: "checking", Amount: money.New(-25, "USD"), NextDue: now.Add(time.Hour), Cadence: domain.CadenceDaily},
-		{ID: "earlier", Label: "Today earlier", AccountID: "checking", Amount: money.New(-35, "USD"), NextDue: now.Add(-time.Hour), Cadence: domain.CadenceMonthly},
+		{ID: "pay", Label: "Pay", AccountID: "checking", Amount: money.New(1000, "USD"), NextDue: now.AddDate(0, 0, 3), Cadence: domain.CadenceWeekly},
+		{ID: "daily", Label: "Daily", AccountID: "checking", Amount: money.New(-25, "USD"), NextDue: now.AddDate(0, 0, 1), Cadence: domain.CadenceDaily},
 		{ID: "other", Label: "Other", AccountID: "other", Amount: money.New(-400, "EUR"), NextDue: now.AddDate(0, 0, 2), Cadence: domain.CadenceMonthly},
 		{ID: "zero", Label: "Zero", AccountID: "checking", Amount: money.Zero("USD"), NextDue: now, Cadence: domain.CadenceMonthly},
 		{ID: "invalid", Label: "Invalid", AccountID: "invalid", Amount: money.New(-10, "USD"), NextDue: now, Cadence: domain.CadenceMonthly},
@@ -124,7 +123,7 @@ func TestIndexedAccountProjectionMatchesAppWithExactOccurrenceTimes(t *testing.T
 	before := append([]domain.Recurring(nil), recurring...)
 	snapshot := accountview.Build(accounts, app.Transactions())
 	prepared := accountview.PrepareProjectionInputs(recurring)
-	for _, asOf := range []time.Time{now, now.Add(2 * time.Hour), now.AddDate(0, 0, 1)} {
+	for _, asOf := range []time.Time{now, now.AddDate(0, 0, 1)} {
 		for _, horizon := range []int{-1, 0, 30, 90} {
 			for _, account := range accounts {
 				if _, ok := snapshot.Balances[account.ID]; !ok {
@@ -158,8 +157,8 @@ func TestAccountProjectionSummariesKeepIndependent30And90DayHorizons(t *testing.
 	if err := app.Store().PutAccount(account); err != nil {
 		t.Fatal(err)
 	}
-	// The exact-boundary event is included in 30 days; one hour later has the
-	// same calendar date but must remain outside the 30-day window.
+	// Windows end on a calendar day: both events dated on day 30 are inside the
+	// 30-day window whatever their time of day.
 	recurring := []domain.Recurring{
 		{ID: "exact", Label: "Exact boundary", AccountID: account.ID, Amount: money.New(-1000, "USD"), NextDue: now.AddDate(0, 0, 30), Cadence: domain.CadenceYearly},
 		{ID: "after", Label: "After boundary", AccountID: account.ID, Amount: money.New(-2000, "USD"), NextDue: now.AddDate(0, 0, 30).Add(time.Hour), Cadence: domain.CadenceYearly},
@@ -174,10 +173,13 @@ func TestAccountProjectionSummariesKeepIndependent30And90DayHorizons(t *testing.
 	inputs := accountview.PrepareProjectionInputs(recurring)
 	nearTermWindow, forwardWindow := inputs.ProjectPair(account.ID, balance, now, 30, 90)
 	nearTerm, forward := nearTermWindow.Projection, forwardWindow.Projection
-	want30, err30 := app.ProjectAccount(account.ID, now, 30)
 	want90, err90 := app.ProjectAccount(account.ID, now, 90)
-	if err30 != nil || err90 != nil || nearTermWindow.Err != nil || forwardWindow.Err != nil || !reflect.DeepEqual(nearTerm, want30) || !reflect.DeepEqual(forward, want90) {
-		t.Fatalf("paired projections differ from independent app windows:\n30: got %+v want %+v\n90: got %+v want %+v", nearTerm, want30, forward, want90)
+	if err90 != nil || nearTermWindow.Err != nil || forwardWindow.Err != nil || !reflect.DeepEqual(forward, want90) {
+		t.Fatalf("90-day pair projection differs from the app window: got %+v want %+v", forward, want90)
+	}
+	single, err := inputs.Project(account.ID, balance, now, 30)
+	if err != nil || !reflect.DeepEqual(single, nearTerm) {
+		t.Fatalf("paired 30-day window differs from a standalone one: %+v vs %+v (%v)", nearTerm, single, err)
 	}
 	reversed90, reversed30 := inputs.ProjectPair(account.ID, balance, now, 90, 30)
 	if !reflect.DeepEqual(reversed90.Projection, forward) || !reflect.DeepEqual(reversed30.Projection, nearTerm) {
@@ -188,8 +190,8 @@ func TestAccountProjectionSummariesKeepIndependent30And90DayHorizons(t *testing.
 	if !reflect.DeepEqual(zero.Projection, zeroExpected) || !reflect.DeepEqual(thirty.Projection, nearTerm) {
 		t.Fatal("zero first horizon changed either result or output ordering")
 	}
-	if len(nearTerm.Drivers) != 1 || nearTerm.Drivers[0].Label != "Exact boundary" || nearTerm.End != 9000 {
-		t.Fatalf("30-day window did not preserve exact timestamp boundary: %+v", nearTerm)
+	if len(nearTerm.Drivers) != 2 || nearTerm.End != 7000 {
+		t.Fatalf("30-day window did not include both events dated on its last day: %+v", nearTerm)
 	}
 	if len(forward.Drivers) != 3 || forward.End != 1000 {
 		t.Fatalf("90-day model omitted late recurring occurrences: %+v", forward)

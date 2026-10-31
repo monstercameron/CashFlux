@@ -34,28 +34,12 @@ var smartHintKeys = Catalog{
 	// %s = the projected overage.
 	"sm4.reasonEarlyPace": "Not over yet, but at this rate the period lands about %s past the limit.",
 	"sm4.reasonSteady":    "No single cause — the spending is spread across the period.",
-	"sm4.title":           "Why this went over",
-	"sm4.contributors":    "Biggest contributors",
-	"sm4.action":          "See the charges",
 	"sm4.aiAction":        "Explain with Smart+",
 
-	// SM-5 — an unusual balance move on one account.
-	// %s = the size of the move, %s = how it compares with this account's norm.
-	"sm5.hint":     "This balance moved unusually: %s.",
-	"sm5.detail":   "That's %s the size of a typical move on this account.",
-	"sm5.action":   "See the charges",
-	"sm5.aiAction": "Explain with Smart+",
-
 	// SM-6 — the repeats detected on one account.
-	// %d = how many repeating charges were found on this account.
-	"sm6.hint":      "%d charges here repeat on a schedule.",
-	"sm6.action":    "Review them",
-	"sm6.title":     "Repeating charges on this account",
 	"sm6.makeRecur": "Track as recurring",
-	"sm6.tracked":   "Already tracked",
 	// %s = the cadence (monthly, weekly…), %s = the typical amount.
 	"sm6.rowMeta": "%s · about %s",
-	"sm6.empty":   "Nothing on this account repeats on a schedule yet.",
 	// %s = the charge now being tracked.
 	"sm6.trackedUndo": "Now tracking %s as recurring.",
 
@@ -63,38 +47,21 @@ var smartHintKeys = Catalog{
 	"sm8.chip":   "Possible duplicate",
 	"sm8.hint":   "This may be a duplicate.",
 	"sm8.detail": "Same amount and merchant as another transaction from the last few days.",
-	"sm8.action": "Compare them",
-
-	// SM-9 — an expected charge that hasn't posted.
-	// %s = the merchant, %s = when it was expected.
-	"sm9.hint":   "%s usually posts by now — nothing has arrived since %s.",
-	"sm9.action": "Check it",
 
 	// SM-10 — a category spiked against its own baseline.
 	// %s = the category, %s = how much above its baseline.
 	"sm10.chip":               "Higher than usual",
 	"sm10.hint":               "About %s more than your usual %s at %s",
-	"sm10.action":             "See the charges",
 	"txnflag.showEvidence":    "Higher than usual. Show evidence",
 	"txnflag.evidenceTitle":   "Why this was flagged",
 	"txnflag.openTransaction": "Open transaction",
 
-	// SM-11 — a low-balance / overdraft forecast on one account.
-	// %s = the date the balance is projected to go negative.
-	"sm11.hint":   "At this burn, this account dips below zero around %s.",
-	"sm11.detail": "Projected from your recent spending and the bills already scheduled.",
-	"sm11.action": "See the forecast",
-
 	// SM-12 — a suggested amount for one budget.
-	// %s = the suggested limit, %d = how many months it averages.
-	"sm12.hint":   "Your %d-month average here is %s.",
-	"sm12.action": "Use %s",
 	// The undoable toast. %s = the budget name, %s = the new limit.
 	"sm12.appliedUndo": "%s set to %s.",
 
 	// SM-13 — a goal pace nudge (Smart+ writes the sentence).
-	"sm13.action":  "Ask Smart+",
-	"sm13.pending": "Thinking…",
+	"sm13.action": "Ask Smart+",
 
 	// SM-14 — reading a date out of a typed to-do.
 	// %s = the date, %s = the repeat label.
@@ -118,11 +85,6 @@ var smartHintKeys = Catalog{
 	// %s = the amount as typed.
 	"sm15.amountOut": "−%s out",
 	"sm15.amountIn":  "+%s in",
-
-	// SM-16 — a fee draining an otherwise-idle account.
-	// %s = the yearly cost of the fee.
-	"sm16.hint":   "This account is idle but still charging fees — about %s a year.",
-	"sm16.action": "Review the account",
 }
 
 func init() {

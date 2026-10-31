@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -35,6 +36,8 @@ type AccountReconciliationPreview struct {
 	CheckpointAmountMinor int64
 	CheckpointCount       int
 	CheckpointAction      string
+	// CategoryID files the balance checkpoint under a budget category. It is empty for no category.
+	CategoryID string
 
 	account              domain.Account
 	currentStated        int64
@@ -54,6 +57,9 @@ type AccountReconciliationPreview struct {
 // PreviewAccountReconciliation reads the booked balance and builds a preview
 // whose commit will fail if the account or any transaction on it changes.
 func (a *App) PreviewAccountReconciliation(accountID string, targetStatedMinor int64, asOf time.Time) (AccountReconciliationPreview, error) {
+	if err := a.ready(); err != nil {
+		return AccountReconciliationPreview{}, err
+	}
 	if accountID == "" {
 		return AccountReconciliationPreview{}, fmt.Errorf("balance update: account ID is required")
 	}
@@ -76,7 +82,7 @@ func (a *App) PreviewAccountReconciliation(accountID string, targetStatedMinor i
 	if err != nil {
 		return AccountReconciliationPreview{}, fmt.Errorf("balance update: read booked balance: %w", err)
 	}
-	convention, _ := reconcile.ConventionOf(account, booked.Amount)
+	convention := accountConvention(account)
 	currentStated, err := statedBalance(booked.Amount, convention)
 	if err != nil {
 		return AccountReconciliationPreview{}, err
@@ -115,6 +121,10 @@ func (a *App) PreviewAccountReconciliation(accountID string, targetStatedMinor i
 	if adjustment == 0 {
 		action = "none"
 	}
+	expectedRows, err := cloneTransactionsChecked(rows)
+	if err != nil {
+		return AccountReconciliationPreview{}, fmt.Errorf("balance update: copy ledger: %w", err)
+	}
 	return AccountReconciliationPreview{
 		AccountID: account.ID, AccountName: account.Name, Currency: account.Currency,
 		CurrentStatedMinor: currentStated, TargetStatedMinor: targetStatedMinor,
@@ -125,14 +135,24 @@ func (a *App) PreviewAccountReconciliation(accountID string, targetStatedMinor i
 		adjustmentStated: adjustment, currency: account.Currency, accountName: account.Name,
 		checkpointAmount: checkpointAmount, checkpointCount: len(checkpoints), checkpointAction: action,
 		asOf: normalizeTransactionDate(asOf), needsAdjustment: adjustment != 0,
-		expectedTransactions: cloneTransactions(rows),
+		expectedTransactions: expectedRows,
 	}, nil
+}
+
+// WithCategory returns the preview with its balance checkpoint filed under categoryID. Commit uses
+// the category when it writes the checkpoint.
+func (p AccountReconciliationPreview) WithCategory(categoryID string) AccountReconciliationPreview {
+	p.CategoryID = categoryID
+	return p
 }
 
 // CommitAccountReconciliation atomically replaces balance checkpoints and
 // updates BalanceAsOf only if the previewed account and its complete ledger
 // slice remain unchanged. A zero-delta confirmation is a no-op.
 func (a *App) CommitAccountReconciliation(preview AccountReconciliationPreview, desc string) (domain.Transaction, error) {
+	if err := a.ready(); err != nil {
+		return domain.Transaction{}, err
+	}
 	if err := a.roleGuard(); err != nil {
 		return domain.Transaction{}, err
 	}
@@ -170,6 +190,7 @@ func (a *App) CommitAccountReconciliation(preview AccountReconciliationPreview, 
 		return domain.Transaction{}, fmt.Errorf("balance update: %w", err)
 	}
 	if create {
+		checkpoint.CategoryID = preview.CategoryID
 		accounts, err := a.store.ListAccounts()
 		if err != nil {
 			return domain.Transaction{}, fmt.Errorf("balance update: read accounts: %w", err)
@@ -180,7 +201,15 @@ func (a *App) CommitAccountReconciliation(preview AccountReconciliationPreview, 
 	} else {
 		checkpoint = domain.Transaction{}
 	}
-	changes, err := a.reconciliationChanges(account, rows, checkpoint, preview.asOf)
+	updated := account
+	updated.BalanceAsOf = a.clock()
+	if is := validate.ValidateAccount(updated); !is.OK() {
+		return domain.Transaction{}, fmt.Errorf("balance update: save account: %w", is)
+	}
+	if err := a.validateCustom("account", updated.Custom); err != nil {
+		return domain.Transaction{}, fmt.Errorf("balance update: save account: %w", err)
+	}
+	changes, err := a.reconciliationChanges(account, updated, rows, checkpoint)
 	if err != nil {
 		return domain.Transaction{}, err
 	}
@@ -191,18 +220,16 @@ func (a *App) CommitAccountReconciliation(preview AccountReconciliationPreview, 
 	return checkpoint, nil
 }
 
-func (a *App) reconciliationChanges(account domain.Account, rows []domain.Transaction, checkpoint domain.Transaction, asOf time.Time) ([]store.RecordChange, error) {
+func (a *App) reconciliationChanges(account, updated domain.Account, rows []domain.Transaction, checkpoint domain.Transaction) ([]store.RecordChange, error) {
 	changes := make([]store.RecordChange, 0, len(rows)+2)
+	checkpoints := make(map[string]bool)
 	for _, old := range provisional.Of(account.ID, rows) {
+		checkpoints[old.ID] = true
 		before, err := json.Marshal(old)
 		if err != nil {
 			return nil, fmt.Errorf("balance update: encode old checkpoint: %w", err)
 		}
 		changes = append(changes, store.RecordChange{Table: "transactions", ID: old.ID, Before: before})
-	}
-	checkpoints := make(map[string]bool)
-	for _, old := range provisional.Of(account.ID, rows) {
-		checkpoints[old.ID] = true
 	}
 	for _, row := range rows {
 		if checkpoints[row.ID] {
@@ -215,8 +242,6 @@ func (a *App) reconciliationChanges(account domain.Account, rows []domain.Transa
 		// A no-op transition makes the row part of the same expected-state write.
 		changes = append(changes, store.RecordChange{Table: "transactions", ID: row.ID, Before: data, After: data})
 	}
-	updated := account
-	updated.BalanceAsOf = asOf
 	beforeAccount, err := json.Marshal(account)
 	if err != nil {
 		return nil, fmt.Errorf("balance update: encode account: %w", err)
@@ -260,10 +285,13 @@ type ExpectedTransferPreview struct {
 // PreviewExpectedTransfer normalizes defaults, then records all financial
 // inputs used by the shared transfer preview math.
 func (a *App) PreviewExpectedTransfer(p TransferParams) (ExpectedTransferPreview, error) {
+	if err := a.ready(); err != nil {
+		return ExpectedTransferPreview{}, err
+	}
 	if p.FromAccountID == "" || p.ToAccountID == "" || p.FromAccountID == p.ToAccountID || p.AmountMinor <= 0 || p.ReceivedMinor < 0 || p.FeeMinor < 0 {
 		return ExpectedTransferPreview{}, fmt.Errorf("transfer preview: invalid account or amount")
 	}
-	if p.OperationID == "" {
+	if strings.TrimSpace(p.OperationID) == "" {
 		p.OperationID = id.New()
 	}
 	if p.Date.IsZero() {
@@ -307,27 +335,25 @@ func (a *App) PreviewExpectedTransfer(p TransferParams) (ExpectedTransferPreview
 	if err != nil {
 		return ExpectedTransferPreview{}, err
 	}
-	feeDelta := int64(0)
-	if p.FeeMinor > 0 {
-		feeDelta = -from.InflowSign() * p.FeeMinor
-	}
-	fromLegAndFee, err := checkedAdd(fromLeg.Amount, feeDelta)
-	var fromAfter int64
-	if err == nil {
-		fromAfter, err = checkedAdd(fromBal.Amount, fromLegAndFee)
-	}
+	pv, err := transferPreviewBalances(from, to, fromBal, toBal, fromLeg, toLeg, p.FeeMinor)
 	if err != nil {
-		return ExpectedTransferPreview{}, fmt.Errorf("transfer preview: source balance overflows")
+		return ExpectedTransferPreview{}, err
 	}
-	toAfter, err := checkedAdd(toBal.Amount, toLeg.Amount)
+	settingsCopy, err := cloneSettings(settings)
 	if err != nil {
-		return ExpectedTransferPreview{}, fmt.Errorf("transfer preview: destination balance overflows")
+		return ExpectedTransferPreview{}, fmt.Errorf("transfer preview: copy settings: %w", err)
 	}
-	pv := TransferPreview{FromBefore: fromBal, FromAfter: money.New(fromAfter, from.Currency),
-		ToBefore: toBal, ToAfter: money.New(toAfter, to.Currency)}
+	fromCopy, err := cloneTransactionsChecked(fromRows)
+	if err != nil {
+		return ExpectedTransferPreview{}, fmt.Errorf("transfer preview: copy source ledger: %w", err)
+	}
+	toCopy, err := cloneTransactionsChecked(toRows)
+	if err != nil {
+		return ExpectedTransferPreview{}, fmt.Errorf("transfer preview: copy destination ledger: %w", err)
+	}
 	return ExpectedTransferPreview{Params: p, Balances: pv, FromAccountName: from.Name, ToAccountName: to.Name,
 		FromAmount: fromLeg, ToAmount: toLeg, params: p, balances: pv, fromAccount: from, toAccount: to,
-		settings: cloneSettings(settings), fromRows: cloneTransactions(fromRows), toRows: cloneTransactions(toRows),
+		settings: settingsCopy, fromRows: fromCopy, toRows: toCopy,
 		fromAmount: fromLeg, toAmount: toLeg}, nil
 }
 
@@ -339,7 +365,7 @@ func (a *App) CreateTransferPairExpected(preview ExpectedTransferPreview) (strin
 		return "", "", err
 	}
 	p := preview.params
-	if p.OperationID == "" || !sameJSON(preview.Params, preview.params) || !sameJSON(preview.Balances, preview.balances) ||
+	if strings.TrimSpace(p.OperationID) == "" || !sameJSON(preview.Params, preview.params) || !sameJSON(preview.Balances, preview.balances) ||
 		preview.FromAccountName != preview.fromAccount.Name || preview.ToAccountName != preview.toAccount.Name ||
 		!sameJSON(preview.FromAmount, preview.fromAmount) || !sameJSON(preview.ToAmount, preview.toAmount) ||
 		preview.fromAccount.ID != p.FromAccountID || preview.toAccount.ID != p.ToAccountID {
@@ -365,7 +391,7 @@ func (a *App) CreateTransferPairExpected(preview ExpectedTransferPreview) (strin
 		return "", "", fmt.Errorf("transfer: read settings: %w", err)
 	}
 	settings.OpenAIKey = ""
-	if !sameJSON(settings, preview.settings) {
+	if !sameTransferCurrencySettings(settings, preview.settings) {
 		return "", "", fmt.Errorf("transfer: saved currency settings changed since preview")
 	}
 	rows, err := a.store.ListTransactions()
@@ -424,6 +450,9 @@ func buildTransferRows(p TransferParams, from, to domain.Account, rates currency
 		source = domain.TxnSourceManual
 	}
 	outID, inID := transferID(p.OperationID, "out"), transferID(p.OperationID, "in")
+	// One id names the relationship and both legs carry it, so later pair operations never have to
+	// re-derive the partner from date, amount, sign and account (an edited amount or an FX pair
+	// would defeat that).
 	groupID := transferGroupID(p, when, desc, source)
 	out := domain.Transaction{ID: outID, AccountID: from.ID, TransferAccountID: to.ID,
 		TransferGroupID: groupID, Amount: fromMoney, Date: when, Desc: desc, Payee: to.Name,
@@ -453,13 +482,9 @@ func (a *App) writeExpectedTransfer(preview ExpectedTransferPreview, legs []doma
 			return err
 		}
 	}
-	var settingsData json.RawMessage
-	if !sameJSON(preview.settings, store.Settings{}) {
-		encoded, err := json.Marshal(preview.settings)
-		if err != nil {
-			return fmt.Errorf("transfer: encode expected settings: %w", err)
-		}
-		settingsData = encoded
+	receipt, err := json.Marshal(legs)
+	if err != nil {
+		return fmt.Errorf("transfer: encode operation receipt: %w", err)
 	}
 	fromData, err := json.Marshal(preview.fromAccount)
 	if err != nil {
@@ -470,9 +495,9 @@ func (a *App) writeExpectedTransfer(preview ExpectedTransferPreview, legs []doma
 		return fmt.Errorf("transfer: encode expected destination account: %w", err)
 	}
 	changes := []store.RecordChange{
-		{Table: "settings", ID: "app", Before: settingsData, After: settingsData},
 		{Table: "accounts", ID: preview.fromAccount.ID, Before: fromData, After: fromData},
 		{Table: "accounts", ID: preview.toAccount.ID, Before: toData, After: toData},
+		{Table: "transfer_operations", ID: preview.params.OperationID, After: receipt},
 	}
 	for _, row := range append(append([]domain.Transaction(nil), preview.fromRows...), preview.toRows...) {
 		data, err := json.Marshal(row)
@@ -537,6 +562,21 @@ func (a *App) expectedTransferAccounts(fromID, toID string) (domain.Account, dom
 	return from, to, nil
 }
 
+// sameTransferCurrencySettings reports whether two settings values price a transfer identically:
+// only the base currency and the saved exchange rates matter, so unrelated settings writes (theme,
+// music state, refresh timestamps) never fail a previewed transfer.
+func sameTransferCurrencySettings(a, b store.Settings) bool {
+	if settingsRates(a).Base != settingsRates(b).Base || len(a.FXRates) != len(b.FXRates) {
+		return false
+	}
+	for code, rate := range a.FXRates {
+		if other, ok := b.FXRates[code]; !ok || other != rate {
+			return false
+		}
+	}
+	return true
+}
+
 func settingsRates(settings store.Settings) currency.Rates {
 	base := settings.BaseCurrency
 	if base == "" {
@@ -545,18 +585,35 @@ func settingsRates(settings store.Settings) currency.Rates {
 	return currency.Rates{Base: base, Rates: settings.FXRates}
 }
 
+// cloneTransactions deep-copies rows for callers that have no error path; the account and transfer
+// previews use cloneTransactionsChecked and fail instead of keeping a bad copy.
 func cloneTransactions(rows []domain.Transaction) []domain.Transaction {
-	encoded, _ := json.Marshal(rows)
-	var out []domain.Transaction
-	_ = json.Unmarshal(encoded, &out)
+	out, _ := cloneTransactionsChecked(rows)
 	return out
 }
 
-func cloneSettings(s store.Settings) store.Settings {
-	encoded, _ := json.Marshal(s)
+func cloneTransactionsChecked(rows []domain.Transaction) ([]domain.Transaction, error) {
+	encoded, err := json.Marshal(rows)
+	if err != nil {
+		return nil, err
+	}
+	var out []domain.Transaction
+	if err := json.Unmarshal(encoded, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func cloneSettings(s store.Settings) (store.Settings, error) {
+	encoded, err := json.Marshal(s)
+	if err != nil {
+		return store.Settings{}, err
+	}
 	var out store.Settings
-	_ = json.Unmarshal(encoded, &out)
-	return out
+	if err := json.Unmarshal(encoded, &out); err != nil {
+		return store.Settings{}, err
+	}
+	return out, nil
 }
 
 func sameTransactionSet(a, b []domain.Transaction) bool {
@@ -575,6 +632,20 @@ func sameJSON(a, b any) bool {
 	left, err1 := json.Marshal(a)
 	right, err2 := json.Marshal(b)
 	return err1 == nil && err2 == nil && string(left) == string(right)
+}
+
+// accountConvention is how the account stores its balance at rest, taken from its fixed liability
+// sign rather than inferred from balances, so a corrected opening balance or a card in credit
+// never flips the sign a typed figure is booked with.
+func accountConvention(account domain.Account) reconcile.Convention {
+	switch {
+	case !account.IsLiability():
+		return reconcile.AsStated
+	case account.InflowSign() < 0:
+		return reconcile.PositiveOwed
+	default:
+		return reconcile.NegativeOwed
+	}
 }
 
 func statedBalance(stored int64, convention reconcile.Convention) (int64, error) {

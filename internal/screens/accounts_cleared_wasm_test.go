@@ -14,13 +14,10 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// C685: an account card carries the balance and, beside it, the cleared-only
-// figure. That second number is a reconciliation aid, and on an account nobody
-// reconciles it reads as a second claim about what is owed.
-//
-// The reported case: a utility shell sits at $0 because every bill was posted and
-// every bill paid, but one side of that had not been ticked cleared — so the card
-// read "$0.00 · cleared ($120.00)" and looked like a debt of $120.
+// An account card carries the balance and, beside it, the cleared-only figure. That second number
+// is a reconciliation aid. An account nobody reconciles, such as a utility shell, shows no cleared
+// figure, because beside the balance it would read as a second claim about what is owed. An account
+// that is reconciled keeps the figure.
 
 func clearedMeta(t *testing.T, f *render.Fixture, acc domain.Account, balance, cleared money.Money) string {
 	t.Helper()
@@ -37,6 +34,7 @@ func utilityShell() domain.Account {
 	}
 }
 
+// A utility shell that sits at $0 shows no cleared figure, even when its cleared balance is $120.00.
 func TestUtilityShellDoesNotShowAClearedFigure(t *testing.T) {
 	f := render.New(t)
 	got := clearedMeta(t, f, utilityShell(), money.New(0, "USD"), money.New(12000, "USD"))
@@ -44,7 +42,7 @@ func TestUtilityShellDoesNotShowAClearedFigure(t *testing.T) {
 		t.Errorf("a utility shell showed a cleared figure:\n%s", got)
 	}
 	if strings.Contains(got, "120.00") {
-		t.Errorf("the card still states $120.00 on an account that owes nothing:\n%s", got)
+		t.Errorf("the card states $120.00 on an account that owes nothing:\n%s", got)
 	}
 }
 
@@ -58,8 +56,7 @@ func TestUtilityShellWithABalanceStillShowsNoClearedFigure(t *testing.T) {
 	}
 }
 
-// An account that IS reconciled keeps the figure — it is how you check a
-// statement, and removing it everywhere would be a worse bug than the one fixed.
+// A checking account is reconciled against statements, so it keeps its cleared figure.
 func TestCheckingStillShowsItsClearedFigure(t *testing.T) {
 	chk := domain.Account{
 		ID: "chk", Name: "Checking", OwnerID: "m1", Scope: domain.ScopeIndividual,
@@ -75,8 +72,8 @@ func TestCheckingStillShowsItsClearedFigure(t *testing.T) {
 	}
 }
 
-// C683's display half: an overpaid card is money the lender owes YOU. Taking
-// -Abs, which the card used to do, turned that credit into more debt.
+// An overpaid card is money the lender owes the household. The card displays it as a credit, not as
+// more debt, whichever sign the account stores its debt in.
 func TestOverpaidCardReadsAsACreditNotMoreDebt(t *testing.T) {
 	f := render.New(t)
 	for _, acc := range []domain.Account{

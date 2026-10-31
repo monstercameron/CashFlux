@@ -135,7 +135,7 @@ func TestPrimaryNetWorthExclusionEditorKeepsHeadlinesTrendAndDeltaTogether(t *te
 	toggleAndSave()
 	assertFigures("102.00")
 	assertDelta("2.00")
-	if byTestID(f, "p", "hero-networth-note") == nil || byTestID(f, "p", "acct-nw-excludes-by-choice") == nil {
+	if byTestID(f, "p", "hero-networth-note") == nil || byTestID(f, "div", "acct-nw-excludes-by-choice") == nil {
 		t.Fatalf("chosen exclusion lost its disclosure: %s", f.Text())
 	}
 	wantPath := chart.LinePath(chart.Points([]float64{10000, 10000, 10000, 10000, 10000, 10000, 10200}, 260, 72, 6))
@@ -147,7 +147,7 @@ func TestPrimaryNetWorthExclusionEditorKeepsHeadlinesTrendAndDeltaTogether(t *te
 	toggleAndSave()
 	assertFigures("19,152.00")
 	assertDelta("9,002.00")
-	if sparkPath() != initialPath || byTestID(f, "p", "hero-networth-note") != nil || byTestID(f, "p", "acct-nw-excludes-by-choice") != nil {
+	if sparkPath() != initialPath || byTestID(f, "p", "hero-networth-note") != nil || byTestID(f, "div", "acct-nw-excludes-by-choice") != nil {
 		t.Fatalf("restoring inclusion retained stale totals or disclosure: %s", f.Text())
 	}
 }

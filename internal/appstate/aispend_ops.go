@@ -13,6 +13,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aispend"
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 // aiSpendKeepMonths is how much history the meter keeps. A year answers "what has
@@ -33,20 +34,35 @@ func (a *App) RecordAISpend(feature, model string, usage ai.Usage) {
 		return
 	}
 	cost, hasCost := ai.EstimateCostUSD(model, usage)
-	s := a.Settings()
-	ledger := aispend.NewLedger(s.AISpend)
-	ledger.Record(aispend.Entry{
+	// Metering is a side effect of using AI, open to every role, while PutSettings reserves the
+	// spend record for editors, so the ledger entry goes straight to the store.
+	if err := a.ready(); err != nil {
+		a.logErr("recordAISpend", err)
+		return
+	}
+	a.logErr("recordAISpend", writeAISpend(a.SettingsChecked, a.store.PutSettings, aispend.Entry{
 		Feature: feature,
 		At:      time.Now(),
 		Tokens:  usage.TotalTokens,
 		CostUSD: cost,
 		HasCost: hasCost,
-	})
-	ledger.Trim(time.Now(), aiSpendKeepMonths)
-	s.AISpend = ledger.Buckets()
-	if err := a.PutSettings(s); err != nil {
-		a.logErr("recordAISpend", err)
+	}))
+}
+
+// writeAISpend adds one entry to the spend record held in the settings that read returns and saves
+// the result with write. A settings read that fails returns its error without calling write: the
+// record built from an empty Settings would replace the household's currency, rates and caps with
+// blanks.
+func writeAISpend(read func() (store.Settings, error), write func(store.Settings) error, entry aispend.Entry) error {
+	s, err := read()
+	if err != nil {
+		return err
 	}
+	ledger := aispend.NewLedger(s.AISpend)
+	ledger.Record(entry)
+	ledger.Trim(entry.At, aiSpendKeepMonths)
+	s.AISpend = ledger.Buckets()
+	return write(s)
 }
 
 // AISpendThisMonth summarises what has been spent so far this month.

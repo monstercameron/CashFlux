@@ -2,7 +2,11 @@
 
 package reconcile
 
-import "github.com/monstercameron/CashFlux/internal/domain"
+import (
+	"math"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
+)
 
 // This file owns the one question reconciliation cannot avoid: which sign is a
 // debt (C683).
@@ -52,9 +56,14 @@ const (
 //
 // An asset is AsStated and needs no inference, so known is always true for one.
 //
-// For a liability the opening balance decides it: that is what the account was
-// CREATED with, so it records the choice its writer made, and unlike the booked
-// balance it does not move. known is true whenever it is non-zero.
+// A liability that declares its LiabilitySign is read from it, and that
+// declaration outranks everything below: it is fixed when the account is created
+// and survives a later correction of the opening balance.
+//
+// For a liability with no declared sign the opening balance decides it: that is
+// what the account was CREATED with, so it records the choice its writer made,
+// and unlike the booked balance it does not move. known is true whenever it is
+// non-zero.
 //
 // With no opening balance there is nothing solid left. The booked balance is the
 // only remaining signal and it is a poor one — it crosses zero the moment a card
@@ -71,6 +80,12 @@ const (
 func ConventionOf(acc domain.Account, bookedMinor int64) (c Convention, known bool) {
 	if acc.Class != domain.ClassLiability {
 		return AsStated, true
+	}
+	switch acc.LiabilitySign {
+	case domain.LiabilityPositiveOwed:
+		return PositiveOwed, true
+	case domain.LiabilityNegativeOwed:
+		return NegativeOwed, true
 	}
 	if o := acc.OpeningBalance.Amount; o != 0 {
 		if o > 0 {
@@ -96,19 +111,44 @@ func ConventionOf(acc domain.Account, bookedMinor int64) (c Convention, known bo
 // It is lossless and its own inverse (see Stored), so an overpaid card — a
 // liability carrying a credit balance — states as a POSITIVE figure rather than
 // collapsing into "even more debt", which is what taking -Abs does.
+//
+// Negating math.MinInt64 has no int64 result, so it saturates at math.MaxInt64.
 func Stated(storedMinor int64, c Convention) int64 {
 	if c == PositiveOwed {
-		return -storedMinor
+		return negateSaturating(storedMinor)
 	}
 	return storedMinor
 }
 
+// ConventionFor reads the convention an account declares through its
+// LiabilitySign, without consulting any balance: an asset is AsStated, and a
+// liability is PositiveOwed unless its sign says negative_owed or, with no sign
+// recorded, it was opened with a negative balance.
+func ConventionFor(acc domain.Account) Convention {
+	switch {
+	case !acc.IsLiability():
+		return AsStated
+	case acc.InflowSign() < 0:
+		return PositiveOwed
+	default:
+		return NegativeOwed
+	}
+}
+
+func negateSaturating(v int64) int64 {
+	if v == math.MinInt64 {
+		return math.MaxInt64
+	}
+	return -v
+}
+
 // Stored converts a figure in the stated convention back into what the account
 // holds at rest — the inverse of Stated, and the conversion any transaction
-// written from a reconciliation must go through before it is posted.
+// written from a reconciliation must go through before it is posted. It
+// saturates at math.MaxInt64 for math.MinInt64, as Stated does.
 func Stored(statedMinor int64, c Convention) int64 {
 	if c == PositiveOwed {
-		return -statedMinor
+		return negateSaturating(statedMinor)
 	}
 	return statedMinor
 }

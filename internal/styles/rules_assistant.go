@@ -904,7 +904,7 @@ func registerSpotlight() {
 		prop("bottom", "1rem"),
 		prop("left", "50%"),
 		prop("transform", "translateX(-50%)"),
-		prop("z-index", "60"),
+		prop("z-index", "var(--z-overlay)"),
 		prop("padding", "0.5rem 0.9rem"),
 		prop("border-radius", "var(--radius-pill)"),
 		prop("background", "var(--bg-elev)"),

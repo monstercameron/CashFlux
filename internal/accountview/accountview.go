@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 )
 
 // Snapshot indexes transactions and calculates each account's exact ledger
@@ -67,8 +68,9 @@ func BuildIndexed(accounts []domain.Account, txns []domain.Transaction, byAccoun
 			info := s.BillPayments[t.BillAccountID]
 			info.Count++
 			info.HasAny = true
-			if info.LatestTxn == "" || !t.Date.Before(paymentDates[t.BillAccountID]) {
-				info.LatestTxn, info.Latest = t.ID, t.Amount.Abs()
+			magnitude, err := t.Amount.AbsChecked()
+			if err == nil && (info.LatestTxn == "" || !t.Date.Before(paymentDates[t.BillAccountID])) {
+				info.LatestTxn, info.Latest = t.ID, magnitude
 				paymentDates[t.BillAccountID] = t.Date
 			}
 			s.BillPayments[t.BillAccountID] = info
@@ -90,20 +92,18 @@ func Visible(ownerID, memberID string) bool {
 	return memberID == "" || ownerID == memberID || ownerID == domain.GroupOwnerID
 }
 
-// Contribution returns the account's sortable net-worth contribution. A missing
-// FX rate retains the historical native-amount ordering; this value must never
-// be displayed as a base-currency total.
+// Contribution returns the account's sortable net-worth contribution in the
+// stated convention: money held is positive and money owed is negative, whichever
+// sign the liability is stored with (see reconcile.ConventionOf). A missing FX
+// rate retains the historical native-amount ordering; this value must never be
+// displayed as a base-currency total.
 func Contribution(a domain.Account, balance money.Money, rates currency.Rates, base string) int64 {
 	v := balance.Amount
 	if converted, err := rates.Convert(balance, base); err == nil {
 		v = converted.Amount
 	}
-	if a.Class == domain.ClassLiability {
-		if v > 0 {
-			return -v
-		}
-	}
-	return v
+	convention, _ := reconcile.ConventionOf(a, balance.Amount)
+	return reconcile.Stated(v, convention)
 }
 
 // Assets partitions owner-visible non-liability accounts. Active assets sort

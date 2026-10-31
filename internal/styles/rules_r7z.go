@@ -32,11 +32,11 @@ func registerR7Z() {
 	// up or down. The action cell must also escape the ledger's cell clipping.
 	rule(".txn-table tbody tr.row:has(.overflow-menu-open)",
 		position("relative"),
-		zIndex("60"),
+		zIndex("var(--z-overlay)"),
 	)
 	rule(".txn-table tbody tr.row:has(.overflow-menu-open) > td.td-actions",
 		position("relative"),
-		zIndex("61"),
+		zIndex("var(--z-row-active)"),
 		overflow("visible"),
 	)
 }

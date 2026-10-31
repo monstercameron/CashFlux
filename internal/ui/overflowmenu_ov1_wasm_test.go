@@ -49,8 +49,9 @@ func TestOV1OverflowMenuHidesExtraContentUntilOpen(t *testing.T) {
 
 	trigger.Click()
 	menu = ov1Menu(f)
-	if menu == nil || !strings.Contains(menu.Attr("class"), "hidden-menu") {
-		t.Fatalf("closed-again menu is missing or visible: %#v", menu)
+	// The menu fades out before it leaves, so closed-again means hidden or leaving.
+	if menu != nil && !strings.Contains(menu.Attr("class"), "hidden-menu") && !strings.Contains(menu.Attr("class"), "is-leaving") {
+		t.Fatalf("closed-again menu is still visible: %#v", menu)
 	}
 	if got := trigger.Attr("aria-expanded"); got != "false" {
 		t.Fatalf("closed-again trigger aria-expanded = %q, want false", got)

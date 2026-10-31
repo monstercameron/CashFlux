@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-// Package accountselect provides a pure-Go helper for choosing the best default
-// account to pre-fill in the Quick-Add transaction form. It is dependency-light
-// (only internal/domain and stdlib) and contains no syscall/js, so it compiles
-// and unit-tests on native Go.
+// Package accountselect chooses the account to pre-fill in the Quick-Add
+// transaction form (this file) and prepares the account-transfer form
+// (transfer.go). The selection helpers use only internal/domain and the standard
+// library; the transfer helpers also use appstate (for TransferParams), goalview,
+// acctsort, currency, money and dateutil. It contains no syscall/js, so it
+// compiles and unit-tests on native Go.
 package accountselect
 
 import (
@@ -16,15 +18,13 @@ import (
 const recentWindow = 90 * 24 * time.Hour
 
 // isSpendAccount reports whether an account qualifies as a "spend from" default:
-// it must be a non-archived asset account that is not a non-spending asset type
-// (investment, retirement, or crypto). Those types are not natural places to
-// record everyday spending transactions.
+// it must be a non-archived asset account whose type is not a valuation holding
+// (investment, retirement, crypto, property, vehicle or other). Those types are
+// not natural places to record everyday spending transactions.
 func isSpendAccount(a domain.Account) bool {
 	return !a.Archived &&
 		a.Class == domain.ClassAsset &&
-		a.Type != domain.TypeInvestment &&
-		a.Type != domain.TypeRetirement &&
-		a.Type != domain.TypeCrypto
+		!a.Type.IsValuation()
 }
 
 // isCheckingLike reports whether a is a checking, debit, or savings account —
@@ -42,22 +42,29 @@ func isCheckingLike(a domain.Account) bool {
 //     names a non-archived account in the accounts slice, that ID is returned
 //     immediately. Archived accounts are not honoured (the member's pref is stale).
 //
-//   - Tier 2 — most-used recent spend account: the non-archived, non-investment
+//   - Tier 2 — most-used recent spend account: the non-archived, non-valuation
 //     asset account with the most transactions in the 90-day window ending at the
-//     most-recent transaction date in the txns slice (not wall-clock time). Using
-//     the max transaction date instead of time.Now() keeps the function
-//     deterministic and side-effect-free — identical inputs always produce the same
-//     output regardless of when the call is made. Ties are broken by account ID
-//     (lexicographic ascending) for stability.
+//     most-recent transaction date among the spend-eligible accounts' transactions
+//     (not wall-clock time). Anchoring on the data instead of time.Now() keeps the
+//     function deterministic and side-effect-free. Ties are broken by account ID
+//     (lexicographic ascending) for stability. Use DefaultIDAt to ignore future-dated transactions when anchoring.
 //
 //   - Tier 3 — first checking/debit/savings asset: the first non-archived
 //     checking, debit, or savings account in the order given.
 //
-//   - Tier 4 — first non-investment asset: the first non-archived, non-investment
-//     asset account in the order given.
+//   - Tier 4 — first non-valuation asset: the first non-archived asset account
+//     whose type is not a valuation holding, in the order given.
 //
 //   - Tier 5 — none: "" is returned when no account qualifies.
 func DefaultID(accounts []domain.Account, txns []domain.Transaction, memberDefaultID string) string {
+	return DefaultIDAt(accounts, txns, memberDefaultID, time.Time{})
+}
+
+// DefaultIDAt is DefaultID with the recency window anchored on the latest
+// eligible transaction dated on or before now, so a future-dated or scheduled
+// row cannot push the window past the real activity. A zero now applies no
+// upper bound, which is DefaultID.
+func DefaultIDAt(accounts []domain.Account, txns []domain.Transaction, memberDefaultID string, now time.Time) string {
 	// --- Tier 1: explicit member preference ---
 	if memberDefaultID != "" {
 		for _, a := range accounts {
@@ -77,11 +84,16 @@ func DefaultID(accounts []domain.Account, txns []domain.Transaction, memberDefau
 
 	// --- Tier 2: most-used recent spend account ---
 	if len(txns) > 0 && len(eligible) > 0 {
-		// Find the latest transaction date to anchor the recency window.
-		maxDate := txns[0].Date
-		for _, t := range txns[1:] {
-			if t.Date.After(maxDate) {
-				maxDate = t.Date
+		// Anchor the recency window on the latest eligible transaction, ignoring
+		// dates after now when now is set.
+		var maxDate time.Time
+		anchored := false
+		for _, t := range txns {
+			if _, ok := eligible[t.AccountID]; !ok || (!now.IsZero() && t.Date.After(now)) {
+				continue
+			}
+			if !anchored || t.Date.After(maxDate) {
+				maxDate, anchored = t.Date, true
 			}
 		}
 		cutoff := maxDate.Add(-recentWindow)
@@ -92,7 +104,7 @@ func DefaultID(accounts []domain.Account, txns []domain.Transaction, memberDefau
 			if _, ok := eligible[t.AccountID]; !ok {
 				continue
 			}
-			if !t.Date.Before(cutoff) {
+			if anchored && !t.Date.Before(cutoff) && (now.IsZero() || !t.Date.After(now)) {
 				freq[t.AccountID]++
 			}
 		}
@@ -124,7 +136,7 @@ func DefaultID(accounts []domain.Account, txns []domain.Transaction, memberDefau
 		}
 	}
 
-	// --- Tier 4: first non-investment asset ---
+	// --- Tier 4: first non-valuation asset ---
 	for _, a := range accounts {
 		if isSpendAccount(a) {
 			return a.ID
@@ -163,6 +175,9 @@ type ResolveInput struct {
 	ActiveMemberID     string
 	Members            []domain.Member
 	WorkspaceDefaultID string
+	// Now bounds the heuristic's recency window: transactions dated after it are
+	// ignored. Zero means no bound.
+	Now time.Time
 }
 
 // Resolve selects an account for a new transaction using explicit, member,
@@ -188,7 +203,7 @@ func Resolve(input ResolveInput) (string, Tier) {
 		return input.WorkspaceDefaultID, TierWorkspace
 	}
 
-	if id := DefaultID(input.Accounts, input.Transactions, ""); id != "" {
+	if id := DefaultIDAt(input.Accounts, input.Transactions, "", input.Now); id != "" {
 		return id, TierHeuristic
 	}
 

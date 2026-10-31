@@ -23,7 +23,7 @@ func registerReportsSurface() {
 	// are transformed (own stacking contexts), so without this the next tile's
 	// chrome swallows clicks on the export menu hanging over it.
 	rule(".bento.bento-reports > .w:has(.add-menu:not(.hidden-menu))",
-		prop("z-index", "30"),
+		prop("z-index", "var(--z-lift)"),
 	)
 
 	// ── Hero: eyebrow (period coverage), the net figure + delta, figure chips. ──

@@ -192,7 +192,7 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	var investAccts []domain.Account
 	for _, a := range app.Accounts() {
-		if !a.Archived && isInvestmentAccount(a.Type) {
+		if !a.Archived && a.Type.IsInvestment() {
 			investAccts = append(investAccts, a)
 		}
 	}
@@ -450,7 +450,7 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 	// work repeated for each holding.
 	invAcctIDs := make(map[string]bool, 4)
 	for _, a := range app.Accounts() {
-		if !a.Archived && isInvestmentAccount(a.Type) {
+		if !a.Archived && a.Type.IsInvestment() {
 			invAcctIDs[a.ID] = true
 		}
 	}
@@ -562,7 +562,7 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 func investAccountsOf(app *appstate.App) []domain.Account {
 	var out []domain.Account
 	for _, a := range app.Accounts() {
-		if !a.Archived && isInvestmentAccount(a.Type) {
+		if !a.Archived && a.Type.IsInvestment() {
 			out = append(out, a)
 		}
 	}

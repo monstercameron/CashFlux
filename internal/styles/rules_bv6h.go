@@ -10,8 +10,6 @@ func registerBV6H() {
 	)
 	rule(".bento-budgets h1, .bento-budgets .budlist-title", fontSize("var(--fs-title)"), fontWeight("600"))
 	rule(".bento-budgets h2, .bento-budgets .brc-head", fontSize("var(--fs-section)"), fontWeight("600"))
-	rule(".bento-budgets .bud3-headline-figure", fontSize("var(--fs-figure)"), fontWeight("600"), fontVariantNumeric("tabular-nums"))
-	rule(".bento-budgets .bud3-headline-secondary", fontSize("var(--fs-body)"), fontWeight("400"))
 	rule(".bento-budgets .budget-crow-name, .bento-budgets .budget-name", fontSize("var(--fs-body)"), fontWeight("600"))
 	rule(".bento-budgets .budget-crow-amt, .bento-budgets .budget-crow-left, .bento-budgets .budget-card-loader-figs", fontSize("var(--fs-body)"), fontWeight("500"), fontVariantNumeric("tabular-nums"))
 	rule(".bento-budgets .budget-sub, .bento-budgets .budget-crow-chip, .bento-budgets .bud-set-lbl, .bento-budgets .bud-set-hint, .bento-budgets .brc-meta", fontSize("var(--fs-meta)"), fontWeight("400"))

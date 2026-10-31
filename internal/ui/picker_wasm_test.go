@@ -203,3 +203,24 @@ func TestMultiPickerTogglesSelectedAriaState(t *testing.T) {
 		t.Fatalf("toggle callback value = %q, want m2", toggled)
 	}
 }
+
+func TestMultiPickerStaysOpenAcrossPicks(t *testing.T) {
+	var toggled []string
+	f := render.New(t)
+	renderMultiPickerForTest(f, MultiPickerProps{
+		ID: "stay-picker", Label: "Stay", Placeholder: "Choose",
+		Options:  []PickerOption{{Value: "m1", Label: "Morgan"}, {Value: "m2", Label: "Taylor"}},
+		OnToggle: func(value string) { toggled = append(toggled, value) },
+	})
+	f.ByID("stay-picker").Click()
+	f.ByID("stay-picker-option-0").Click()
+	f.Flush()
+	if !f.ByID("stay-picker-listbox").Exists() {
+		t.Fatal("the sheet closed after one pick; a multi-select should stay open")
+	}
+	f.ByID("stay-picker-option-1").Click()
+	f.Flush()
+	if want := []string{"m1", "m2"}; len(toggled) != 2 || toggled[0] != want[0] || toggled[1] != want[1] {
+		t.Fatalf("toggled = %v, want %v", toggled, want)
+	}
+}

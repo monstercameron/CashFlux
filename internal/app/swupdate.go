@@ -401,10 +401,10 @@ func showSWUpdateBanner(kind buildinfo.Banner) {
 	banner.Call("setAttribute", "role", "alert")
 	if stale {
 		banner.Call("setAttribute", "aria-live", "assertive")
-		banner.Set("style", "position:fixed;z-index:100000;top:0;left:0;right:0;padding:12px 20px;background:#fff4d6;color:#302400;border-bottom:1px solid #d9a400;box-shadow:0 2px 12px #0002;font:500 15px/1.5 system-ui,sans-serif;display:flex;gap:14px;align-items:center;flex-wrap:wrap")
+		banner.Set("style", "position:fixed;z-index:var(--z-banner, 9000);top:0;left:0;right:0;padding:12px 20px;background:#fff4d6;color:#302400;border-bottom:1px solid #d9a400;box-shadow:0 2px 12px #0002;font:500 15px/1.5 system-ui,sans-serif;display:flex;gap:14px;align-items:center;flex-wrap:wrap")
 	} else {
 		banner.Call("setAttribute", "aria-live", "polite")
-		banner.Set("style", "position:fixed;z-index:100000;top:0;left:0;right:0;padding:12px 20px;background:#1f2c24;color:#dff2e4;border-bottom:1px solid #356b50;box-shadow:0 2px 12px #0006;font:500 15px/1.5 system-ui,sans-serif;display:flex;gap:14px;align-items:center;flex-wrap:wrap")
+		banner.Set("style", "position:fixed;z-index:var(--z-banner, 9000);top:0;left:0;right:0;padding:12px 20px;background:#1f2c24;color:#dff2e4;border-bottom:1px solid #356b50;box-shadow:0 2px 12px #0006;font:500 15px/1.5 system-ui,sans-serif;display:flex;gap:14px;align-items:center;flex-wrap:wrap")
 	}
 
 	text := doc.Call("createElement", "p")

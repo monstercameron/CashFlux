@@ -128,6 +128,118 @@ Account PDF attachments still bypassed the encrypted local blob store, and the s
 
 The Artifacts screen called PutArtifact directly with full image bytes. That bypassed the encrypted IndexedDB blob store and could make a large image exhaust the durable dataset before cloud sync uploaded its ciphertext. The upload now leaves the FileReader callback, commits the encrypted blob, saves metadata without inline bytes, refreshes usage, and requests persistence. The local three-browser regression checks the encrypted IndexedDB record, exact downloaded bytes, a second-browser edit, and a third-browser restore. Its first run reached the third browser but stalled on the loading shell with three WebAssembly pages open; closing each previous page before the next profile made the rerun pass. Account document attachments still use the inline path and need a separate fix.
 
+## 2026-10-31 - Transactions componentization pass
+
+Worked the remaining audit items for the Transactions page with five parallel workers, each on
+disjoint files, then integrated and tested them together.
+
+Done: toolbar and bulk-bar buttons on `ToolButton`; the period select on `SelectInput`; the scheduled-row
+menu on `OverflowMenu`, with a new optional `Href` on `OverflowMenuItem` so the one item stays a route link;
+the receipt preview on `AccessibleOverlay`; the edit form's draft on `ui.UseForm`, with focus moved to the
+first invalid field; fixed ids on `ui.UseId`; and the payment-link save as one store and appstate write
+(`PutTransactionWithRule`), which validates the rule before writing anything. The brittle class-list and
+absence assertions were rewritten as real checks.
+
+Kept on purpose. The category select stays native: choosing "New category" remounts the element, and
+`SelectInput` cannot express that remount or set the value property the test reads. The grouped-row
+markup is not rendered from any file on this page, so there was nothing to move.
+
+Verified. Native and wasm builds pass. The Transactions wasm run (272 tests) and the app run pass except
+`TestTV7CTransactionPageCalendarToggleShowsLiabilityDueDate`, which depends on the date. The overflow
+menu tests pass in `internal/ui`. In the browser: the period select changes the summary, the edit form's
+empty-amount refusal focuses the amount and marks it invalid, Escape closes the form and returns focus to
+its Edit button, and the bulk bar sits on screen on desktop and above the tab bar on a phone.
+
+Not verified in a browser: the payment-link save, the template chips, the recategorise offer, the receipt
+preview, and the scheduled-row menu. The sample data has no scheduled bill in the months I could reach,
+and no transaction with a receipt. Those paths are covered by wasm tests only.
+
+Open for the user to decide: Save looked greyed out while the amount was empty in the edit form. I have
+not checked whether that predates this pass. Nothing is committed.
+
+## 2026-10-31 - Transactions cleanup follow-up: bulk bar, checked reads, nested controls
+
+The earlier entry below left four items open. This pass closed the ones inside the Transactions page
+and recorded the rest.
+
+The bulk bar was off screen with rows selected. Its host is `position: fixed`, but the page's entrance
+animation used `both` fill, which kept an identity transform after it ended. A transform makes the page
+the containing block for fixed descendants, so the host sized to the whole ledger and the bar sat below
+the viewport. The fix is `backwards` fill on `#cf-page-view.page-enter`. The end state matches the base
+style (opacity 1, no transform), so no page looks different after its entrance, but every page's fixed
+overlays now resolve against the viewport. This is the one change that reaches beyond the Transactions
+page, and it is called out in the CHANGELOG. On a phone the bar spans the screen above the tab bar.
+
+Exclude and delete read the ledger with `TransactionsChecked`. A failed read posts a notice and opens no
+confirm; before, `Transactions()` returned nothing and the confirm opened on an empty view.
+
+The payment-link save wrote the transaction, then the rule. A rule failure used to show the error and
+then a success notice, and close the form. It now says the payment is linked but the rule was not saved,
+and keeps the form open. One atomic write needs the store to batch a rule with a transaction, which is an
+`appstate` and `store` change, so it is not done here.
+
+Template chips put the delete control beside the pick button. The recategorise offer keeps its Apply,
+Always and Dismiss buttons outside the status region, which now wraps only the message.
+
+Accounts, categories, transactions, settings and FX rates on the page are memoised on the data revision.
+The future-schedule count and its bill list are computed once per revision, day and range.
+
+Still open, from the whole-page audit: the grouped-row and row-menu markup on the ledger, `ToolButton`
+and `SelectInput` where the page builds its own, `ui.UseId` for fixed ids, a focus trap on the receipt
+preview, and the test files that assert exact class lists. The audit's stale-test claim
+(`transactions_cstable_wasm_test.go:207`) did not reproduce; that test passed in the filtered run.
+
+## 2026-10-31 - Transactions follows the cleanup checklist
+
+Applied docs/CLEANUP_METHODOLOGY.md to the Transactions page, keeping its layout and the engine ledger.
+The notices that were hand-built `P` and `div` elements (not ready, not found, empty, field error,
+receipt note, categorisation and follow-up messages, the calendar FX error) are now `uiw.Callout`, with
+the tone and live role each one needs. Every test id and role was kept; the new callouts carry the
+old ids. Static inline styles moved into named rules in the Transactions rule files. Dynamic values
+stay as custom properties set on one element: the category share width and the member colour.
+
+Decisions. A notice that holds a button (the no-match states with ghost rows and a Clear action) keeps
+its div, because a Callout live region would put the buttons inside it. The picker hints inside the
+option lists stay plain spans. Disclosures stay controlled: the scope-bar custom period, the
+new-category toggle and the upcoming strip take their open state from the page or from a parent, and
+`uiw.Disclosure` owns its own state, so it cannot drive them. The row menus stay on their overlays.
+The scheduled pill keeps its literal 12px because a styles test enforces the 12/14/17/24px scale on
+Transactions selectors, and that test is the authority here.
+
+Reviews. Four read-only reviewers judged the changes against the checklist. They found three must-fix
+items, which were applied: the draft-hint error had lost its 12px text class, and the follow-up
+`.txnfu-empty` rule was left with no markup. The share-width custom property was kept, because the
+shared `MeterBar` sets a data-driven width inline and that is the precedent.
+
+Open. Browser check: with one row selected, the bulk bar sits at about y 1086 in a 926px viewport, so
+it is off screen. The bar is `position: fixed` inside the widget frame, but the ancestor
+`#cf-page-view.page-enter` keeps a `transform` after its entrance animation ends, because the
+keyframe fills with `both`. A transform makes it the containing block for fixed descendants, so the
+frame is sized to the page's 1087px. That rule is shared by every page, so the fix is a change to
+`rules_gen.go` (fill mode `backwards`) and was not made in this pass. I did not confirm the bar's
+position at HEAD, so that is still open. The no-match pill's literal 12px and the camel-case keys
+the old inline map used are also unverified in a browser.
+
+## 2026-10-30 - Trend spinner and draw-in on the accounts header
+
+The accounts trend waits one settle, so its chart used to appear all at once. The shared trend now takes a pending state that shows a spinner in the trend slot, and the drawn line reveals from left to right with a short rise. Both are CSS keyframes in the headline stylesheet, and both respect prefers-reduced-motion.
+
+## 2026-10-30 - Transactions follows the Accounts order
+
+The Transactions page now opens with its two actions, then the period summary (net, a running-total line, spent and income) built on the shared page headline, then the search and filter bubble above the list. The summary keeps the existing count line as its footer, so its interactive figures and their tests stay put. The running total is a pure helper, txntoolbar.RunningTotal, with table tests.
+
+## 2026-10-30 - Shared page headline for Budgets and Accounts
+
+The Accounts summary was three cards and a strip. Budgets already had a headline (figure, sentence, gauge, attention line) styled under a Budgets-only scope. The shared piece is `ui.PageHeadline`, with `PageHeadlineFigure` and `PageHeadlineFact` for its parts, styled once in `rules_pageheadline.go`. Budgets and Accounts now both build it; the Budgets-only `bud3-headline` rules and the Accounts-only rules are gone. `MeterBar` gained a pace marker and a test id so the Budgets gauge is a shared meter too. The Transactions count line stays its own component: its figures are filter toggles, and moving them onto a display-only headline would change how the filters work. Verified in the browser at phone width; the screens wasm focused run passes. Follow-up: the summary sizes now come from the shared --fs tokens defined on the headline and the transaction count line, the Accounts trend is deferred one settle (as the Dashboard hero is) so it cannot disturb the hero, and the Budgets window label is no longer double-wrapped.
+
+## 2026-10-30 - Dismissable contradiction rows
+
+The "These figures disagree" strip could not be dismissed, so a finding the reader had already handled stayed on screen. Each row now has a Dismiss action, and the strip has a "Bring back" control. The visibility rule is `contradict.Visible`, which is pure and tested. The dismissed keys are stored with SetKV in the dataset, not localStorage, so each dismiss and bring-back is one dataset write that the undo stack captures. The toast Undo reverses it. Dismissal is keyed on the finding, so it holds across amount changes and ends when the contradiction does. Verified in the browser: dismiss, Undo, reload, bring back, Undo, and the all-dismissed line.
+
+## 2026-10-30 - Update balance speaks in the stated convention
+
+The Update balance dialog compared the typed figure with the raw stored balance, so a debt stored positive and one stored negative moved in opposite directions. The dialog now shows the current balance in the stated convention the account card already uses, so a debt reads with a minus sign. `reconcile.ClassifyChange` names the move (debt falls, debt rises, or other), and the dialog explains a debt-to-debt change in plain words. A debt typed without its minus sign gets a gentle "Did you mean" line rather than a block, because a debt can legitimately be paid off into credit. The save path converts the typed figure with `reconcile.Stored` before the checkpoint is posted. The modal copy was then cut to one line for a debt change ("Debt down $1,000.00"), with the sign hint removed. Tests cover the classification and the unsigned-entry rule. Version bumped to 1.19.11.
+
 ## 2026-10-21 - Prepare v1.19.10 stability release and end the refactor session
 
 The user authorized a final release today and requested the session end afterward. Current main v1.19.9 protections are integrated. Final native370packages with vet, App263WASM plus the focused Settings regression, Screens1101, UI90, Browserstore61, all five production builds, 46-route/theme smoke, native transition checks and the encrypted three-browser file/edit journey pass. Failed pre-fix navigation evidence is retained. No paid AI calls or user household writes were used. The stability report records exact scopes and remaining architecture/performance gaps; this is not a full componentization completion claim. Publishing uses the existing tag/image/deploy workflow after this version commit.

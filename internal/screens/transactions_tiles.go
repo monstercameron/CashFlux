@@ -236,6 +236,7 @@ func filterMultiGroup(label string, field txnfilter.FilterField, selected []stri
 func filterSearchGroup(props filterGroupProps) ui.Node {
 	query := ui.UseState("")
 	expanded := ui.UseState(false)
+	listboxID := ui.UseId()
 	onQuery := ui.UseEvent(func(e ui.Event) { query.Set(e.GetValue()) })
 	onExpand := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 
@@ -268,11 +269,11 @@ func filterSearchGroup(props filterGroupProps) ui.Node {
 		Input(css.Class("field", "filter-group-search"), Type("search"),
 			Attr("role", "combobox"), Attr("aria-autocomplete", "list"), Attr("aria-expanded", "true"),
 			Attr("aria-label", uistate.T("transactions.filterSearchAria", searchNoun)),
-			Attr("aria-controls", "filter-options-"+fieldName),
+			Attr("aria-controls", listboxID),
 			Attr("data-testid", "filter-search-"+fieldName),
 			Placeholder(uistate.T("transactions.filterSearchPlaceholder", searchNoun)),
 			uiw.FieldValue(query.Get()), OnInput(onQuery)),
-		Div(css.Class("filter-pills", "filter-search-options"), Attr("id", "filter-options-"+fieldName),
+		Div(css.Class("filter-pills", "filter-search-options"), Attr("id", listboxID),
 			Attr("role", "listbox"), Attr("aria-multiselectable", "true"), items,
 			If(len(filtered) > filterGroupCollapseThreshold, ui.CreateElement(filterGroupDisclosure, filterGroupDisclosureProps{
 				Field: props.Field, Open: expanded.Get(),
@@ -395,8 +396,7 @@ type txnInterpretRowProps struct {
 }
 
 func txnInterpretRow(props txnInterpretRowProps) ui.Node {
-	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Text13),
-		Style(map[string]string{"padding": "0.4rem 0.1rem 0.1rem"}),
+	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Text13, "txn-interpret-row"),
 		Attr("role", "status"),
 		Span(css.Class(tw.TextDim, tw.ShrinkO), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 		Button(css.Class("btn", "btn-tool"), Type("button"), Attr("data-testid", "nl-interpret"),
@@ -446,21 +446,11 @@ func txnBulkTagEditor(props txnBulkTagEditorProps) ui.Node {
 	return Div(css.Class("bulk-tag-editor"),
 		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("r1c.tagInput")), Placeholder(uistate.T("r1c.tagInput")),
 			OnInput(props.OnInput), uiw.FieldValue(props.Value)),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-apply-tag"), OnClick(props.Add), uistate.T("r1c.addTag")))
-}
-
-// toolbarIconBtn renders one transactions-toolbar action as a standard labeled
-// button (.btn-tool): a slightly-grayed leading glyph followed by an always-visible
-// text label, so the action reads at a glance instead of needing a hover to decode a
-// bare icon. The label also serves as the aria-label. variant is "" (neutral),
-// "primary" (accent — the Add action), or "danger" (delete).
-func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, variant string) ui.Node {
-	return toolbarIconBtnOpen(testID, ic, label, onClick, variant, false)
+		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("r1c.addTag"), TestID: "bulk-apply-tag"}, OnClick(props.Add)))
 }
 
 func toolbarIconLink(testID string, ic icon.Name, label, href string) ui.Node {
-	return A(css.Class("btn btn-tool"), Attr("data-testid", testID), Href(href), Attr("aria-label", label),
-		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(label))
+	return uiw.ToolButton(uiw.ToolButtonProps{Label: label, Icon: ic, TestID: testID, Href: href})
 }
 
 func txnBulkActionGroup(label string, children ...ui.Node) ui.Node {
@@ -490,69 +480,10 @@ func addTxnTag(tags []string, tag string) []string { return txntoolbar.AddTag(ta
 
 func txnHasTag(tags []string, tag string) bool { return txntoolbar.HasTag(tags, tag) }
 
-// toolbarIconBtnState is toolbarIconBtn with an explicit disabled state and a
-// tooltip. A toolbar verb that cannot run yet (C561's Categorize before a category
-// is chosen) reads as unavailable AND says what would make it available, instead of
-// looking live and mutating on click.
-func toolbarIconBtnState(testID string, ic icon.Name, label string, onClick ui.Handler, variant string, disabled bool, title string) ui.Node {
-	cls := "btn btn-tool"
-	switch variant {
-	case "primary":
-		cls += " btn-primary"
-	case "danger":
-		cls += " bt-danger"
-	}
-	args := []any{
-		css.Class(cls), Type("button"),
-		Attr("aria-label", label), OnClick(onClick),
-		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(label),
-	}
-	if title != "" {
-		args = append(args, Attr("title", title))
-	}
-	if disabled {
-		args = append(args, Disabled(true), Attr("aria-disabled", "true"))
-	}
-	if testID != "" {
-		args = append(args, Attr("data-testid", testID))
-	}
-	return Button(args...)
-}
-
 // bulkCatLabel is a category's qualified display path for a bulk-op result message
 // ("Filed 12 under Housing > Mortgage"), or "" when the id no longer resolves.
 func bulkCatLabel(app *appstate.App, id string) string {
 	return txntoolbar.CategoryLabel(app.Categories(), id)
-}
-
-// toolbarIconBtnOpen is toolbarIconBtn with an explicit open flag: when true the button
-// stays highlighted (the .is-open state) — used for the buttons that open a flip modal /
-// panel so the trigger reads as "currently open" until it's dismissed.
-func toolbarIconBtnOpen(testID string, ic icon.Name, label string, onClick ui.Handler, variant string, open bool) ui.Node {
-	// Labeled toolbar buttons (the .btn-tool standard): a slightly-grayed left glyph + the
-	// text label, so the action reads at a glance instead of needing a hover to decode a
-	// bare glyph. variant tints it: primary = accent, danger = red.
-	cls := "btn btn-tool"
-	switch variant {
-	case "primary":
-		cls += " btn-primary"
-	case "danger":
-		cls += " bt-danger"
-	}
-	if open {
-		cls += " is-open"
-	}
-	args := []any{
-		css.Class(cls), Type("button"),
-		Attr("aria-label", label), Attr("aria-expanded", boolStr(open)), OnClick(onClick),
-		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(label),
-	}
-	if testID != "" {
-		args = append(args, Attr("data-testid", testID))
-	}
-	return Button(args...)
 }
 
 // txnToolbarProps carries the data the toolbar tile reads to build its filter
@@ -662,7 +593,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	renderProps := txnToolbarRenderProps{txnToolbarProps: props, Own: own, Filter: filter, MemberLens: memberLens, LensOn: lensOn, Indexes: indexes, Summary: summary, Derived: derived, SetFilter: func(mut func(*txnfilter.Criteria)) { setTxFilterOn(filterAtom, mut) }}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: txnResponsiveToolbar(ui.CreateElement(txnToolbarControls, renderProps), ui.CreateElement(txnUpcomingStrip, struct{}{}), ui.CreateElement(txnToolbarInterpret, renderProps), txnToolbarFoot(ui.CreateElement(txnToolbarCount, renderProps))),
+		Body: txnResponsiveToolbar(Div(css.Class("txn-bubble"), txnSummaryHead(renderProps)), Div(css.Class("txn-bubble"), ui.CreateElement(txnToolbarControls, renderProps), ui.CreateElement(txnUpcomingStrip, struct{}{}), ui.CreateElement(txnToolbarInterpret, renderProps))),
 	})
 }
 
@@ -706,14 +637,12 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 	filterAtom := uistate.UseTxFilter()
 	searchPending := uistate.UseTxnSearchPending()
 	setFilter := props.SetFilter
-	debFilterD := func(key string, delay time.Duration, mut func(*uistate.TxFilter)) {
-		debounce.Call("txn-filter:"+key, delay, func() { setFilter(mut) })
-	}
+	// The toolbar already debounces typed search, so the query applies as it arrives here.
 	onFilterText := func(v string) {
 		if !searchPending.Get() {
 			searchPending.Set(true)
 		}
-		debFilterD("text", 150*time.Millisecond, func(x *uistate.TxFilter) { x.Text = v; searchPending.Set(false) })
+		setFilter(func(x *uistate.TxFilter) { x.Text = v; searchPending.Set(false) })
 	}
 	clearSearchNow := func() {
 		debounce.Flush("txn-filter:text")
@@ -750,47 +679,48 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 			uistate.PersistTxFilter(cleared)
 		},
 		ClearAllLabel: clearAllLabel(len(props.Own.PageFilters())), RemoveLabel: uistate.T("transactions.removeFilter"),
+		PrimaryActions: []ui.Node{ui.CreateElement(txnToolbarMore, props)},
 		Actions: []ui.Node{
 			Div(css.Class("txn-toolbar-context"), ui.CreateElement(txnDateScope, struct{}{}), ui.CreateElement(txnViewToggle, struct{}{})),
-			Div(css.Class("txn-toolbar-commands"), ui.CreateElement(txnToolbarAdd, props), ui.CreateElement(txnToolbarReview, props), ui.CreateElement(txnToolbarMore, props)),
 		},
 	})
 }
 
+// txnToolbarAdd is the one primary action that starts a new transaction. Its menu holds
+// the kinds it can start, so the label stays a plain "Add".
 func txnToolbarAdd(_ txnToolbarRenderProps) ui.Node {
 	transferOpenAtom := uistate.UseAcctTransferOpen()
 	importPanelAtom := uistate.UseImportPanelOpen()
-	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
 	addExpense := func() { uistate.OpenQuickAddAs(uistate.QuickAddExpense) }
 	addIncome := func() { uistate.OpenQuickAddAs(uistate.QuickAddIncome) }
 	addTransfer := func() { transferOpenAtom.Set(true) }
 	return Div(ClassStr("txn-toolbar-add"),
-		Div(css.Class("btn-split"),
-			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
-			uiw.OverflowMenu(uiw.OverflowMenuProps{
-				TriggerLabel:  uistate.T("transactions.addKindLabel"),
-				TriggerIcon:   icon.ChevronDown,
-				TriggerTestID: "txn-add-kind-btn",
-				TriggerClass:  "btn btn-primary btn-split-caret",
-				Items: []uiw.OverflowMenuItem{
-					{Label: uistate.T("transactions.addExpense"), Icon: icon.ArrowDown, TestID: "txn-add-expense", OnSelect: addExpense},
-					{Label: uistate.T("transactions.addIncome"), Icon: icon.ArrowUp, TestID: "txn-add-income", OnSelect: addIncome},
-					{Label: uistate.T("transactions.addTransfer"), Icon: icon.Repeat, TestID: "txn-add-transfer", OnSelect: addTransfer},
-					{Label: uistate.T("transactions.importBtn"), Icon: icon.Upload, TestID: "txn-add-import", Section: uistate.T("transactions.addFromFile"),
-						OnSelect: func() { importPanelAtom.Set(true) }},
-				},
-			}),
-		),
+		uiw.OverflowMenu(uiw.OverflowMenuProps{
+			TriggerLabel:   uistate.T("transactions.addTitle"),
+			TriggerText:    uistate.T("action.add"),
+			TriggerIcon:    icon.Plus,
+			TriggerTestID:  "txn-add-btn",
+			TriggerVariant: "primary",
+			Items: []uiw.OverflowMenuItem{
+				{Label: uistate.T("transactions.addExpense"), Icon: icon.ArrowDown, TestID: "txn-add-expense", OnSelect: addExpense},
+				{Label: uistate.T("transactions.addIncome"), Icon: icon.ArrowUp, TestID: "txn-add-income", OnSelect: addIncome},
+				{Label: uistate.T("transactions.addTransfer"), Icon: icon.Repeat, TestID: "txn-add-transfer", OnSelect: addTransfer},
+				{Label: uistate.T("transactions.importBtn"), Icon: icon.Upload, TestID: "txn-add-import", Section: uistate.T("transactions.addFromFile"),
+					OnSelect: func() { importPanelAtom.Set(true) }},
+			},
+		}),
 	)
 }
 
+// txnToolbarReview is the Review action with its count of rows waiting for a look. It is the
+// shared ToolButton in the attention tint, the same component the page's other actions use.
 func txnToolbarReview(props txnToolbarRenderProps) ui.Node {
 	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	summary := props.Summary
-	return If(summary.review > 0, Button(css.Class("txn-review-callout txn-review-callout-attention"), Type("button"),
-		Attr("data-testid", "txn-review-btn"), Attr("aria-label", uistate.T("r1c.reviewCallout", summary.review)),
-		OnClick(openReview), Span(uistate.T("uxt4.review")),
-		Span(css.Class("txn-review-count"), Attr("aria-hidden", "true"), strconv.Itoa(summary.review))))
+	return If(summary.review > 0, uiw.ToolButton(uiw.ToolButtonProps{
+		Label: uistate.T("uxt4.review"), Icon: icon.CheckCircle, Badge: strconv.Itoa(summary.review), Variant: "stale",
+		AriaLabel: uistate.T("r1c.reviewCallout", summary.review), TestID: "txn-review-btn",
+	}, OnClick(openReview)))
 }
 
 func txnToolbarMore(props txnToolbarRenderProps) ui.Node {
@@ -823,7 +753,6 @@ func txnToolbarMore(props txnToolbarRenderProps) ui.Node {
 	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
 		TriggerText:   uistate.T("transactions.moreActions"),
 		TriggerTestID: "txn-more-btn",
-		TriggerClass:  "btn btn-tool",
 		ExtraContent: ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{
 			App: app, Filter: fOwn, Rates: props.Rates, Base: props.Base, Embedded: true,
 		}),
@@ -973,7 +902,7 @@ func txnToolbarFilterPanel(props txnToolbarRenderProps) ui.Node {
 			dateField(uistate.T("transactions.toDate"), f.To, displayPrefs.DateStyle, onFilterTo),
 			amountField(uistate.T("transactions.filterAmountMin"), uistate.T("transactions.filterAmountMinPh"), f.AmountMin, onFilterAmountMin),
 			amountField(uistate.T("transactions.filterAmountMax"), uistate.T("transactions.filterAmountMaxPh"), f.AmountMax, onFilterAmountMax),
-			If(txnFilterRangeError(fOwn, props.Base) != "", P(css.Class("field-error"), Attr("role", "alert"), txnFilterRangeError(fOwn, props.Base))),
+			If(txnFilterRangeError(fOwn, props.Base) != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(txnFilterRangeError(fOwn, props.Base))})),
 			filterSelect(uistate.T("transactions.clearedStatus"), f.Cleared, clearedOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Cleared = v }) }),
 			filterSelect(uistate.T("transactions.flowLabel"), f.Flow, flowOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Flow = v }) }),
 		),
@@ -1036,8 +965,16 @@ func txnResponsiveToolbar(toolbar ui.Node, content ...any) ui.Node {
 
 // txnUserColumnVisible limits the member column to an Everyone view with multiple
 // household members.
+// txnToolbarFoot is the count line under the summary: the period's figures, the
+// category breakdown and the row count.
 func txnToolbarFoot(countLine ui.Node) ui.Node {
 	return Div(css.Class("txn-toolbar-foot"), countLine)
+}
+
+// txnTopActions is the row of the two actions that open the page's work: add a
+// transaction, and review the ones waiting for a look.
+func txnTopActions(props txnToolbarRenderProps) ui.Node {
+	return Div(css.Class("txn-top-actions"), ui.CreateElement(txnToolbarReview, props), ui.CreateElement(txnToolbarAdd, props))
 }
 
 func txnUserColumnVisible(enabled bool, memberScope string, memberCount int) bool {
@@ -1081,14 +1018,14 @@ func TxnColumnsBody(_ struct{}) ui.Node {
 	user := ui.UseEvent(func() { c := colsAtom.Get(); c.User = !c.User; apply(c) })
 
 	row := func(label, hint, testID string, on bool, onClick ui.Handler) ui.Node {
-		return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"padding": "0.35rem 0", "cursor": "pointer"}),
+		return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, "txn-col-toggle-row"),
 			Input(Type("checkbox"), Attr("data-testid", testID), CheckedIf(on), OnClick(onClick)),
 			Span(label),
 			If(hint != "", Span(css.Class("muted", tw.Text12), Attr("title", hint), hint)),
 		)
 	}
 	return Div(css.Class(tw.FlexCol),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("transactions.columnsHint")),
+		P(css.Class("muted", tw.Text13, "txn-cols-hint"), uistate.T("transactions.columnsHint")),
 		row(uistate.T("transactions.colAmount"), "", "col-toggle-amount", cols.Amount, amount),
 		row(uistate.T("transactions.colAccount"), "", "col-toggle-account", cols.Account, account),
 		row(uistate.T("transactions.colCategory"), "", "col-toggle-category", cols.Category, category),
@@ -1474,29 +1411,24 @@ func txnBulkBarContent(props txnBulkBarContentProps) ui.Node {
 	bulkMarkReviewed, bulkDelete, clearSelection := props.Reviewed, props.Delete, props.Clear
 	tagEditor, moreActions := props.TagEditor, props.More
 	bodyArgs := append([]any{css.Class("bulk-bar bulk-bar-refined txn-bulkbar-overlay")}, txnBulkToolbarAttrs(n)...)
-	bodyArgs = append(bodyArgs, Style(map[string]string{
-		"box-sizing": "border-box", "display": "flex", "align-items": "center", "gap": "0.5rem",
-		"min-height": "48px", "padding": "0 1rem", "flex-wrap": "nowrap",
-		"white-space": "nowrap",
-		"background":  "var(--bg-elev)", "border": "1px solid var(--border)",
-		"border-radius": "var(--radius-lg)",
-	}),
+	bodyArgs = append(bodyArgs,
 		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
 		ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-category-picker", Label: uistate.T("transactions.categoryToApply"), Placeholder: uistate.T("r1c.category"), SearchLabel: uistate.T("r5b.searchCategories"), Options: catOptions, OnChoose: onBulkCat, OnCreate: onCreateBulkCategory}),
 		ui.CreateElement(txnBulkOwnerPicker, txnBulkOwnerPickerProps{
 			ID: "bulk-member-picker", TestID: "bulk-owner-picker", Label: uistate.T("bulk2.owners"),
 			Options: ownerOptions, OnApply: assignBulkOwners,
 		}),
-		Button(css.Class("btn btn-tool", "txn-bulk-primary", "txn-bulk-inline-reviewed"), Type("button"), Attr("data-testid", "bulk-mark-reviewed"), Attr("aria-label", uistate.T("r1c.markReviewed")), OnClick(bulkMarkReviewed), uiw.Icon(icon.CheckCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("r1c.markReviewed"))),
+		uiw.ToolButton(uiw.ToolButtonProps{
+			Label: uistate.T("r1c.markReviewed"), Icon: icon.CheckCircle, TestID: "bulk-mark-reviewed",
+			Class: "txn-bulk-primary txn-bulk-inline-reviewed",
+		}, OnClick(bulkMarkReviewed)),
 		tagEditor,
 		moreActions,
-		buttonWithDisabled(props.Saving, []any{
-			css.Class("btn btn-tool bt-danger", "txn-bulk-primary", "txn-bulk-inline-delete"), Type("button"), Attr("data-testid", "bulk-delete"),
-			Attr("aria-label", uistate.T("txp3.bulkDeleteSelected")),
-			Title(uistate.T("txp3.bulkDeleteSelected")),
-			OnClick(bulkDelete),
-		}, IfElse(props.Saving, Text(uistate.T("enc34.saving")), Fragment(uiw.Icon(icon.Trash, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("txp3.bulkDeleteSelected"))))),
-		Button(css.Class("btn btn-tool", "bulk-clear-selection"), Type("button"), Attr("data-testid", "bulk-clear-selection"), Attr("aria-label", uistate.T("r1c.clearSelection")), Title(uistate.T("r1c.clearSelection")), OnClick(clearSelection), Text("×")),
+		txnBulkDeleteButton(props.Saving, bulkDelete),
+		uiw.ToolButton(uiw.ToolButtonProps{
+			Label: "×", AriaLabel: uistate.T("r1c.clearSelection"), Title: uistate.T("r1c.clearSelection"),
+			TestID: "bulk-clear-selection", Class: "bulk-clear-selection",
+		}, OnClick(clearSelection)),
 		If(props.PickerOpen, txnBulkCategoryPicker(props.PickerQuery, props.PickerKind,
 			func(categoryID string) { props.ClosePicker(); onBulkCat(categoryID) },
 			func() { props.ClosePicker() },
@@ -1508,6 +1440,23 @@ func txnBulkBarContent(props txnBulkBarContentProps) ui.Node {
 		Style: txnBulkBarWidgetStyle(),
 		Body:  body,
 	})
+}
+
+// txnBulkDeleteButton is the bulk bar's delete action. While the delete is saving it shows
+// the saving text, drops the glyph and is disabled; its accessible name and tooltip stay the
+// delete label throughout.
+func txnBulkDeleteButton(saving bool, onDelete ui.Handler) ui.Node {
+	deleteLabel := uistate.T("txp3.bulkDeleteSelected")
+	props := uiw.ToolButtonProps{
+		Label: deleteLabel, Icon: icon.Trash, TestID: "bulk-delete",
+		Class: "bt-danger txn-bulk-primary txn-bulk-inline-delete",
+	}
+	extra := []any{OnClick(onDelete)}
+	if saving {
+		props.Label, props.Icon, props.AriaLabel, props.Title = uistate.T("enc34.saving"), "", deleteLabel, deleteLabel
+		extra = append(extra, Attr("disabled", "disabled"))
+	}
+	return uiw.ToolButton(props, extra...)
 }
 
 func txnBulkToolbarAttrs(selectedCount int) []any {

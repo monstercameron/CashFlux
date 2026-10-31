@@ -28,7 +28,8 @@ func preparePlanning(app *appstate.App, now time.Time, trimText, compareID, amou
 	accounts, accountsErr := app.AccountsChecked()
 	txns, txnsErr := app.TransactionsChecked()
 	goals, goalsErr := app.GoalsChecked()
-	recurring, recurringErr := app.Store().ListRecurring()
+	recurring := app.Recurring()
+	var recurringErr error
 	plans, plansErr := app.Store().ListPlans()
 	var comparePlan *domain.Plan
 	var comparePlanErr error

@@ -36,8 +36,8 @@ func TestR7ZOpenRowMenuPaintsAboveSiblingsAndFitsActionsCell(t *testing.T) {
 	registerR7Z()
 	css := Build()
 	for _, want := range []string{
-		".txn-table tbody tr.row:has(.overflow-menu-open){position:relative;z-index:60;}",
-		".txn-table tbody tr.row:has(.overflow-menu-open) > td.td-actions{position:relative;z-index:61;overflow:visible;}",
+		".txn-table tbody tr.row:has(.overflow-menu-open){position:relative;z-index:var(--z-overlay);}",
+		".txn-table tbody tr.row:has(.overflow-menu-open) > td.td-actions{position:relative;z-index:var(--z-row-active);overflow:visible;}",
 		".txn-row-menu{display:contents;}",
 		".txn-table tbody tr.row{height:44px;max-height:44px;}",
 		".txn-table .td-actions{white-space:nowrap;",

@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -29,6 +30,13 @@ var smartInputCache = newViewCache[smartengine.Input](1)
 // their engine pass; each caller still applies the current dismissals immediately.
 var freeFindingsCache = newViewCache[[]smart.Insight](1)
 
+// accountsPageInsightsCache memoizes the Accounts page insight pass. The pass is the costly part
+// of an Accounts list render, and its answer depends only on the same context as the input plus
+// the Smart settings, so a filter change or hover does not run the engine again.
+var accountsPageInsightsCache = newViewCache[[]smart.Insight](1)
+
+// smartContextKey is the cache key for the Smart memos: the store revision, the week
+// start, and the current minute.
 func smartContextKey(app *appstate.App, weekStart time.Weekday, now time.Time) string {
 	return revKey(app) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(now.Unix()/60, 10)
 }
@@ -41,13 +49,15 @@ func buildSmartInput(app *appstate.App, weekStart time.Weekday) smartengine.Inpu
 	return buildSmartInputAt(app, weekStart, time.Now())
 }
 
+// buildSmartInputAt is buildSmartInput at a fixed instant, served from smartInputCache.
 func buildSmartInputAt(app *appstate.App, weekStart time.Weekday, now time.Time) smartengine.Input {
 	return memoByRev(smartInputCache, smartContextKey(app, weekStart, now), func() smartengine.Input {
 		return buildSmartInputRawAt(app, weekStart, now)
 	})
 }
 
-// buildSmartInputRaw is the uncached seam used by engine parity tests.
+// buildSmartInputRaw is buildSmartInput without the cache, for tests that need a
+// fresh Input.
 func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.Input {
 	return buildSmartInputRawAt(app, weekStart, time.Now())
 }
@@ -73,12 +83,14 @@ func buildSmartInputRawAt(app *appstate.App, weekStart time.Weekday, now time.Ti
 		Members:       app.Members(),
 		Tasks:         app.Tasks(),
 		Subscriptions: app.Cancellations(),
-		// TX9: matched bill occurrences read as PAID, so the missing-transaction
-		// detector skips what a bill-match link already settled.
+		// Matched bill occurrences count as paid, so the missing-transaction detector
+		// skips what a bill-match link already settled.
 		PaidOccurrences: app.BillMatchPaidOccurrences(),
 	}
 }
 
+// freeSmartFindings runs the engine over the Free-tier features only, cached per
+// context key and language. Callers apply their own dismissals.
 func freeSmartFindings(app *appstate.App, weekStart time.Weekday, now time.Time) []smart.Insight {
 	key := smartContextKey(app, weekStart, now) + "|" + string(uistate.ActiveLanguage())
 	return memoByRev(freeFindingsCache, key, func() []smart.Insight {
@@ -119,7 +131,7 @@ func runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insi
 }
 
 // runActionableFindings returns every free-tier finding the user has not
-// dismissed, for surfaces that rank ACTIONS rather than flag anomalies (WF-SM3).
+// dismissed, for surfaces that rank actions rather than flag anomalies.
 //
 // It is deliberately separate from runAnomalyDetectors: that one filters to the
 // four anomaly codes because a "flagged activity" list is about things that look
@@ -146,4 +158,13 @@ func aiProviderConfigured(app *appstate.App, backendAI bool) bool {
 		return true
 	}
 	return app.Settings().OpenAIKey != ""
+}
+
+// accountsPageInsights runs the Accounts page's insight pass once per data revision,
+// minute, week start and Smart settings, rather than on every list render.
+func accountsPageInsights(app *appstate.App, in smartengine.Input, s smart.Settings, weekStart time.Weekday) []smart.Insight {
+	key := smartContextKey(app, weekStart, time.Now()) + "|" + fmt.Sprint(s)
+	return memoByRev(accountsPageInsightsCache, key, func() []smart.Insight {
+		return smartengine.RunPage(in, s, smart.PageAccounts)
+	})
 }

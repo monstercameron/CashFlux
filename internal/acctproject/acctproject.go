@@ -12,17 +12,17 @@
 package acctproject
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-// ErrCurrencyMismatch reports a recurring amount denominated differently from
-// the account balance being projected.
-var ErrCurrencyMismatch = errors.New("acctproject: recurring amount currency does not match account")
+// ErrCurrencyMismatch is money.ErrCurrencyMismatch, kept so callers that match a
+// projection's currency failure against this package keep working.
+var ErrCurrencyMismatch = money.ErrCurrencyMismatch
 
 // Driver is one dated cash flow scoped to the account: a recurring paycheck, a
 // bill, a scheduled transfer. Amount is signed minor units (positive = money in,
@@ -53,8 +53,10 @@ func (p Projection) HasLowDip() bool { return p.Low < p.Start }
 // units) over [asOf, asOf+horizonDays], applying every driver that falls inside the
 // window in date order. Drivers before asOf are treated as landing today; drivers
 // past the horizon are dropped. The returned Drivers slice is sorted by date (ties
-// by label) and contains only the in-window drivers actually applied. A non-positive
-// horizon yields a flat projection at `start`.
+// by label) and contains only the in-window drivers actually applied. All of a
+// day's drivers are applied before the balance is compared, so Low, LowDate and
+// FirstNegative describe closing balances and never depend on the label order of
+// same-day drivers. A non-positive horizon yields a flat projection at `start`.
 func Project(start int64, asOf time.Time, drivers []Driver, horizonDays int) (Projection, error) {
 	asOf = day(asOf)
 	p := Projection{Start: start, Low: start, LowDate: asOf, End: start}
@@ -81,27 +83,45 @@ func Project(start int64, asOf time.Time, drivers []Driver, horizonDays int) (Pr
 		return inWindow[i].Label < inWindow[j].Label
 	})
 
-	bal := start
-	for _, d := range inWindow {
-		var err error
-		bal, err = money.Add(bal, d.Amount)
-		if err != nil {
-			return Projection{}, fmt.Errorf("acctproject: apply %q on %s: %w", d.Label, d.Date.Format("2006-01-02"), err)
+	bal, err := walkDayCloses(start, inWindow, func(date time.Time, closing int64) bool {
+		if closing < p.Low {
+			p.Low, p.LowDate = closing, date
 		}
-		if bal < p.Low {
-			p.Low, p.LowDate = bal, d.Date
-		}
+		return true
+	})
+	if err != nil {
+		return Projection{}, err
 	}
 	p.Drivers = inWindow
 	p.End = bal
 	return p, nil
 }
 
-// day canonicalizes a time to its UTC calendar day so comparisons across the mixed
-// locations the caller feeds in ("same day" vs "before") stay honest.
-func day(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+// walkDayCloses applies date-sorted drivers to start one calendar day at a time and
+// calls visit with each day's date and closing balance, in order, until visit
+// returns false. It returns the balance after the last day visited.
+func walkDayCloses(start int64, drivers []Driver, visit func(date time.Time, closing int64) bool) (int64, error) {
+	bal := start
+	for i := 0; i < len(drivers); {
+		date := day(drivers[i].Date)
+		for ; i < len(drivers) && day(drivers[i].Date).Equal(date); i++ {
+			var err error
+			bal, err = money.Add(bal, drivers[i].Amount)
+			if err != nil {
+				return 0, fmt.Errorf("acctproject: apply %q on %s: %w", drivers[i].Label, date.Format("2006-01-02"), err)
+			}
+		}
+		if !visit(date, bal) {
+			break
+		}
+	}
+	return bal, nil
 }
+
+// day canonicalizes a time to the calendar date it shows in its own location,
+// at 00:00 UTC (dateutil.DayStart), so comparisons across the mixed locations the
+// caller feeds in ("same day" vs "before") stay honest.
+func day(t time.Time) time.Time { return dateutil.DayStart(t) }
 
 // ─── C381: the curve, not just its low point ─────────────────────────────────
 
@@ -113,8 +133,8 @@ type Point struct {
 	In, Out int64
 }
 
-// Series expands the projection into one point per day over the horizon,
-// starting with the untouched balance today.
+// Series expands the projection into one point per day over the horizon: day zero
+// through day horizonDays, horizonDays+1 points with strictly increasing dates.
 //
 // Project alone answers "how low does it get", which is the right answer for a
 // one-line warning on a row. Drawing the forward line under the balance chart
@@ -122,9 +142,12 @@ type Point struct {
 // month comfortably positive and dips below zero on the 23rd looks perfectly
 // healthy at month granularity, and the dip is the entire point of showing it.
 //
-// The first point is today's balance with nothing applied, so the drawn line
-// starts where the account actually is and cannot contradict the figure printed
-// beside it. A non-positive horizon yields nothing.
+// Every point is a closing balance. The day-zero point is today's balance after
+// whatever lands today, so it equals Start unless a driver (or an overdue flow
+// Project moved to today) is dated asOf. Only the drivers Project kept are drawn,
+// and only those dated within [day(asOf), day(asOf)+horizonDays]: a Series asked
+// for a later asOf than the Project call ignores the earlier drivers rather than
+// folding them into the opening balance. A non-positive horizon yields nothing.
 func (p Projection) Series(asOf time.Time, horizonDays int) ([]Point, error) {
 	if horizonDays <= 0 {
 		return nil, nil
@@ -136,18 +159,8 @@ func (p Projection) Series(asOf time.Time, horizonDays int) ([]Point, error) {
 		byDay[k] = append(byDay[k], d)
 	}
 	out := make([]Point, 0, horizonDays+1)
-	out = append(out, Point{Date: start, Balance: p.Start})
 	bal := p.Start
-	todayDrivers := byDay[start.Format("2006-01-02")]
-	if len(todayDrivers) > 0 {
-		in, outAmt, next, err := applyDay(bal, todayDrivers)
-		if err != nil {
-			return nil, err
-		}
-		bal = next
-		out = append(out, Point{Date: start, Balance: bal, In: in, Out: outAmt})
-	}
-	for i := 1; i <= horizonDays; i++ {
+	for i := 0; i <= horizonDays; i++ {
 		dt := start.AddDate(0, 0, i)
 		in, outAmt, next, err := applyDay(bal, byDay[dt.Format("2006-01-02")])
 		if err != nil {
@@ -185,6 +198,10 @@ func applyDay(balance int64, drivers []Driver) (in, out, nextBalance int64, err 
 // FirstNegative reports the first day the projected balance closes below zero,
 // and whether it happens at all.
 //
+// A day counts when its closing balance, after every driver dated that day, is
+// below zero; an intra-day dip that recovers by close does not. Drivers must be
+// date-sorted, as Project returns them.
+//
 // FIRST, not lowest. Knowing when trouble starts is what leaves time to act; the
 // deepest point is usually later than the point where the decision had to be
 // made. A start balance already below zero counts as today — otherwise an
@@ -195,18 +212,18 @@ func (p Projection) FirstNegative(asOf time.Time) (time.Time, bool, error) {
 	if p.Start < 0 {
 		return start, true, nil
 	}
-	bal := p.Start
-	for _, d := range p.Drivers {
-		var err error
-		bal, err = money.Add(bal, d.Amount)
-		if err != nil {
-			return time.Time{}, false, fmt.Errorf("acctproject: apply %q on %s: %w", d.Label, d.Date.Format("2006-01-02"), err)
+	var negativeOn time.Time
+	found := false
+	_, err := walkDayCloses(p.Start, p.Drivers, func(date time.Time, closing int64) bool {
+		if closing < 0 {
+			negativeOn, found = date, true
 		}
-		if bal < 0 {
-			return day(d.Date), true, nil
-		}
+		return !found
+	})
+	if err != nil {
+		return time.Time{}, false, err
 	}
-	return time.Time{}, false, nil
+	return negativeOn, found, nil
 }
 
 // Known reports whether the projection rests on anything. A horizon with no

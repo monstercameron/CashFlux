@@ -147,10 +147,10 @@ func registerSmartRowHint() {
 		overflowWrap("anywhere"),
 	)
 
-	// --- SM-6: the repeats found on one account -------------------------------
-	// Reuses the budget card's disclosure toggle (.budget-drivers-toggle) so the two
-	// "opt-in detail under a record" affordances are visibly the same control, then
-	// lists each repeat as a name/meta pair with its action pinned right.
+	// --- Recurring charges found on one account -------------------------------
+	// Reuses the budget card's disclosure toggle (.budget-drivers-toggle) so the two opt-in
+	// detail affordances look the same. Each charge is listed as a name and meta pair, with
+	// its track action pinned to the right.
 	rule(".acct-recur",
 		marginTop("0.35rem"),
 	)
@@ -161,33 +161,6 @@ func registerSmartRowHint() {
 		border("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
-	)
-	rule(".acct-recur-row",
-		display("flex"),
-		alignItems("center"),
-		justifyContent("space-between"),
-		gap("0.6rem"),
-		padding("0.45rem 0.6rem"),
-		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
-	)
-	rule(".acct-recur-list .acct-recur-row:first-child",
-		borderTop("0"),
-	)
-	rule(".acct-recur-main",
-		display("flex"),
-		flexDirection("column"),
-		minWidth("0"),
-	)
-	rule(".acct-recur-name",
-		overflow("hidden"),
-		textOverflow("ellipsis"),
-		whiteSpace("nowrap"),
-		color("var(--text)"),
-		fontWeight("600"),
-		fontSize("var(--type-13)"),
-	)
-	rule(".acct-recur-meta",
-		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".acct-recur-track",
 		flexShrink("0"),

@@ -2,7 +2,13 @@
 
 package reconcile
 
-import "github.com/monstercameron/CashFlux/internal/domain"
+import (
+	"maps"
+	"slices"
+	"sort"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
+)
 
 // Ledger is the narrow slice of the store a rollback needs. An interface, so the
 // journal stays pure logic testable without the app, and so a rollback holds only
@@ -38,6 +44,8 @@ type Session struct {
 	created []string
 }
 
+// NewSession returns an empty journal for one reconcile dialog. Everything the
+// dialog writes is noted on it, and Rollback undoes exactly that.
 func NewSession() *Session {
 	return &Session{before: map[string]domain.Transaction{}}
 }
@@ -48,16 +56,36 @@ func (s *Session) NoteBefore(t domain.Transaction) {
 		return
 	}
 	if _, seen := s.before[t.ID]; !seen {
-		s.before[t.ID] = t
+		s.before[t.ID] = cloneTransaction(t)
 	}
+}
+
+// cloneTransaction copies the slices and map a Transaction holds by reference,
+// so a later in-place edit of the live row cannot change the stored before-image.
+func cloneTransaction(t domain.Transaction) domain.Transaction {
+	t.Splits = slices.Clone(t.Splits)
+	t.Tags = slices.Clone(t.Tags)
+	t.MemberIDs = slices.Clone(t.MemberIDs)
+	t.Attachments = slices.Clone(t.Attachments)
+	t.Custom = maps.Clone(t.Custom)
+	return t
 }
 
 // NoteCreated records a row the modal posted itself.
 func (s *Session) NoteCreated(id string) {
-	if s == nil || id == "" {
+	if s == nil || id == "" || s.isCreated(id) {
 		return
 	}
 	s.created = append(s.created, id)
+}
+
+func (s *Session) isCreated(id string) bool {
+	for _, c := range s.created {
+		if c == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Touched reports whether the modal has written anything, so Cancel can close
@@ -67,14 +95,27 @@ func (s *Session) Touched() bool {
 }
 
 // Count is how many rows Cancel would put back — used to say so before doing it.
+// A row the dialog created and then also changed is one row, since Cancel deletes
+// it.
 func (s *Session) Count() int {
 	if s == nil {
 		return 0
 	}
-	return len(s.before) + len(s.created)
+	n := len(s.created)
+	for id := range s.before {
+		if !s.isCreated(id) {
+			n++
+		}
+	}
+	return n
 }
 
 // Rollback restores every row the modal changed and deletes every row it created.
+//
+// A row the dialog created has no meaningful before-image: it did not exist, so
+// it is deleted and never restored, even if it was also noted after being
+// created. Restores run in ascending id order so a rollback issues the same
+// writes every time.
 //
 // Deletions run FIRST: a created adjustment can only have been posted after the
 // clears that motivated it, and removing it before restoring the rest keeps the
@@ -100,7 +141,15 @@ func (s *Session) Rollback(l Ledger) (failed int) {
 			keptCreated = append(keptCreated, id)
 		}
 	}
-	for id, t := range s.before {
+	restoreIDs := make([]string, 0, len(s.before))
+	for id := range s.before {
+		if !s.isCreated(id) {
+			restoreIDs = append(restoreIDs, id)
+		}
+	}
+	sort.Strings(restoreIDs)
+	for _, id := range restoreIDs {
+		t := s.before[id]
 		if err := l.PutTransaction(t); err != nil {
 			failed++
 			keptBefore[id] = t

@@ -63,7 +63,7 @@ const vbDragShimJS = `
     if (!status) {
       status = document.createElement("div"); status.id = statusId; status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
-      status.style.cssText = "position:fixed;bottom:1rem;left:1rem;z-index:1000;padding:.55rem .8rem;border-radius:8px;background:var(--bg-elev,#1a1a1d);color:var(--text,#eee);border:1px solid var(--border,#555);font:13px sans-serif";
+      status.style.cssText = "position:fixed;bottom:1rem;left:1rem;z-index:var(--z-toast);padding:.55rem .8rem;border-radius:8px;background:var(--bg-elev,#1a1a1d);color:var(--text,#eee);border:1px solid var(--border,#555);font:13px sans-serif";
       status.textContent = "Canvas changes are waiting to save."; document.body.appendChild(status);
     }
   }

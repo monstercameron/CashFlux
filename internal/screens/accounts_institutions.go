@@ -5,13 +5,14 @@
 package screens
 
 import (
-	"sort"
+	"log/slog"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/institution"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -20,11 +21,11 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// accounts_institutions.go is the AC10 institution directory: a lightweight CRM for
-// "who do I bank with" that grounds the ★★ Multi-Institution Analytics feature with a
-// real entity (domain.Institution) instead of matching on the free-text
-// Account.Institution string. It also colors account rows by their institution and
-// feeds the AC16 emergency pack's support-contact roll-up.
+// This file is the institution directory: a small contact list answering "who do I
+// bank with". Each institution is a real entity (domain.Institution), so multi-
+// institution analysis does not depend on matching the free-text Account.Institution
+// string. Account rows are colored by their institution, and the emergency pack
+// lists the institutions' support contacts.
 
 // sortedInstitutions returns the household's institutions sorted by display name, so
 // the manager list and the edit-form picker present a stable, predictable order.
@@ -33,24 +34,13 @@ func sortedInstitutions(app *appstate.App) []domain.Institution {
 		return nil
 	}
 	insts := app.Institutions()
-	sort.SliceStable(insts, func(i, j int) bool {
-		return strings.ToLower(insts[i].TrimmedName()) < strings.ToLower(insts[j].TrimmedName())
-	})
+	institution.SortByName(insts)
 	return insts
 }
 
-// institutionSwatchColor returns the color to render for an institution chip/stripe,
-// falling back to a calm neutral accent when the institution has none set.
-func institutionSwatchColor(in domain.Institution) string {
-	if c := strings.TrimSpace(in.Color); c != "" {
-		return c
-	}
-	return "#7c83ff"
-}
-
-// institutionChip renders a small colored tag with the institution's name — used on
-// the account row (AC10) so an account's institution reads at a glance without
-// opening the editor. Returns Fragment() when instID does not resolve.
+// institutionChip renders a small colored tag with the institution's name, shown on
+// an account row so its institution reads at a glance without opening the editor.
+// Returns Fragment() when instID does not resolve.
 func institutionChip(instByID map[string]domain.Institution, instID string) ui.Node {
 	in, ok := instByID[instID]
 	if !ok {
@@ -58,12 +48,9 @@ func institutionChip(instByID map[string]domain.Institution, instID string) ui.N
 	}
 	return Span(css.Class("inst-chip", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 		Attr("data-testid", "inst-chip-"+instID),
-		Attr("aria-label", uistate.T("accounts.institutionChipAria", in.TrimmedName())),
-		Span(Style(map[string]string{
-			"width": "8px", "height": "8px", "border-radius": "50%",
-			"background": institutionSwatchColor(in), "display": "inline-block", "flex-shrink": "0",
-		})),
-		Span(css.Class(tw.TextDim), in.TrimmedName()),
+		AriaLabel(uistate.T("accounts.institutionChipAria", in.DisplayName(uistate.T("accounts.institutionUntitled")))),
+		Span(css.Class("inst-dot"), Attr("style", "--inst-color: "+institution.SwatchColor(in))),
+		Span(css.Class(tw.TextDim), in.DisplayName(uistate.T("accounts.institutionUntitled"))),
 	)
 }
 
@@ -74,19 +61,20 @@ type InstitutionsManagerFormProps struct {
 	OnDone func()
 }
 
-// InstitutionsManagerForm is the AC10 institution-directory modal body: a list of
-// every institution (name, color, account count) with Edit/Delete, plus "Add
-// institution". Editing/adding swaps in institutionEditForm, keyed on the target id
-// so it remounts fresh (its useState seeds from the target) each time the selection
-// changes — this component itself never unmounts while the modal is open, so its own
-// editingID toggle state is the only thing that needs to persist across that swap.
+// InstitutionsManagerForm is the institution-directory modal body: a list of every
+// institution (name, color, account count) with an Edit button, plus "Add
+// institution". Editing or adding swaps in institutionEditForm, keyed on the target
+// id so it remounts fresh (its state seeds from the target). This component stays
+// mounted while the modal is open, so editingID is the only state that carries
+// across the swap.
 func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	editingID := ui.UseState("") // "" = list view; "new" or an institution id = edit sub-form
-
-	done := props.OnDone
-	if done == nil {
-		done = func() {}
-	}
+	startNew := ui.UseEvent(Prevent(func() { editingID.Set("new") }))
+	finish := ui.UseEvent(Prevent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
 
 	if id := editingID.Get(); id != "" {
 		closeSub := func() { editingID.Set("") }
@@ -107,7 +95,6 @@ func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 		}
 	}
 
-	startNew := ui.UseEvent(Prevent(func() { editingID.Set("new") }))
 	startEdit := func(instID string) { editingID.Set(instID) }
 
 	rows := MapKeyed(insts, func(in domain.Institution) any { return in.ID }, func(in domain.Institution) ui.Node {
@@ -117,11 +104,12 @@ func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	})
 
 	return Div(css.Class("inv-pool-modal"),
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.75rem"}), uistate.T("accounts.institutionsHint")),
-		If(len(insts) == 0, P(css.Class("empty"), uistate.T("accounts.institutionsEmpty"))),
+		Div(css.Class("acct-callout-gap"), uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("accounts.institutionsHint"))})),
+		If(len(insts) == 0, uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("accounts.institutionsEmpty"))})),
 		Div(css.Class("rows"), rows),
-		Div(css.Class(tw.Mt3),
+		Div(css.Class(tw.Mt3, tw.Flex, tw.Gap2),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "institution-add"), OnClick(startNew), uistate.T("accounts.addInstitution")),
+			If(props.OnDone != nil, Button(css.Class("btn"), Type("button"), Attr("data-testid", "institution-done"), OnClick(finish), uistate.T("action.done"))),
 		),
 	)
 }
@@ -132,25 +120,29 @@ type institutionListRowProps struct {
 	OnEdit       func(string) // plain func — never an On* hook — safe inside MapKeyed
 }
 
-// institutionListRow is one institution row in the directory list. Its own component
-// so the Edit click hook stays stable across a variable-length institution list
-// (CLAUDE.md §gotchas — never an On* hook inside a loop).
+// institutionListRow is one institution row in the directory list. It is its own
+// component so the Edit click hook keeps a stable position in a variable-length list.
 func institutionListRow(props institutionListRowProps) ui.Node {
 	in := props.Inst
 	edit := ui.UseEvent(Prevent(func() { props.OnEdit(in.ID) }))
-	return Div(css.Class("row"), Attr("data-testid", "institution-row-"+in.ID),
-		Span(Style(map[string]string{
-			"width": "10px", "height": "10px", "border-radius": "50%",
-			"background": institutionSwatchColor(in), "flex-shrink": "0",
-		})),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), in.TrimmedName()),
-			If(props.AccountCount > 0, Span(css.Class("row-meta"), uistate.T("accounts.institutionAccountCount", plural(props.AccountCount, "account")))),
-			If(strings.TrimSpace(in.SupportPhone) != "", Span(css.Class("row-meta"), in.SupportPhone)),
-		),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "institution-edit-"+in.ID),
-			Attr("aria-label", uistate.T("accounts.editInstitution")), Title(uistate.T("accounts.editInstitution")), OnClick(edit),
-			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+	var meta []string
+	if props.AccountCount > 0 {
+		meta = append(meta, uistate.TN("accounts.institutionLinkedOne", "accounts.institutionLinkedMany", props.AccountCount))
+	}
+	if phone := strings.TrimSpace(in.SupportPhone); phone != "" {
+		meta = append(meta, in.SupportPhone)
+	}
+	return Div(css.Class("acct-entity"), Attr("data-testid", "institution-row-"+in.ID),
+		uiw.EntityRow(uiw.EntityRowProps{
+			Leading: Span(css.Class("inst-dot inst-dot-lg"), Attr("style", "--inst-color: "+institution.SwatchColor(in))),
+			Title:   in.DisplayName(uistate.T("accounts.institutionUntitled")),
+			Meta:    meta,
+			Actions: []ui.Node{uiw.ToolButton(uiw.ToolButtonProps{
+				Icon: icon.Pencil, Title: uistate.T("accounts.editInstitution"),
+				AriaLabel: uistate.T("accounts.editInstitutionAria", in.DisplayName(uistate.T("accounts.institutionUntitled"))),
+				TestID:    "institution-edit-" + in.ID,
+			}, OnClick(edit))},
+		}),
 	)
 }
 
@@ -169,10 +161,15 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 	app := appstate.Default
 	isNew := props.ID == "" || props.ID == "new"
 	var existing domain.Institution
+	// found is false when the institution being edited no longer exists, for example because it was
+	// deleted in another tab. Saving or deleting then reports that instead of creating or deleting
+	// something else.
+	found := isNew
 	if !isNew && app != nil {
 		for _, in := range app.Institutions() {
 			if in.ID == props.ID {
 				existing = in
+				found = true
 				break
 			}
 		}
@@ -185,7 +182,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 	noteS := ui.UseState(existing.Note)
 	errS := ui.UseState("")
 
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onName := func(v string) { nameS.Set(v) }
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	onPhone := ui.UseEvent(func(v string) { phoneS.Set(v) })
 	onURL := ui.UseEvent(func(v string) { urlS.Set(v) })
@@ -200,14 +197,24 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 		if app == nil {
 			return
 		}
+		if !found {
+			errS.Set(uistate.T("accounts.institutionGone"))
+			return
+		}
 		name := strings.TrimSpace(nameS.Get())
 		if name == "" {
 			errS.Set(uistate.T("accounts.institutionNameRequired"))
 			return
 		}
+		color, err := institution.NormalizeColor(colorS.Get())
+		if err != nil {
+			slog.Warn("institution colour rejected", "institution", existing.ID, "error", err)
+			errS.Set(uistate.T("accounts.institutionColorInvalid"))
+			return
+		}
 		in := existing
 		in.Name = name
-		in.Color = strings.TrimSpace(colorS.Get())
+		in.Color = color
 		in.SupportPhone = strings.TrimSpace(phoneS.Get())
 		in.SupportURL = strings.TrimSpace(urlS.Get())
 		in.Note = strings.TrimSpace(noteS.Get())
@@ -215,7 +222,8 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 			in.ID = id.New()
 		}
 		if err := app.PutInstitution(in); err != nil {
-			errS.Set(err.Error())
+			slog.Error("save institution", "institution", in.ID, "error", err)
+			errS.Set(acctWriteErrorText(err))
 			return
 		}
 		dataEditSaved()
@@ -227,13 +235,17 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 		if app == nil || isNew {
 			return
 		}
-		name := existing.TrimmedName()
+		if !found {
+			errS.Set(uistate.T("accounts.institutionGone"))
+			return
+		}
+		name := existing.DisplayName(uistate.T("accounts.institutionUntitled"))
 		uistate.ConfirmModal(uistate.T("accounts.institutionDeleteConfirm", name), true, func(ok bool) {
 			if !ok {
 				return
 			}
 			if err := app.DeleteInstitution(existing.ID); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				postAcctWriteError("delete institution", err)
 				return
 			}
 			dataEditSaved()
@@ -249,37 +261,36 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 		title = uistate.T("accounts.editInstitution")
 	}
 
-	var deleteBtn ui.Node = Fragment()
-	if !isNew {
-		deleteBtn = Button(css.Class("btn btn-sm danger"), Type("button"), Attr("data-testid", "institution-delete"),
-			OnClick(del), uistate.T("accounts.deleteInstitution"))
-	}
+	deleteBtn := If(!isNew, Button(css.Class("btn btn-sm danger"), Type("button"), Attr("data-testid", "institution-delete"),
+		OnClick(del), uistate.T("accounts.deleteInstitution")))
 
 	swatch := colorS.Get()
 	if swatch == "" {
-		swatch = "#7c83ff"
+		swatch = institution.DefaultSwatchColor
 	}
 
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "institution-edit-form"), OnSubmit(save),
 		Div(css.Class("modal-scroll"),
 			H4(css.Class("set-label"), title),
-			labeledField(uistate.T("accounts.institutionNameLabel"),
-				Input(css.Class("field"), Attr("id", "inst-name"), Attr("autofocus", ""), Attr("data-testid", "institution-name"),
-					Type("text"), Placeholder(uistate.T("accounts.institutionNamePh")), OnInput(onName), uiw.FieldValue(nameS.Get()))),
-			labeledField(uistate.T("accounts.institutionColorLabel"),
+			uiw.FormField(uistate.T("accounts.institutionNameLabel"),
+				uiw.TextInput(uiw.TextFieldProps{
+					Value: nameS.Get(), Placeholder: uistate.T("accounts.institutionNamePh"), OnInput: onName,
+					Extra: []any{Attr("id", "inst-name"), Attr("autofocus", ""), Attr("data-testid", "institution-name")},
+				})),
+			uiw.FormField(uistate.T("accounts.institutionColorLabel"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Input(css.Class("color-input"), Type("color"), Attr("data-testid", "institution-color"),
-						Attr("aria-label", uistate.T("accounts.institutionColorLabel")), OnInput(onColor), uiw.FieldValue(swatch)))),
-			labeledField(uistate.T("accounts.institutionPhoneLabel"),
+						AriaLabel(uistate.T("accounts.institutionColorLabel")), OnInput(onColor), uiw.FieldValue(swatch)))),
+			uiw.FormField(uistate.T("accounts.institutionPhoneLabel"),
 				Input(css.Class("field"), Type("tel"), Attr("data-testid", "institution-phone"),
 					Placeholder(uistate.T("accounts.institutionPhonePh")), OnInput(onPhone), uiw.FieldValue(phoneS.Get()))),
-			labeledField(uistate.T("accounts.institutionURLLabel"),
+			uiw.FormField(uistate.T("accounts.institutionURLLabel"),
 				Input(css.Class("field"), Type("url"), Attr("data-testid", "institution-url"),
 					Placeholder(uistate.T("accounts.institutionURLPh")), OnInput(onURL), uiw.FieldValue(urlS.Get()))),
-			labeledField(uistate.T("accounts.institutionNoteLabel"),
+			uiw.FormField(uistate.T("accounts.institutionNoteLabel"),
 				uiw.TextAreaInput(uiw.TextFieldProps{Value: noteS.Get(), Placeholder: uistate.T("accounts.institutionNotePh"),
 					AriaLabel: uistate.T("accounts.institutionNoteLabel"), OnInput: onNote})),
-			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
+			If(errS.Get() != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(errS.Get())})),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
@@ -294,7 +305,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 func institutionPickerOptions(app *appstate.App) []uiw.SelectOption {
 	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.institutionNone")}}
 	for _, in := range sortedInstitutions(app) {
-		opts = append(opts, uiw.SelectOption{Value: in.ID, Label: in.TrimmedName()})
+		opts = append(opts, uiw.SelectOption{Value: in.ID, Label: in.DisplayName(uistate.T("accounts.institutionUntitled"))})
 	}
 	return opts
 }

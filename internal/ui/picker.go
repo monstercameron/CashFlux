@@ -6,14 +6,15 @@ package ui
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"strings"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/interop"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
@@ -22,28 +23,31 @@ var (
 	pickerSearchStyles  = css.New(tw.WFull, tw.Px3, tw.Py2, tw.Rounded)
 	pickerListStyles    = css.New(tw.MaxH55vh, tw.OverflowYAuto, tw.Py1)
 	pickerOptionStyles  = css.New(tw.Flex, tw.WFull, tw.ItemsCenter, tw.Gap2, tw.Rounded, tw.Px2, tw.Py1, tw.TextLeft)
-	multiSheetStyles    = css.New(tw.WFull, tw.MaxW85, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg)
-	multiListStyles     = css.New(tw.MaxH55vh, tw.OverflowYAuto, tw.Flex, tw.FlexWrap, tw.Gap2)
-	multiOptionStyles   = css.New(tw.InlineFlex, tw.ItemsCenter, tw.Gap2, tw.RoundedFull, tw.Px3, tw.Py2)
 	secondaryTextStyles = css.New(tw.TextDim, css.FontSize(css.Rem(0.75)))
 )
 
+// maxPopoverHeight is the tallest a picker panel may grow, in pixels. Longer content scrolls
+// inside the panel.
+const maxPopoverHeight = 420
+
+// pickerPosition is where a picker panel sits, in CSS pixels. Top and Left are the panel's
+// top-left corner, MaxHeight caps its height, and Width is the trigger's width.
 type pickerPosition struct {
-	Top, Left, MaxHeight int
+	Top, Left, MaxHeight, Width int
 }
 
+// pickerPopoverRules returns the fixed-position styles for a picker panel at position.
 func pickerPopoverRules(position pickerPosition) []css.Rule {
 	return []css.Rule{css.Position.Fixed, css.Top(css.Px(position.Top)), css.Left(css.Px(position.Left)), css.Raw("max-height", strconv.Itoa(position.MaxHeight)+"px"), css.Raw("overflow-y", "auto"), tw.MinW150, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg}
 }
 
+// pickerViewportPosition places a panel beside a trigger whose top and bottom edges are given.
+// The panel opens below the trigger, unless there is too little room there and more room above.
+// Its height is capped at the space it gets.
 func pickerViewportPosition(top, bottom, panelHeight, viewportHeight float64) pickerPosition {
 	const margin = 16.0
-	const maxPopoverHeight = 420.0
 	if viewportHeight < 0 {
 		viewportHeight = 0
-	}
-	if panelHeight < 0 {
-		panelHeight = 0
 	}
 	panelHeight = math.Min(panelHeight, maxPopoverHeight)
 	spaceBelow := math.Max(0, viewportHeight-bottom-margin)
@@ -55,9 +59,6 @@ func pickerViewportPosition(top, bottom, panelHeight, viewportHeight float64) pi
 		available = spaceAbove
 	}
 	maxHeight := int(math.Round(math.Min(maxPopoverHeight, available)))
-	if maxHeight < 0 {
-		maxHeight = 0
-	}
 	if openAbove {
 		popoverTop = top - math.Min(panelHeight, float64(maxHeight))
 		if popoverTop < margin {
@@ -67,19 +68,128 @@ func pickerViewportPosition(top, bottom, panelHeight, viewportHeight float64) pi
 	return pickerPosition{Top: int(math.Round(popoverTop)), MaxHeight: maxHeight}
 }
 
-// PickerProps configures a searchable, explicit-commit picker.
-type PickerProps struct {
-	ID, Label, Placeholder, SelectedLabel string
-	Options                               []PickerOption
-	Searchable                            bool
-	OnCommit                              func(value string)
-	OnCreate                              func(query string)
-	TestID                                string
+// pickerPanelPlacement measures the trigger and the open panel, found by element id, and returns
+// where the panel sits beside the trigger. The panel's height is the taller of its box and its
+// content, so a scrolling panel is measured at full height. ok is false when the trigger is missing.
+func pickerPanelPlacement(triggerID, panelID string) (placement pickerPosition, ok bool) {
+	trigger := domNode(triggerID)
+	if !trigger.Truthy() {
+		return pickerPosition{}, false
+	}
+	bounds := domValue(trigger, "getBoundingClientRect")
+	panelHeight := float64(maxPopoverHeight)
+	if panel := domNode(panelID); panel.Truthy() {
+		measuredHeight := domValue(panel, "getBoundingClientRect").Get("height").Float()
+		if contentHeight := panel.Get("scrollHeight"); contentHeight.Present() && contentHeight.Float() > measuredHeight {
+			measuredHeight = contentHeight.Float()
+		}
+		if measuredHeight > 0 {
+			panelHeight = measuredHeight
+		}
+	}
+	viewportHeight := domDocument().Get("defaultView").Get("innerHeight").Float()
+	placement = pickerViewportPosition(bounds.Get("top").Float(), bounds.Get("bottom").Float(), panelHeight, viewportHeight)
+	placement.Left = int(math.Round(bounds.Get("left").Float()))
+	placement.Width = int(math.Round(bounds.Get("width").Float()))
+	return placement, true
 }
 
-// Picker renders a button and a portalled listbox. The trigger opens on ArrowDown;
-// focus enters the search field, arrows only change the active option, Enter/click
-// commits once, and Escape closes without applying and returns focus to the trigger.
+// usePickerPlacement keeps an open panel beside its trigger. It measures on open, then again
+// when the page scrolls or resizes. Scroll events arrive in bursts, so each burst is coalesced
+// into one animation frame. A placement equal to the last one is not handed on, so the picker
+// only re-renders when the panel really moves.
+func usePickerPlacement(open bool, id string, setPosition func(pickerPosition)) {
+	last := uic.UseRef(pickerPosition{})
+	placed := uic.UseRef(false)
+	queued := uic.UseRef(false)
+	cancelFrame := uic.UseRef(func() {})
+	place := func() {
+		placement, ok := pickerPanelPlacement(id, id+"-surface")
+		if !ok || (placed.Get() && placement == last.Get()) {
+			return
+		}
+		last.Set(placement)
+		placed.Set(true)
+		setPosition(placement)
+	}
+	// Measure on open, before paint, so the panel never shows at a stale spot. Each open starts
+	// with placed reset, so its first measurement is always handed on.
+	uic.UseLayoutEffect(func() func() {
+		if open {
+			placed.Set(false)
+			place()
+		}
+		return nil
+	}, open, id)
+	// onMove queues at most one placement per animation frame.
+	onMove := func(uic.Event) {
+		if !open || queued.Get() {
+			return
+		}
+		queued.Set(true)
+		cancelFrame.Set(interop.RequestAnimationFrame(func(float64) {
+			queued.Set(false)
+			place()
+		}))
+	}
+	uic.UseWindowEvent("resize", onMove, open, id)
+	uic.UseWindowEvent("scroll", onMove, open, id)
+	// A frame still queued when the panel closes is cancelled, so it cannot re-place a closed panel.
+	uic.UseLayoutEffect(func() func() {
+		return func() {
+			if queued.Get() {
+				cancelFrame.Get()()
+				queued.Set(false)
+			}
+		}
+	}, open, id)
+}
+
+// multiSheetSurfaceStyle places the multi-select sheet beside its trigger. The sheet is as wide
+// as the trigger, but at least 200px. Only the placement is inline. The sheet's colours and shape
+// come from the shared styles.
+func multiSheetSurfaceStyle(place pickerPosition) map[string]string {
+	return map[string]string{
+		"position":   "fixed",
+		"top":        strconv.Itoa(place.Top) + "px",
+		"left":       strconv.Itoa(place.Left) + "px",
+		"width":      strconv.Itoa(max(place.Width, 200)) + "px",
+		"max-height": strconv.Itoa(place.MaxHeight) + "px",
+	}
+}
+
+// pickerSurfaceHasFocus reports whether keyboard focus is inside the element with the given id.
+// It reads the document's active element, so it needs no event target.
+func pickerSurfaceHasFocus(surfaceID string) bool {
+	surface := domNode(surfaceID)
+	active := domDocument().Get("activeElement")
+	return surface.Truthy() && active.Truthy() && domValue(surface, "contains", active).Bool()
+}
+
+// PickerProps configures a Picker.
+type PickerProps struct {
+	// ID names the trigger. The list, the search field and the panel derive their ids from it.
+	// Label is the accessible name of the trigger and of the list. Placeholder is the trigger's
+	// text when SelectedLabel is empty, and the hint in the search field. SelectedLabel is the
+	// trigger's text once a value is chosen.
+	ID, Label, Placeholder, SelectedLabel string
+	Options                               []PickerOption
+	// Searchable adds a search field, and lets a typed letter open the picker with that letter as
+	// the search.
+	Searchable bool
+	// OnCommit receives the value of the option the reader chooses.
+	OnCommit func(value string)
+	// OnCreate, when set, offers to create a new item named by the query when nothing matches it.
+	OnCreate func(query string)
+	// TestID is the data-testid of the trigger. Empty adds none.
+	TestID string
+}
+
+// Picker renders a button that opens a listbox in a portal. Enter, Space or ArrowDown on the
+// trigger opens it. When the picker is searchable, a typed letter opens it too. Focus then moves
+// to the search field, or to the list when the picker is not searchable. Arrow keys move the
+// active option. Enter or a click commits the value. Escape closes the picker without applying a
+// value, and returns focus to the trigger.
 func Picker(props PickerProps) uic.Node {
 	return uic.CreateElement(pickerComponent, pickerComponentProps{Props: props, PortalTarget: "body"})
 }
@@ -94,8 +204,9 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 	open := uic.UseState(false)
 	query := uic.UseState("")
 	active := uic.UseState(-1)
-	position := uic.UseState(pickerPosition{MaxHeight: 420})
+	position := uic.UseState(pickerPosition{MaxHeight: maxPopoverHeight})
 	filtered := FilterPickerOptions(props.Options, query.Get())
+	// If the stored index is out of range or on a disabled option, use the first enabled one.
 	activeIndex := active.Get()
 	if activeIndex < 0 || activeIndex >= len(filtered) || filtered[activeIndex].Disabled {
 		activeIndex = PickerActiveIndex(filtered)
@@ -117,7 +228,15 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 		query.Set("")
 		focusPickerID(props.ID)
 	}
-	onOpen := uic.UseEvent(func() { openPicker() })
+	// chooseOption commits a value, closes the picker and returns focus to the trigger.
+	chooseOption := func(value string) {
+		if props.OnCommit != nil {
+			props.OnCommit(value)
+		}
+		open.Set(false)
+		focusPickerID(props.ID)
+	}
+	onOpen := uic.UseEvent(openPicker)
 	onTriggerKey := uic.UseEvent(func(event uic.KeyboardEvent) {
 		if event.GetKey() == "ArrowDown" || event.GetKey() == "Enter" || event.GetKey() == " " {
 			event.PreventDefault()
@@ -145,11 +264,7 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 		case "Enter":
 			event.PreventDefault()
 			if activeIndex >= 0 && activeIndex < len(filtered) {
-				if props.OnCommit != nil {
-					props.OnCommit(filtered[activeIndex].Value)
-				}
-				open.Set(false)
-				focusPickerID(props.ID)
+				chooseOption(filtered[activeIndex].Value)
 			}
 		case "Escape":
 			event.PreventDefault()
@@ -161,100 +276,43 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 	onTriggerKeyOption := OnKeyDown(onTriggerKey)
 	onQueryOption := OnInput(onQuery)
 	onKeyOption := OnKeyDown(onKey)
+	firstFocus := listID
+	if props.Searchable {
+		firstFocus = searchID
+	}
 	uic.UseEffect(func() func() {
 		if open.Get() {
-			focusTarget := listID
-			if props.Searchable {
-				focusTarget = searchID
-			}
-			focusPickerID(focusTarget)
+			focusPickerID(firstFocus)
 		}
 		return nil
 	}, open.Get())
-	uic.UseEffect(func() func() {
-		if !open.Get() {
-			return nil
-		}
-		reposition := func() {
-			document := js.Global().Get("document")
-			if !document.Truthy() || document.Get("getElementById").Type() != js.TypeFunction {
-				return
-			}
-			trigger := document.Call("getElementById", props.ID)
-			if !trigger.Truthy() || trigger.Get("getBoundingClientRect").Type() != js.TypeFunction {
-				return
-			}
-			bounds := trigger.Call("getBoundingClientRect")
-			panelHeight := 420.0
-			panel := document.Call("getElementById", props.ID+"-surface")
-			if panel.Truthy() && panel.Get("getBoundingClientRect").Type() == js.TypeFunction {
-				measuredHeight := panel.Call("getBoundingClientRect").Get("height").Float()
-				contentHeight := panel.Get("scrollHeight")
-				if contentHeight.Type() == js.TypeNumber && contentHeight.Float() > measuredHeight {
-					measuredHeight = contentHeight.Float()
-				}
-				if measuredHeight > 0 {
-					panelHeight = measuredHeight
-				}
-			}
-			window := js.Global().Get("window")
-			viewportHeight := window.Get("innerHeight").Float()
-			placement := pickerViewportPosition(bounds.Get("top").Float(), bounds.Get("bottom").Float(), panelHeight, viewportHeight)
-			placement.Left = int(math.Round(bounds.Get("left").Float()))
-			position.Set(placement)
-		}
-		reposition()
-		window := js.Global().Get("window")
-		if !window.Truthy() {
-			return nil
-		}
-		listener := js.FuncOf(func(js.Value, []js.Value) any { reposition(); return nil })
-		window.Call("addEventListener", "resize", listener)
-		window.Call("addEventListener", "scroll", listener, true)
-		return func() {
-			window.Call("removeEventListener", "resize", listener)
-			window.Call("removeEventListener", "scroll", listener, true)
-			listener.Release()
-		}
-	}, open.Get(), props.ID)
+	usePickerPlacement(open.Get(), props.ID, position.Set)
 
 	triggerLabel := props.SelectedLabel
 	if triggerLabel == "" {
 		triggerLabel = props.Placeholder
 	}
-	trigger := Button(
+	triggerArgs := []any{
 		css.Class("cf-picker-trigger", pickerTriggerStyles),
 		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"),
 		Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())),
-		Attr("aria-controls", listID), onOpenOption, onTriggerKeyOption, triggerLabel,
-	)
-	if props.TestID != "" {
-		trigger = Button(
-			css.Class("cf-picker-trigger", pickerTriggerStyles),
-			Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"),
-			Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())),
-			Attr("aria-controls", listID), Attr("data-testid", props.TestID), onOpenOption, onTriggerKeyOption, triggerLabel,
-		)
+		Attr("aria-controls", listID), onOpenOption, onTriggerKeyOption,
 	}
-	var popup uic.Node = Fragment()
+	if props.TestID != "" {
+		triggerArgs = append(triggerArgs, Attr("data-testid", props.TestID))
+	}
+	trigger := Button(append(triggerArgs, triggerLabel)...)
 	positionRules := pickerPopoverRules(position.Get())
 	panelClass := "cf-picker-popover " + string(css.New(positionRules...))
 	var panel uic.Node = Fragment()
 	if open.Get() {
-		rows := make([]uic.Node, 0, len(filtered)+1)
+		listArgs := []any{Attr("id", listID), Attr("role", "listbox"), Attr("tabindex", "0"), Attr("aria-label", props.Label), Attr("aria-activedescendant", activeID), css.Class("cf-picker-list", pickerListStyles), onKeyOption}
 		for index, option := range filtered {
-			rows = append(rows, uic.CreateElement(pickerOptionRow, pickerOptionRowProps{
+			listArgs = append(listArgs, uic.CreateElement(pickerOptionRow, pickerOptionRowProps{
 				ID: PickerOptionID(props.ID, index), Option: option, Active: index == activeIndex, Depth: option.Depth,
-				OnChoose: func(value string) {
-					if props.OnCommit != nil {
-						props.OnCommit(value)
-					}
-					open.Set(false)
-					focusPickerID(props.ID)
-				},
+				OnChoose: chooseOption,
 			}))
 		}
-		var listbox uic.Node
 		var search uic.Node = Fragment()
 		if props.Searchable {
 			search = Input(css.Class("cf-picker-search", pickerSearchStyles),
@@ -262,36 +320,24 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 				Attr("aria-controls", listID), Attr("aria-expanded", "true"), Attr("aria-autocomplete", "list"),
 				Attr("aria-activedescendant", activeID), Placeholder(props.Placeholder), Value(query.Get()), onQueryOption, onKeyOption)
 		}
-		listboxArgs := []any{Attr("id", listID), Attr("role", "listbox"), Attr("tabindex", "0"), Attr("aria-label", props.Label), Attr("aria-activedescendant", activeID), css.Class("cf-picker-list", pickerListStyles), onKeyOption}
-		for _, row := range rows {
-			listboxArgs = append(listboxArgs, row)
-		}
-		listbox = Div(listboxArgs...)
-		panelChildren := []uic.Node{search, listbox}
-		if props.OnCreate != nil && strings.TrimSpace(query.Get()) != "" && len(filtered) == 0 {
+		panelChildren := []any{search, Div(listArgs...)}
+		trimmedQuery := strings.TrimSpace(query.Get())
+		if props.OnCreate != nil && trimmedQuery != "" && len(filtered) == 0 {
 			panelChildren = append(panelChildren, uic.CreateElement(pickerCreateRow, pickerCreateRowProps{
-				ID: props.ID + "-create", Query: strings.TrimSpace(query.Get()), OnCreate: props.OnCreate,
+				ID: props.ID + "-create", Query: trimmedQuery, OnCreate: props.OnCreate,
 				OnChoose: func() { open.Set(false); focusPickerID(props.ID) },
 			}))
 		}
-		panelArgs := make([]any, 0, len(panelChildren))
-		for _, child := range panelChildren {
-			panelArgs = append(panelArgs, child)
-		}
-		panel = Fragment(panelArgs...)
+		panel = Fragment(panelChildren...)
 	}
-	// Register the picker as an overlay surface so it participates in the shared
-	// overlay stack. Nested surfaces get a z-index above their dialog and own
-	// outside-click dismissal, so a click on an option cannot dismiss the dialog.
-	initialFocus := listID
-	if props.Searchable {
-		initialFocus = searchID
-	}
-	popup = uic.AccessibleOverlay(uic.AccessibleOverlayProps{
+	// The panel is an accessible overlay, portalled to the body above any dialog it sits in. The
+	// overlay handles Escape and outside presses itself, so a press on an option does not dismiss
+	// the dialog behind it.
+	popup := uic.AccessibleOverlay(uic.AccessibleOverlayProps{
 		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget},
 		SurfaceID: props.ID + "-surface", Kind: uic.OverlayKindPopover, Role: "region", LabelledBy: props.ID,
 		CloseOnEscape: true, CloseOnOutsideClick: true, RestoreFocus: true,
-		InitialFocusSelector: "#" + initialFocus, BaseZIndex: 3501,
+		InitialFocusSelector: "#" + firstFocus, BaseZIndex: 3501,
 		SurfaceClass: panelClass, Child: panel, OnDismiss: closePicker,
 	})
 	return Div(css.Class("cf-picker", css.New(tw.Relative)), trigger, popup)
@@ -305,26 +351,20 @@ type pickerOptionRowProps struct {
 	OnChoose func(string)
 }
 
+// pickerOptionRow renders one option. The option is wrapped once per level of depth, so it
+// indents with its place in the tree. Indentation is capped at 24 levels.
 func pickerOptionRow(props pickerOptionRowProps) uic.Node {
-	selected := "false"
-	if props.Active {
-		selected = "true"
-	}
 	option := Button(css.Class("cf-picker-option", pickerOptionStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("role", "option"), Attr("aria-selected", selected),
+		Attr("id", props.ID), Attr("type", "button"), Attr("role", "option"), Attr("aria-selected", boolAttr(props.Active)),
 		Attr("aria-disabled", boolAttr(props.Option.Disabled)), Attr("tabindex", "-1"),
 		OnClick(func() {
-			if !props.Option.Disabled && props.OnChoose != nil {
+			if !props.Option.Disabled {
 				props.OnChoose(props.Option.Value)
 			}
 		}),
 		Attr("data-depth", props.Depth), props.Option.Label, If(props.Option.Secondary != "", Span(css.Class("cf-picker-secondary", secondaryTextStyles), props.Option.Secondary)),
 	)
-	indent := props.Depth
-	if indent > 24 {
-		indent = 24
-	}
-	for range indent {
+	for range min(props.Depth, 24) {
 		option = Div(css.Class("cf-picker-indent", css.New(tw.Ml1)), option)
 	}
 	return option
@@ -336,33 +376,41 @@ type pickerCreateRowProps struct {
 	OnChoose  func()
 }
 
+// pickerCreateRow offers to create the typed query as a new item. Choosing it runs OnCreate,
+// then OnChoose.
 func pickerCreateRow(props pickerCreateRowProps) uic.Node {
 	return Button(css.Class("cf-picker-create", css.New(tw.Flex, tw.WFull, tw.ItemsCenter, tw.Gap2, tw.Rounded, tw.Px2, tw.Py2, tw.TextLeft, tw.TextFg)),
 		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", uistate.T("picker.createAria", props.Query)),
 		OnClick(func() {
-			if props.OnCreate != nil {
-				props.OnCreate(props.Query)
-			}
-			if props.OnChoose != nil {
-				props.OnChoose()
-			}
+			props.OnCreate(props.Query)
+			props.OnChoose()
 		}),
 		uistate.T("picker.create", props.Query),
 	)
 }
 
-// MultiPickerProps configures a controlled listbox that toggles multiple values.
+// MultiPickerProps configures a MultiPicker.
 type MultiPickerProps struct {
-	ID, Label, Placeholder string
-	Options                []PickerOption
-	Selected               []string
-	OnToggle               func(value string)
-	TestID                 string
+	// ID names the trigger. The sheet, its title and its options derive their ids from it.
+	ID string
+	// Label is the accessible name of the trigger and the heading of the sheet.
+	Label string
+	// Placeholder is the trigger's text, usually a summary of what is chosen.
+	Placeholder string
+	// Options are the choices, in order.
+	Options []PickerOption
+	// Selected holds the values currently chosen.
+	Selected []string
+	// OnToggle receives the value of each option the reader clicks.
+	OnToggle func(value string)
+	// TestID names the trigger for tests. Empty adds no test id.
+	TestID string
 }
 
-// MultiPicker renders a portalled multi-select sheet. Each option has
-// aria-selected state and click toggles it through OnToggle; Escape closes and
-// restores focus to the trigger.
+// MultiPicker is a field that opens a sheet of choices beside it. Choosing an option toggles it
+// through OnToggle, and the sheet stays open so several options can be chosen in one visit. The
+// sheet closes on Escape, on a press outside it, or when focus moves out of it. Escape also
+// returns focus to the field.
 func MultiPicker(props MultiPickerProps) uic.Node {
 	return uic.CreateElement(multiPickerComponent, multiPickerComponentProps{Props: props, PortalTarget: "body"})
 }
@@ -375,120 +423,136 @@ type multiPickerComponentProps struct {
 func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	props := componentProps.Props
 	open := uic.UseState(false)
-	listID := props.ID + "-listbox"
 	active := uic.UseState(0)
-	closePicker := func() { open.Set(false); focusPickerID(props.ID) }
-	onTrigger := OnClick(func() { active.Set(0); open.Set(true) })
-	trigger := Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger,
-		props.Placeholder)
-	if props.TestID != "" {
-		trigger = Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-			Attr("id", props.ID), Attr("type", "button"), Attr("data-testid", props.TestID), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger, props.Placeholder)
+	place := uic.UseState(pickerPosition{MaxHeight: maxPopoverHeight})
+	usePickerPlacement(open.Get(), props.ID, place.Set)
+	listID := props.ID + "-listbox"
+	surfaceID := props.ID + "-surface"
+
+	onOpen := uic.UseEvent(func(uic.Event) {
+		active.Set(0)
+		open.Set(true)
+	})
+	// ArrowDown and ArrowUp on the trigger open the sheet at its first option.
+	onTriggerKey := uic.UseEvent(func(event uic.KeyboardEvent) {
+		if key := event.GetKey(); key == "ArrowDown" || key == "ArrowUp" {
+			event.PreventDefault()
+			active.Set(0)
+			open.Set(true)
+		}
+	})
+	dismiss := func() { open.Set(false) }
+	// leave closes the sheet when focus moves out of it. The check runs in the next animation
+	// frame, after the browser has moved focus to its new owner, so moving between options inside
+	// the sheet counts as staying in it.
+	leave := func() {
+		interop.RequestAnimationFrame(func(float64) {
+			if !pickerSurfaceHasFocus(surfaceID) {
+				dismiss()
+			}
+		})
 	}
-	options := FilterPickerOptions(props.Options, "")
+
+	trigger := []any{
+		css.Class("cf-multi-trigger"), Type("button"),
+		Attr("id", props.ID), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"),
+		Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID),
+		OnClick(onOpen), OnKeyDown(onTriggerKey), props.Placeholder,
+	}
+	if props.TestID != "" {
+		trigger = append(trigger, Attr("data-testid", props.TestID))
+	}
+
 	var panel uic.Node = Fragment()
+	initialFocus := ""
 	if open.Get() {
-		rows := make([]uic.Node, 0, len(options))
+		options := FilterPickerOptions(props.Options, "")
+		if len(options) > 0 {
+			initialFocus = "#" + props.ID + "-option-0"
+		}
+		listArgs := []any{
+			css.Class("cf-multi-list"), Attr("id", listID), Attr("role", "listbox"),
+			Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"),
+			Attr("aria-activedescendant", props.ID+"-option-"+strconv.Itoa(active.Get())),
+		}
 		for index, option := range options {
-			selected := containsPickerValue(props.Selected, option.Value)
-			rows = append(rows, uic.CreateElement(multiPickerOptionRow, multiPickerOptionRowProps{
-				ID: props.ID + "-option-" + strconv.Itoa(index), Option: option, Selected: selected, Active: index == active.Get(),
-				OnToggle: func(value string) {
-					if props.OnToggle != nil {
-						props.OnToggle(value)
-					}
-				},
+			listArgs = append(listArgs, uic.CreateElement(multiPickerOptionRow, multiPickerOptionRowProps{
+				ID:       props.ID + "-option-" + strconv.Itoa(index),
+				Option:   option,
+				Selected: slices.Contains(props.Selected, option.Value),
+				OnToggle: props.OnToggle,
+				OnLeave:  leave,
 				OnMove: func(delta int) {
-					next := PickerNextIndex(options, index, delta)
-					if next >= 0 {
+					if next := PickerNextIndex(options, index, delta); next >= 0 {
 						active.Set(next)
 						focusPickerID(props.ID + "-option-" + strconv.Itoa(next))
 					}
 				},
 			}))
 		}
-		listArgs := []any{Attr("id", listID), Attr("role", "listbox"), Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), Attr("aria-activedescendant", props.ID+"-option-"+strconv.Itoa(active.Get())), css.Class("cf-multipicker-list", multiListStyles)}
-		for _, row := range rows {
-			listArgs = append(listArgs, row)
-		}
-		panel = Div(css.Class("cf-multipicker-sheet", multiSheetStyles),
-			Div(Attr("id", props.ID+"-title"), props.Label), Div(listArgs...),
+		panel = Div(css.Class("cf-multi-sheet"),
+			Div(css.Class("cf-multi-title"), Attr("id", props.ID+"-title"), props.Label),
+			Div(listArgs...),
 		)
 	}
-	initialFocus := ""
-	if len(options) > 0 {
-		initialFocus = "#" + props.ID + "-option-0"
-	}
+
+	// The sheet is an overlay in the body, so it stacks above any dialog it sits in.
 	overlay := uic.AccessibleOverlay(uic.AccessibleOverlayProps{
-		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget}, SurfaceID: props.ID + "-surface",
-		Kind: uic.OverlayKindSheet, Role: "dialog", LabelledBy: props.ID + "-title", Modal: true,
-		TrapFocus: true, RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
-		InitialFocusSelector: initialFocus, Child: panel, OnDismiss: closePicker,
+		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget},
+		SurfaceID: surfaceID, SurfaceClass: "cf-multi-surface", SurfaceStyle: multiSheetSurfaceStyle(place.Get()),
+		Kind: uic.OverlayKindPopover, Role: "dialog", LabelledBy: props.ID + "-title",
+		RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
+		InitialFocusSelector: initialFocus, Child: panel, OnDismiss: dismiss,
 	})
-	return Fragment(trigger, overlay)
+	return Fragment(Button(trigger...), overlay)
 }
 
 type multiPickerOptionRowProps struct {
 	ID       string
 	Option   PickerOption
 	Selected bool
-	Active   bool
 	OnToggle func(string)
 	OnMove   func(int)
+	OnLeave  func()
 }
 
 func multiPickerOptionRow(props multiPickerOptionRowProps) uic.Node {
 	onKey := uic.UseEvent(func(event uic.KeyboardEvent) {
 		delta := 0
-		if event.GetKey() == "ArrowDown" {
+		switch event.GetKey() {
+		case "ArrowDown":
 			delta = 1
-		} else if event.GetKey() == "ArrowUp" {
+		case "ArrowUp":
 			delta = -1
 		}
 		if delta != 0 {
 			event.PreventDefault()
-			if props.OnMove != nil {
-				props.OnMove(delta)
-			}
+			props.OnMove(delta)
 		}
 	})
-	selected := "false"
-	if props.Selected {
-		selected = "true"
-	}
-	class := "cf-multipicker-option"
-	if props.Active {
-		class += " is-active"
-	}
-	return Button(css.Class(class, multiOptionStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("role", "option"), Attr("aria-selected", selected), Attr("aria-disabled", boolAttr(props.Option.Disabled)),
-		OnKeyDown(onKey),
-		OnClick(func() {
-			if !props.Option.Disabled && props.OnToggle != nil {
-				props.OnToggle(props.Option.Value)
-			}
-		}), props.Option.Label)
-}
-
-func containsPickerValue(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
+	onClick := uic.UseEvent(func(uic.Event) {
+		if !props.Option.Disabled && props.OnToggle != nil {
+			props.OnToggle(props.Option.Value)
 		}
-	}
-	return false
+	})
+	onBlur := uic.UseEvent(func(uic.Event) {
+		props.OnLeave()
+	})
+	return Button(css.Class("cf-multi-option"), Type("button"),
+		Attr("id", props.ID), Attr("role", "option"),
+		Attr("aria-selected", boolAttr(props.Selected)), Attr("aria-disabled", boolAttr(props.Option.Disabled)),
+		OnKeyDown(onKey), OnClick(onClick), OnBlur(onBlur),
+		props.Option.Label)
 }
 
+// focusPickerID moves focus to the element with the given id, if it is on the page.
 func focusPickerID(id string) {
-	document := js.Global().Get("document")
-	if document.Truthy() {
-		if element := document.Call("getElementById", id); element.Truthy() {
-			element.Call("focus")
-		}
+	if element := domNode(id); element.Truthy() {
+		domValue(element, "focus")
 	}
 }
 
+// boolAttr returns "true" or "false", the form ARIA attributes expect.
 func boolAttr(value bool) string {
 	if value {
 		return "true"

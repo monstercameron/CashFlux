@@ -3,11 +3,13 @@
 package accountview
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 )
 
 // GroupSection is a named group of visible accounts and its net subtotal.
@@ -18,11 +20,16 @@ type GroupSection struct {
 	Subtotal           money.Money
 	ExcludedCurrencies []string
 	Incomplete         bool
+	// Overflow reports that a conversion or the subtotal did not fit in int64.
+	// Such a balance is left out and marks the section Incomplete, but its currency
+	// is not listed in ExcludedCurrencies, since a rate was not what failed.
+	Overflow bool
 }
 
 // Groups claims accounts once in stored group order and appends the unclaimed
 // accounts in their incoming order. Empty groups are omitted. Subtotals include
-// only convertible, valid balances; exclusions are explicit on each section.
+// only convertible, valid balances held in the account's own currency, in the
+// stated sign convention; exclusions are explicit on each section.
 func Groups(shown []domain.Account, groups []domain.AccountGroup, balances map[string]money.Money, rates currency.Rates, base string) []GroupSection {
 	byID := make(map[string]domain.Account, len(shown))
 	for _, a := range shown {
@@ -67,22 +74,28 @@ func section(group domain.AccountGroup, accounts []domain.Account, balances map[
 	excluded := map[string]bool{}
 	for _, a := range accounts {
 		balance, valid := balances[a.ID]
-		if !valid || balance.Currency == "" {
+		if !valid || balance.Currency == "" || balance.Currency != a.Currency {
 			s.Incomplete = true
 			continue
 		}
 		converted, err := rates.Convert(balance, base)
 		if err != nil {
-			excluded[a.Currency] = true
 			s.Incomplete = true
+			if errors.Is(err, money.ErrOverflow) {
+				s.Overflow = true
+			} else {
+				excluded[balance.Currency] = true
+			}
 			continue
 		}
-		if a.Class == domain.ClassLiability && converted.Amount > 0 {
-			converted.Amount = -converted.Amount
-		}
+		convention, _ := reconcile.ConventionOf(a, balance.Amount)
+		converted.Amount = reconcile.Stated(converted.Amount, convention)
 		total, err := s.Subtotal.Add(converted)
 		if err != nil {
 			s.Incomplete = true
+			if errors.Is(err, money.ErrOverflow) {
+				s.Overflow = true
+			}
 			continue
 		}
 		s.Subtotal = total

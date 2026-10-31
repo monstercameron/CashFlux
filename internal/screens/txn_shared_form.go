@@ -192,12 +192,19 @@ func TxnNewCategoryAction(testID string, expanded bool, onClick ui.Handler) ui.N
 // TxnSharedForm renders the common Add/Edit field hierarchy: everyday fields
 // first, followed by a single disclosure for supporting details.
 func TxnSharedForm(model TxnFormModel) ui.Node {
+	return ui.CreateElement(txnSharedForm, model)
+}
+
+// txnSharedForm is the component behind TxnSharedForm, so the generated id for a
+// form without a MoreID has its own hook slot.
+func txnSharedForm(model TxnFormModel) ui.Node {
 	css.Inject("cf-transaction-form", txnFormCSS)
-	moreID := model.MoreID
+	generatedMoreID := ui.UseId()
+	moreID, moreTestID := model.MoreID, model.MoreID
 	if moreID == "" {
-		moreID = "txn-add-more"
+		moreID, moreTestID = generatedMoreID, "txn-add-more"
 	}
-	detailsArgs := []any{css.Class("csv-help txn-form-details"), Attr("id", moreID), Attr("data-testid", moreID)}
+	detailsArgs := []any{css.Class("csv-help txn-form-details"), Attr("id", moreID), Attr("data-testid", moreTestID)}
 	if model.OpenMore {
 		detailsArgs = append(detailsArgs, Attr("open", "open"))
 	}

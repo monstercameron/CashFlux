@@ -66,6 +66,16 @@ func AddHost() uic.Node {
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),
 		})
+	case "service":
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("services.add"),
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			FormID:    "service-add-form",
+			SaveLabel: uistate.T("services.add"),
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.ServiceAddForm, screens.ServiceAddFormProps{OnDone: close}),
+		})
 	case "debt":
 		// Add debt: the same account form, pre-set to a liability (credit card) so the
 		// Debt page's "Add debt" never silently creates a checking asset — the APR /

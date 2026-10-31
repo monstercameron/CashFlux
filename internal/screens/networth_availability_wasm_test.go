@@ -71,7 +71,7 @@ func TestPrimaryNetWorthHeroAccountsAvailabilityTransitions(t *testing.T) {
 		assertFigure(id, "100.00")
 	}
 	for _, id := range []string{"hero-networth-note", "acct-networth-note"} {
-		node := byTestID(f, "p", id)
+		node := byTestID(f, noteTag(id), id)
 		if node == nil || !strings.Contains(node.Text(), "Partial total") || !strings.Contains(node.Text(), "EUR") || !strings.Contains(node.Text(), "1 account") {
 			t.Fatalf("missing partial disclosure %s: %s", id, f.Text())
 		}
@@ -85,7 +85,7 @@ func TestPrimaryNetWorthHeroAccountsAvailabilityTransitions(t *testing.T) {
 	for _, id := range []string{"hero-networth-value", "acct-networth-value"} {
 		assertFigure(id, "80.00")
 	}
-	if byTestID(f, "p", "hero-networth-note") != nil || byTestID(f, "p", "acct-networth-note") != nil {
+	if byTestID(f, "p", "hero-networth-note") != nil || byTestID(f, "div", "acct-networth-note") != nil {
 		t.Fatal("restored rates retained a stale partial warning")
 	}
 	debt.OpeningBalance = money.New(-1000, "GBP")
@@ -99,7 +99,7 @@ func TestPrimaryNetWorthHeroAccountsAvailabilityTransitions(t *testing.T) {
 		assertFigure(id, "—")
 	}
 	for _, id := range []string{"hero-networth-note", "acct-networth-note"} {
-		node := byTestID(f, "p", id)
+		node := byTestID(f, noteTag(id), id)
 		if node == nil || !strings.Contains(node.Text(), "unavailable") || strings.Contains(node.Text(), "Private") {
 			t.Fatalf("fatal balance was not safely disclosed: %s", f.Text())
 		}
@@ -121,7 +121,7 @@ func TestPrimaryNetWorthHeroAccountsAvailabilityTransitions(t *testing.T) {
 	for _, id := range []string{"hero-networth-value", "acct-networth-value"} {
 		assertFigure(id, "0.00")
 	}
-	if byTestID(f, "p", "hero-networth-note") != nil || byTestID(f, "p", "acct-networth-note") != nil {
+	if byTestID(f, "p", "hero-networth-note") != nil || byTestID(f, "div", "acct-networth-note") != nil {
 		t.Fatal("a genuine known zero was marked unavailable")
 	}
 }
@@ -307,4 +307,13 @@ func TestPrimaryNotificationNetWorthWinRequiresCompleteTotal(t *testing.T) {
 	if strings.Contains(f.Text(), "Net worth") || !strings.Contains(f.Text(), goal.Name) {
 		t.Fatalf("fatal net worth left a stale win: %s", f.Text())
 	}
+}
+
+// noteTag is the element a net-worth disclosure renders as: the dashboard hero's note is a paragraph,
+// the accounts summary's note is a Callout.
+func noteTag(testID string) string {
+	if strings.HasPrefix(testID, "acct-") {
+		return "div"
+	}
+	return "p"
 }

@@ -10,7 +10,7 @@ var detail1AcctKeys = Catalog{
 	// When more than half the visible accounts are stale, the per-row STALE badges
 	// collapse to a subdued dot and this one summary line leads the list (its action
 	// reuses the toolbar's existing "Mark all updated").
-	"accounts.staleSummary": "Most accounts need a balance update",
+	"accounts.staleSummary": "Most account balances are out of date",
 	// aria-label for the subdued per-row stale dot shown in the collapsed state.
 	"accounts.staleDotAria": "Balance is out of date",
 

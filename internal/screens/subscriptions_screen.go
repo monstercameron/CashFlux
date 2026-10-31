@@ -175,10 +175,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	if readErr != nil && detectErr == nil {
 		detectErr = fmt.Errorf("read subscription accounts: %w", readErr)
 	}
-	recurringRows, readErr := app.Store().ListRecurring()
-	if readErr != nil && detectErr == nil {
-		detectErr = fmt.Errorf("read recurring schedules: %w", readErr)
-	}
+	recurringRows := app.Recurring()
 	categoryRows, readErr := app.CategoriesChecked()
 	if readErr != nil && detectErr == nil {
 		detectErr = readErr

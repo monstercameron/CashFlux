@@ -17,7 +17,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// accounts_integrity.go is the UI for the earmark-integrity check (XC7): a quiet
+// accounts_integrity.go is the UI for the earmark-integrity check: a quiet
 // warn-tone line on an over-earmarked account's row. Checked currency and
 // availability facts come from goals.BuildAccountReservations; this only renders.
 
@@ -53,7 +53,7 @@ func accountEarmarkWarningBody(position goalsvc.AccountReservation) ui.Node {
 	nav := router.UseNavigate()
 	onTransfer := ui.UseEvent(Prevent(func() { acctEditAtom.Set(uistate.AccountEdit{ID: a.ID, Mode: uistate.AcctEditModeTransfer}) }))
 	onReviewGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
-	return Div(css.Class("row-meta"), Attr("data-testid", "acct-earmark-warn-"+a.ID), Attr("role", "status"),
+	return Div(css.Class("row-meta"), Attr("data-testid", "acct-earmark-warn-"+a.ID), Role("status"),
 		ui.CreateElement(reservationNotice, reservationNoticeProps{Position: position}),
 		Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-earmark-transfer-"+a.ID), OnClick(onTransfer), uistate.T("integrity.transfer")),
 		Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-earmark-review-"+a.ID), OnClick(onReviewGoals), uistate.T("integrity.reviewGoals")))

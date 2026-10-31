@@ -217,7 +217,7 @@ func registerTxnToolbar() {
 	// open-menu lift), so the tooltip always paints on top.
 	rule(".bento > .w:has(.tbar-btn:hover), .bento > .w:has(.tbar-btn:focus-visible)",
 		position("relative"),
-		zIndex("30"),
+		zIndex("var(--z-lift)"),
 	)
 
 	// Redesigned filter panel: each categorical dimension is a labelled group of toggle
@@ -312,42 +312,53 @@ func registerTxnToolbar() {
 		gap("0.75rem"),
 		alignItems("flex-end"),
 	)
-	rule(".txn-review-callout",
-		display("inline-flex"),
-		alignItems("center"),
-		gap("0.45rem"),
-		padding("0.45rem 0.7rem"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-lg)"),
-		background("transparent"),
-		color("var(--text)"),
-		fontSize("var(--fs-body)"),
-		fontWeight("600"),
-		cursor("pointer"),
-	)
-	rule(".txn-review-callout-attention",
-		color("var(--text)"),
-	)
-	rule(".txn-review-callout-attention::before",
-		content(`""`),
-		display("inline-block"),
-		width("8px"),
-		height("8px"),
-		borderRadius("50%"),
-		background("var(--warn)"),
-		flex("0 0 8px"),
-	)
-	rule(".txn-review-callout:hover",
-		borderColor("var(--border-strong)"),
-	)
-	rule(".txn-review-callout:focus-visible",
-		outline("2px solid var(--accent)"),
-		outlineOffset("2px"),
-	)
 	rule(".txn-count-range",
 		marginLeft("auto"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
 		color("var(--text-dim)"),
+	)
+
+	// The bulk bar floats over the ledger on one non-wrapping row. The compound selector
+	// wins over the plain .bulk-bar wrap and padding above.
+	rule(".bulk-bar.txn-bulkbar-overlay",
+		boxSizing("border-box"),
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		minHeight("48px"),
+		padding("0 1rem"),
+		flexWrap("nowrap"),
+		whiteSpace("nowrap"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+	)
+	// On a phone the bar spans the screen above the bottom tab bar and wraps its actions.
+	// The compound selector beats the desktop left and width offsets.
+	ruleMedia("(max-width: 719px)", ".bulk-bar.txn-bulkbar-overlay",
+		prop("left", "12px"),
+		prop("right", "12px"),
+		prop("bottom", "76px"),
+		prop("width", "auto"),
+		prop("max-width", "none"),
+		flexWrap("wrap"),
+		whiteSpace("normal"),
+	)
+	// A filter range error takes a full row beneath the range fields.
+	rule(".filter-ranges > .callout",
+		flex("1 1 100%"),
+	)
+	// The "Add this as ..." line under the search box.
+	rule(".txn-interpret-row",
+		padding("0.4rem 0.1rem 0.1rem"),
+	)
+	// One checkbox row in the columns menu.
+	rule(".txn-col-toggle-row",
+		padding("0.35rem 0"),
+		cursor("pointer"),
+	)
+	rule(".muted.txn-cols-hint",
+		margin("0 0 0.5rem"),
 	)
 }

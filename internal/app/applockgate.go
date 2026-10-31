@@ -102,7 +102,7 @@ func showProtectedStorageGate(cause error, onReady func()) {
 	gate.Call("setAttribute", "role", "dialog")
 	gate.Call("setAttribute", "aria-modal", "true")
 	gate.Call("setAttribute", "aria-labelledby", "cf-protected-title")
-	gate.Get("style").Set("cssText", "position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:var(--bg,#111);color:var(--text,#f4f4f5);padding:1rem;")
+	gate.Get("style").Set("cssText", "position:fixed;inset:0;z-index:var(--z-lock, 9500);display:grid;place-items:center;background:var(--bg,#111);color:var(--text,#f4f4f5);padding:1rem;")
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:1rem;width:min(90vw,380px);padding:1.5rem;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#444);border-radius:12px;")
 	gate.Call("appendChild", card)
@@ -331,7 +331,7 @@ func resetSetupFields(doc js.Value) {
 func buildAppLockSetup(doc js.Value) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", appLockSetupID)
-	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:1001;display:grid;place-items:center;background:rgba(0,0,0,0.6);")
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:var(--z-modal);display:grid;place-items:center;background:rgba(0,0,0,0.6);")
 
 	const inputStyle = "width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;font:inherit;"
 	card := doc.Call("createElement", "div")

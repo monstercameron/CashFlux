@@ -41,11 +41,6 @@ func registerDpType() {
 	// Level 4 — Row/card title. Base was 1.05rem (16.8px); nudge to 1rem (16px) so
 	// card headers land at the top of the 14-16px band and read as clearly
 	// subordinate to a section title.
-	rule(".card-title",
-		fontSize("1rem"),
-		fontWeight("600"),
-		lineHeight("1.35"),
-	)
 
 	// Level 5 — Metadata legibility (the key fix). These small labels were dimmed
 	// so far they read as texture rather than text:

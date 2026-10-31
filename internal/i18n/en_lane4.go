@@ -12,8 +12,8 @@ var lane4Keys = Catalog{
 	// %s = the statement closing date the user typed.
 	"accounts.reconAdjustDesc": "Reconciliation adjustment (statement %s)",
 	// %s = the formatted adjustment amount.
-	"accounts.reconAdjustPosted": "Posted a %s adjustment to match the statement.",
-	"accounts.reconAdjustAction": "Post adjustment",
+	"accounts.reconAdjustPosted": "Posted a %s balance correction to match the statement.",
+	"accounts.reconAdjustAction": "Post correction",
 	// %s = the formatted unresolved difference.
 	"accounts.reconForceConfirm":  "Finish reconciling with a %s difference still unresolved? The gap will be recorded in this account's history.",
 	"accounts.reconForceRecorded": "Reconciliation recorded with a %s unresolved difference.",
@@ -24,15 +24,12 @@ var lane4Keys = Catalog{
 	"accounts.reconReopened":     "Reopened the %s reconciliation — its figures are back in the form.",
 	"accounts.reconReopenAction": "Reopen last",
 	"accounts.reconInvestigate":  "Investigate cleared",
-	"accounts.reconResolveHint":  "Doesn't match yet? Post an adjustment for the difference, dig into the cleared transactions, or finish with the gap noted.",
+	"accounts.reconResolveHint":  "Doesn't match yet? Post a balance correction for the difference, dig into the cleared transactions, or finish with the gap noted.",
 	// %s = the formatted difference recorded on a forced reconciliation.
 	"accounts.reconForcedTag": "off by %s",
 	"accounts.reconDraftNote": "Resumed from your saved draft.",
 
-	// #77 — Mark-all-updated preview + undo. First %s = "N balances", second
-	// %s = the (possibly truncated) account-name list.
-	"accounts.markAllConfirm": "Mark %s as confirmed just now? This updates: %s. You can undo it afterwards.",
-	// %s = the leading names, %d = how many more beyond them.
+	// #77 — Mark-all-updated preview. %s = the leading names, %d = how many more beyond them.
 	"accounts.markAllMore": "%s and %d more",
 
 	// #55 — pre-operation safety checkpoints (Settings → Data).

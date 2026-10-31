@@ -112,14 +112,7 @@ func MemberSwitcher() uic.Node {
 			If(roleLine != "", Span(css.Class("member-switcher-role", tw.TextDim), Attr("data-testid", "member-switcher-role"),
 				Style(map[string]string{"display": "block", "fontSize": "11px", "lineHeight": "1.2"}), roleLine)),
 		),
-		Button(css.Class("icon-btn", tw.TextDim, tw.HoverTextFg),
-			Type("button"),
-			Attr("aria-label", uistate.T("profileSwitch.switchBtn")),
-			Attr("data-testid", "profile-switch-btn"),
-			Title(uistate.T("profileSwitch.switchBtn")),
-			OnClick(openSwitch),
-			ui.Icon(icon.Users, css.Class(tw.W5, tw.H5)),
-		),
+		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Users, Title: uistate.T("profileSwitch.switchBtn"), TestID: "profile-switch-btn"}, OnClick(openSwitch)),
 	)
 }
 

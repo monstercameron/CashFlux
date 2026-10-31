@@ -220,7 +220,7 @@ func showPasskeyManager() {
 func buildPasskeyManager(doc js.Value, available bool) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", webauthnModalID)
-	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:1001;display:grid;place-items:center;background:rgba(0,0,0,0.6);")
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:var(--z-modal);display:grid;place-items:center;background:rgba(0,0,0,0.6);")
 	ov.Call("setAttribute", "role", "dialog")
 	ov.Call("setAttribute", "aria-modal", "true")
 	ov.Call("setAttribute", "aria-label", uistate.T("webauthn.setupTitle"))

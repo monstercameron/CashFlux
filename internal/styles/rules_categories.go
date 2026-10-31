@@ -20,7 +20,7 @@ func registerCategoriesSurface() {
 	// A row with an OPEN ⋯ menu must paint above its later siblings (tiles are
 	// transformed stacking contexts; the shared rule handles tile-vs-tile).
 	rule(".bento.bento-cats > .w:has(.add-menu:not(.hidden-menu))",
-		prop("z-index", "30"),
+		prop("z-index", "var(--z-lift)"),
 	)
 	// The category's this-period figure column, right-aligned before the actions.
 	rule(".cat-figure",

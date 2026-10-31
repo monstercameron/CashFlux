@@ -31,7 +31,7 @@ func TestCSCALWeekHeaderKeepsColumnOrderAndNames(t *testing.T) {
 		t.Fatalf("weekday columns=%d", len(columns))
 	}
 	for i, node := range columns {
-		if node.Attr("class") != "cal-head" || node.Attr("aria-label") != headers[i].Aria || node.Text() != headers[i].Text {
+		if !hasClass(node.Attr("class"), "cal-head") || node.Attr("aria-label") != headers[i].Aria || node.Text() != headers[i].Text {
 			t.Errorf("column %d text=%q aria=%q class=%q", i, node.Text(), node.Attr("aria-label"), node.Attr("class"))
 		}
 	}
@@ -40,7 +40,7 @@ func TestCSCALWeekHeaderKeepsColumnOrderAndNames(t *testing.T) {
 	}
 	var total bool
 	for _, node := range f.AllByTag("div") {
-		if node.Attr("class") == "cal-head" && node.Text() == uistate.T("transactions.calWeekTotal") {
+		if hasClass(node.Attr("class"), "cal-head") && node.Text() == uistate.T("transactions.calWeekTotal") {
 			total = true
 		}
 	}
@@ -58,8 +58,10 @@ func TestCSCALGhostMarkerKeepsInlineMarkupAndCopy(t *testing.T) {
 		t.Fatalf("marker spans=%d want 3", len(spans))
 	}
 	for i, want := range []string{summary.Class, "txn-cal-ghost-status", "txn-cal-ghost-label"} {
-		if spans[i].Attr("class") != want {
-			t.Errorf("span %d class=%q want %q", i, spans[i].Attr("class"), want)
+		for _, class := range strings.Fields(want) {
+			if !hasClass(spans[i].Attr("class"), class) {
+				t.Errorf("span %d class=%q is missing %q", i, spans[i].Attr("class"), class)
+			}
 		}
 		if spans[i].Attr("aria-label") != "" || spans[i].Attr("title") != "" {
 			t.Fatal("marker duplicates accessible day description")

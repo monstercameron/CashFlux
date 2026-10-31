@@ -4,6 +4,7 @@ package accountview
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -125,7 +126,7 @@ func ids(accounts []domain.Account) []string {
 }
 
 func TestGroupsClaimOnceAndKeepUngroupedOrder(t *testing.T) {
-	accounts := []domain.Account{{ID: "a"}, {ID: "b", Class: domain.ClassLiability}, {ID: "c"}, {ID: "d"}}
+	accounts := []domain.Account{{ID: "a", Currency: "USD"}, {ID: "b", Class: domain.ClassLiability, Currency: "USD"}, {ID: "c", Currency: "USD"}, {ID: "d", Currency: "USD"}}
 	groups := []domain.AccountGroup{{ID: "first", AccountIDs: []string{"missing", "b", "b", "a"}}, {ID: "empty", AccountIDs: []string{"b"}}}
 	balances := map[string]money.Money{"a": money.New(500, "USD"), "b": money.New(-100, "USD"), "c": money.New(30, "USD"), "d": money.New(20, "USD")}
 	got := Groups(accounts, groups, balances, currency.Rates{Base: "USD"}, "USD")
@@ -179,4 +180,82 @@ func BenchmarkAssetSelection(b *testing.B) {
 			Assets(accounts, s.Balances, rates, "USD", "")
 		}
 	})
+}
+
+func TestContributionAndGroupsUseTheStatedSignForEitherLiabilityConvention(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	cases := []struct {
+		name    string
+		account domain.Account
+		balance int64
+		want    int64
+	}{
+		{"asset keeps its sign", domain.Account{ID: "a", Currency: "USD"}, 700, 700},
+		{"debt stored positive reads negative", domain.Account{ID: "a", Currency: "USD", Class: domain.ClassLiability, OpeningBalance: money.New(900, "USD")}, 500, -500},
+		{"debt stored negative reads negative", domain.Account{ID: "a", Currency: "USD", Class: domain.ClassLiability, OpeningBalance: money.New(-900, "USD")}, -500, -500},
+		{"overpaid positive-owed card reads positive", domain.Account{ID: "a", Currency: "USD", Class: domain.ClassLiability, OpeningBalance: money.New(900, "USD")}, -50, 50},
+		{"overpaid negative-owed card reads positive", domain.Account{ID: "a", Currency: "USD", Class: domain.ClassLiability, OpeningBalance: money.New(-900, "USD")}, 50, 50},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			balance := money.New(tc.balance, "USD")
+			if got := Contribution(tc.account, balance, rates, "USD"); got != tc.want {
+				t.Fatalf("Contribution = %d, want %d", got, tc.want)
+			}
+			sections := Groups([]domain.Account{tc.account}, nil, map[string]money.Money{"a": balance}, rates, "USD")
+			if len(sections) != 1 || sections[0].Subtotal.Amount != tc.want || sections[0].Incomplete {
+				t.Fatalf("Groups subtotal = %+v, want %d", sections, tc.want)
+			}
+		})
+	}
+}
+
+func TestGroupSectionRejectsBalanceInAnotherCurrencyAndNamesTheBalanceCurrency(t *testing.T) {
+	accounts := []domain.Account{{ID: "usd", Currency: "USD"}, {ID: "mismatch", Currency: "USD"}, {ID: "gbp", Currency: "GBP"}}
+	balances := map[string]money.Money{"usd": money.New(100, "USD"), "mismatch": money.New(900, "EUR"), "gbp": money.New(5, "GBP")}
+	got := Groups(accounts, nil, balances, currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1}}, "USD")
+	if len(got) != 1 || got[0].Subtotal.Amount != 100 || !got[0].Incomplete {
+		t.Fatalf("mismatched-currency balance leaked into the subtotal: %+v", got)
+	}
+	if !reflect.DeepEqual(got[0].ExcludedCurrencies, []string{"GBP"}) {
+		t.Fatalf("ExcludedCurrencies = %v, want only the unconvertible GBP", got[0].ExcludedCurrencies)
+	}
+}
+
+func TestBuildBillPaymentsSurvivesMinInt64Amount(t *testing.T) {
+	now := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	accounts := []domain.Account{{ID: "checking", Currency: "USD"}, {ID: "card", Currency: "USD"}}
+	txns := []domain.Transaction{
+		{ID: "ok", AccountID: "checking", BillAccountID: "card", Amount: money.New(-100, "USD"), Date: now.AddDate(0, 0, -1)},
+		{ID: "min", AccountID: "checking", BillAccountID: "card", Amount: money.New(math.MinInt64, "USD"), Date: now},
+	}
+	info := Build(accounts, txns).BillPayments["card"]
+	if info.Count != 2 || info.LatestTxn != "ok" || info.Latest.Amount != 100 {
+		t.Fatalf("BillPayments = %+v, want both counted and the representable payment kept as latest", info)
+	}
+}
+
+func TestContributionAndGroupsFollowTheDeclaredLiabilitySign(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	account := domain.Account{
+		ID: "a", Currency: "USD", Class: domain.ClassLiability,
+		LiabilitySign: domain.LiabilityNegativeOwed, OpeningBalance: money.New(900, "USD"),
+	}
+	balance := money.New(-500, "USD")
+	if got := Contribution(account, balance, rates, "USD"); got != -500 {
+		t.Fatalf("Contribution = %d, want -500", got)
+	}
+	sections := Groups([]domain.Account{account}, nil, map[string]money.Money{"a": balance}, rates, "USD")
+	if len(sections) != 1 || sections[0].Subtotal.Amount != -500 {
+		t.Fatalf("Groups subtotal = %+v, want -500", sections)
+	}
+}
+
+func TestGroupSectionReportsOverflowWithoutExcludingACurrency(t *testing.T) {
+	accounts := []domain.Account{{ID: "a", Currency: "USD"}, {ID: "b", Currency: "USD"}}
+	balances := map[string]money.Money{"a": money.New(math.MaxInt64, "USD"), "b": money.New(1, "USD")}
+	got := Groups(accounts, nil, balances, currency.Rates{Base: "USD"}, "USD")
+	if len(got) != 1 || !got[0].Incomplete || !got[0].Overflow || len(got[0].ExcludedCurrencies) != 0 {
+		t.Fatalf("overflowing subtotal = %+v, want Incomplete+Overflow and no excluded currency", got)
+	}
 }

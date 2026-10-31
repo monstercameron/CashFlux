@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-func TestR1DFilterSheetIsFixedWidthOverlay(t *testing.T) {
+func TestR1DFilterSheetFillsItsOverlay(t *testing.T) {
 	resetSheet()
 	registerGenerated()
 	css := Build()
 	for _, want := range []string{
 		".filter-inline-panel.filter-sheet{",
-		"position:fixed",
-		"width:min(380px, 100vw)",
+		"position:static",
+		"width:100%",
 		"overflow-y:auto",
 	} {
 		if !strings.Contains(css, want) {

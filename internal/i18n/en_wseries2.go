@@ -12,13 +12,6 @@ import "maps"
 // (internal/screenlint ratchet).
 var wSeries2Keys = Catalog{
 	// C365 — investments link from the Accounts list.
-	"accountsInvest.sectionTitle":      "Investments",
-	"accountsInvest.bannerAria":        "Investments summary",
-	"accountsInvest.value":             "Value",
-	"accountsInvest.gain":              "Gain",
-	"accountsInvest.returnPct":         "Return",
-	"accountsInvest.open":              "Open investments",
-	"accountsInvest.openTitle":         "See holdings, allocation, and growth on the investments page",
 	"accountsInvest.viewHoldings":      "View holdings",
 	"accountsInvest.viewHoldingsTitle": "See this account's holdings and growth",
 

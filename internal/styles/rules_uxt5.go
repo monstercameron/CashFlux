@@ -28,7 +28,7 @@ func registerUXT5() {
 		background("var(--hover)"), color("var(--text)"),
 	)
 	rule(".txn-row-info-popover",
-		position("absolute"), right("0"), top("calc(100% + 4px)"), zIndex("40"),
+		position("absolute"), right("0"), top("calc(100% + 4px)"), zIndex("var(--z-cell)"),
 		display("flex"), flexDirection("column"), gap(".35rem"),
 		width("max-content"), padding(".5rem"), border("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"), background("var(--bg-elev)"),
@@ -40,7 +40,7 @@ func registerUXT5() {
 	)
 	rule(".txn-count-upcoming", position("relative"))
 	rule(".txn-upcoming-popover",
-		position("absolute"), top("calc(100% + 6px)"), left("0"), zIndex("30"),
+		position("absolute"), top("calc(100% + 6px)"), left("0"), zIndex("var(--z-lift)"),
 		width("max-content"), maxWidth("min(30rem, calc(100vw - 2rem))"),
 		padding(".65rem"), border("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"), background("var(--bg-elev)"),

@@ -27,6 +27,7 @@ var curated = []Name{
 	Cloud,
 	Paperclip,
 	Appearance,
+	Eye, EyeOff,
 }
 
 func TestEveryConstantResolves(t *testing.T) {

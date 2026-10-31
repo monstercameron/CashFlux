@@ -140,14 +140,11 @@ func registerTxcFieldsSurface() {
 		background("var(--accent)"),
 		borderColor("var(--accent)"),
 	)
-	// "+N more open" / "all done" — a quiet closing line under the capped list.
-	rule(".txnfu-more, .txnfu-empty",
+	// "+N more open" — a quiet closing line under the capped list.
+	rule(".txnfu-more",
 		padding("0.25rem 0.35rem"),
 		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
-	)
-	rule(".txnfu-empty",
-		color("var(--accent)"),
 	)
 	rule(".txnfu-item-title",
 		flex("1 1 auto"),
@@ -334,7 +331,7 @@ func registerTxcFieldsSurface() {
 	// because the description truncation lives on `.row-desc-text`, not the `td`.
 	rule(".txn-table td.row-desc-cell:has(.add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
 		position("relative"),
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 		overflow("visible"),
 	)
 }

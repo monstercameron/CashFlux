@@ -44,6 +44,8 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		key := e.Get("key").String()
+		// Enter is a page shortcut for the review surface and the transactions list. When focus is on
+		// a control that already uses Enter, the key is left to that control.
 		if key == "Enter" && globalEnterShortcutTargetIgnored(e.Get("target")) {
 			return nil
 		}
@@ -157,21 +159,19 @@ func wireKeyboardShortcuts() {
 	doc.Call("addEventListener", "keydown", onKeyDown)
 }
 
-// globalEnterShortcutTargetIgnored keeps Enter's transaction-edit shortcut out
-// of controls that already own Enter, including Import menu items and dialogs.
+// globalEnterShortcutTargetIgnored reports whether an Enter keydown on target is left to that
+// target. Enter is a page shortcut, so controls that already use Enter keep it: buttons, fields,
+// selects, links, menu items, and anything inside a menu or dialog.
 func globalEnterShortcutTargetIgnored(target js.Value) bool {
 	if target.IsNull() || target.IsUndefined() {
 		return false
 	}
-	tag := target.Get("tagName")
-	tagName := ""
-	if tag.Type() == js.TypeString {
-		tagName = tag.String()
-	}
-	role := target.Call("getAttribute", "role")
+	tagName := jsString(target.Get("tagName"))
+	// The document is a valid key target (a synthetic keydown, or one before anything has focus).
+	// It has no getAttribute or closest, so each call is guarded.
 	roleName := ""
-	if role.Type() == js.TypeString {
-		roleName = role.String()
+	if target.Get("getAttribute").Type() == js.TypeFunction {
+		roleName = jsString(target.Call("getAttribute", "role"))
 	}
 	inMenuOrDialog := false
 	if target.Get("closest").Type() == js.TypeFunction {
@@ -275,7 +275,7 @@ func closeHelpOverlay() {
 func buildHelpOverlay(doc js.Value) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", helpOverlayID)
-	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:rgba(0,0,0,0.55);")
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:var(--z-modal);display:grid;place-items:center;background:rgba(0,0,0,0.55);")
 
 	card := doc.Call("createElement", "div")
 	card.Get("style").Set("cssText", "background:var(--bg-elev,#1a1a1d);color:var(--text,#f4f4f5);border:1px solid var(--border,#2a2a2c);border-radius:10px;padding:1.1rem 1.35rem;max-width:min(92vw,440px);box-shadow:0 12px 40px rgba(0,0,0,0.5);font-size:0.9rem;line-height:1.5;")
@@ -596,7 +596,7 @@ func openCommandPalette(doc, ov js.Value) {
 func buildCommandPalette(doc js.Value) {
 	ov := doc.Call("createElement", "div")
 	ov.Set("id", cmdPaletteID)
-	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:210;display:grid;place-items:start center;padding-top:12vh;background:rgba(0,0,0,0.5);")
+	ov.Get("style").Set("cssText", "position:fixed;inset:0;z-index:calc(var(--z-modal) + 1);display:grid;place-items:start center;padding-top:12vh;background:rgba(0,0,0,0.5);")
 	// GM4-3: label the backdrop so screen readers can identify the modal region.
 	ov.Call("setAttribute", "aria-label", uistate.T("cmd.search"))
 

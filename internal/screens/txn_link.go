@@ -89,17 +89,17 @@ func saveTxnLink(app *appstate.App, txn domain.Transaction, draft txnlink.Draft,
 		uistate.PostNotice(uistate.T("txnlink.nothingToSave"), true)
 		return
 	}
-	if err := app.PutTransaction(decision.Transaction); err != nil {
+	// A produced rule is saved in the same commit as the transaction.
+	rule, ruleMade := txnlink.BillRule(app.Rules(), txn, draft, id.New(), app.NextRuleOrder())
+	var err error
+	if ruleMade {
+		err = app.PutTransactionWithRule(decision.Transaction, rule)
+	} else {
+		err = app.PutTransaction(decision.Transaction)
+	}
+	if err != nil {
 		uistate.PostNotice(err.Error(), true)
 		return
-	}
-	ruleMade := false
-	if rule, ok := txnlink.BillRule(app.Rules(), txn, draft, id.New(), app.NextRuleOrder()); ok {
-		if err := app.PutRule(rule); err != nil {
-			uistate.PostNotice(err.Error(), true)
-		} else {
-			ruleMade = true
-		}
 	}
 	uistate.PostNotice(uistate.T(decision.NoticeKey(ruleMade)), false)
 	uistate.BumpDataRevision()
@@ -155,7 +155,7 @@ func txnLinkSubscriptionPicker(p txnLinkSubscriptionPickerProps) ui.Node {
 			Options: txnLinkOptions(p.Options, "txnlink.noneSub"), Selected: p.Selected, OnChange: p.Change,
 			AriaLabel: uistate.T("txnlink.subLabel"), TestID: "txnlink-sub-select",
 		}),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.subHint")))
+		P(css.Class("muted", tw.Text13, "txn-hint-flush"), uistate.T("txnlink.subHint")))
 }
 
 type txnLinkBillPickerProps struct {
@@ -179,8 +179,8 @@ func txnLinkBillPicker(p txnLinkBillPickerProps) ui.Node {
 			Options: txnLinkOptions(p.Options, "txnlink.noneBill"), Selected: p.Selected, OnChange: p.Change,
 			AriaLabel: uistate.T("txnlink.billLabel"), TestID: "txnlink-bill-select",
 		}),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.billHint")),
-		If(p.ShowAutoLink, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+		P(css.Class("muted", tw.Text13, "txn-hint-flush"), uistate.T("txnlink.billHint")),
+		If(p.ShowAutoLink, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "txnlink-autolink"), autoLinkChange}, checkedAttr(p.AutoLink)...)...),
 			Div(css.Class("row-main"),
 				Span(uistate.T("txnlink.autoLink", p.Merchant)),
@@ -227,8 +227,8 @@ func txnLinkFooter(p txnLinkFooterProps) ui.Node {
 	saveClick := OnClick(ui.UseEvent(Prevent(p.Save)))
 	hint := Fragment()
 	if p.Decision.HintKey != "" {
-		hint = P(css.Class("muted", tw.Text13), Attr("data-testid", p.Decision.HintTestID),
-			Style(map[string]string{"margin": "0"}), uistate.T(p.Decision.HintKey))
+		hint = P(css.Class("muted", tw.Text13, "txn-hint-flush"), Attr("data-testid", p.Decision.HintTestID),
+			uistate.T(p.Decision.HintKey))
 	}
 	args := []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), saveClick, uistate.T(p.Decision.SaveKey)}
 	if !p.Decision.Changed {

@@ -186,33 +186,14 @@ func registerTxnScope() {
 		marginLeft("auto"),
 	)
 
-	// --- The primary Add, split (C573) --------------------------------------------
-	// One control, two targets: press the label to add, press the caret to say what
-	// kind first. They read as one object — a seam rather than a gap — so the caret
-	// is unmistakably a modifier of the button beside it and not a fifth toolbar
-	// action competing with it.
-	rule(".btn-split",
-		display("inline-flex"),
-		alignItems("stretch"),
-	)
-	rule(".btn-split > .btn:first-child",
-		prop("border-top-right-radius", "0"),
-		prop("border-bottom-right-radius", "0"),
-	)
-	rule(".btn-split .btn-split-caret",
-		prop("border-top-left-radius", "0"),
-		prop("border-bottom-left-radius", "0"),
-		borderLeft("1px solid rgba(0,0,0,0.22)"),
-		paddingLeft("0.5rem"),
-		paddingRight("0.5rem"),
-	)
-
 	// Category text and its optional suggestion/provenance marks remain on one line.
 	rule(".td-cat-inner",
 		display("flex"),
 		alignItems("center"),
 		gap("0.3rem"),
+		width("100%"),
 		minWidth("0"),
+		minHeight("1.5rem"),
 		flexWrap("nowrap"),
 	)
 	rule(".td-cat-name",
@@ -267,5 +248,15 @@ func registerTxnScope() {
 		lineHeight("1"),
 		color("var(--text-dim)"),
 		cursor("help"),
+	)
+
+	// The count line renders an empty hidden slot when the ledger has no rows.
+	rule(".txn-countline-slot",
+		display("none"),
+	)
+	// A segment's width is its category's share of spending, set per element as
+	// --txn-seg-width.
+	rule(".txn-category-segment",
+		width("var(--txn-seg-width)"),
 	)
 }

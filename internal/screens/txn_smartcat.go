@@ -123,7 +123,7 @@ func txnSmartCatContent(p txnSmartCatContentProps) ui.Node {
 				{Value: smartCatRecat, Label: uistate.T("smartcat.modeRecat"), TestID: "smartcat-mode-recat"},
 			}, OnSelect: p.OnMode,
 		}),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T(view.HintKey)),
+		P(css.Class("muted", tw.Text13, "txn-hint-flush"), uistate.T(view.HintKey)),
 		If(p.Provider, ui.CreateElement(txnSmartCatButton, txnSmartCatButtonProps{
 			TestID: "smartcat-scan", Label: uistate.T(view.ScanKey), Disabled: p.State.Loading, OnClick: p.OnScan,
 		})),
@@ -164,7 +164,7 @@ func txnSmartCatResults(p txnSmartCatResultsProps) ui.Node {
 	case "loading":
 		return P(css.Class("muted"), Attr("data-testid", "smartcat-loading"), uistate.T("smartcat.scanning"))
 	case "error":
-		return P(css.Class("err"), Attr("role", "alert"), p.State.Error)
+		return uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(p.State.Error)})
 	case "empty":
 		return P(css.Class("muted"), Attr("data-testid", "smartcat-empty"), uistate.T(p.View.EmptyKey))
 	case "rows":
@@ -216,7 +216,7 @@ type txnSmartCatRowProps struct {
 // never registered inside the results loop).
 func txnSmartCatRow(props txnSmartCatRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle() })
-	return Label(css.Class("row", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+	return Label(css.Class("row", tw.Flex, tw.ItemsCenter, tw.Gap2, "txn-check-row"),
 		// Branded `.cf-check` (not a bare native checkbox): a native <input type=checkbox>
 		// renders inconsistently across OS/browser/theme — on some laptops it's a tiny,
 		// near-invisible dark-on-dark box — so the app styles its own. Match the rest of
