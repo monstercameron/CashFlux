@@ -171,7 +171,7 @@ func registerAccountsSurface() {
 	// The Details toggle is a quiet link — small, dim, never louder than the meta.
 	// Every row reserves the recurring-charges line, so rows with and without charges match in height.
 	rule(".acct-recur",
-		prop("height", "calc(var(--type-14) * 1.6)"),
+		prop("min-height", "calc(var(--type-14) * 1.6)"),
 	)
 	// Comfortable reading size for the account row's secondary text, all from the type scale:
 	// the meta line and toggles at the body step, the badges one step up from the caption, and
