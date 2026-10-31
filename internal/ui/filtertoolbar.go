@@ -214,7 +214,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		}
 		open.Set(false)
 	}
-	panelMounted := usePanelFade(open.Get())
+	panelMounted := UsePanelFade(open.Get())
 	// Stable ids for the two nodes the keystroke has to touch before the app can
 	// re-render (C628).
 	searchID, pendingID := "fctrl-search-"+uid, "fctrl-pending-"+uid

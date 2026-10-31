@@ -132,6 +132,8 @@ type accountDocsDrawerProps struct {
 func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 	a := props.Account
 	expanded := ui.UseState(false)
+	// The list stays mounted for its fade-out, so closing animates as well as opening.
+	bodyMounted := uiw.UsePanelFade(expanded.Get())
 	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 	labelS := ui.UseState("")
 	expiryS := ui.UseState("")
@@ -158,7 +160,7 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 		Attr("data-testid", "acct-docs-toggle-"+a.ID), AriaExpanded(expanded.Get()), OnClick(toggle),
 		uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(toggleLabel))
 
-	if !expanded.Get() {
+	if !expanded.Get() && !bodyMounted {
 		return Div(css.Class("acct-docs"), toggleBtn)
 	}
 
@@ -189,19 +191,21 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 
 	return Div(css.Class("acct-docs"), Attr("data-testid", "acct-docs-drawer-"+a.ID),
 		toggleBtn,
-		If(n == 0, P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.35rem 0")))), uistate.T("accounts.documentsEmpty"))),
-		If(n > 0, Div(css.Class("rows", tw.Mt1), rows)),
-		Div(css.Class(tw.Mt2), Attr("data-testid", "acct-docs-attach-"+a.ID),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "acct-doc-label-"+a.ID),
-					css.Class(css.New(css.Flex(css.Num(1), css.Num(1), css.Length("12rem")))),
-					Placeholder(uistate.T("accounts.documentLabelPh")), AriaLabel(uistate.T("accounts.documentLabelField")), OnInput(onLabel), uiw.FieldValue(labelS.Get())),
-				Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-doc-expiry-"+a.ID),
-					AriaLabel(uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(expiryS.Get())),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-doc-attach-btn-"+a.ID),
-					OnClick(attach), uistate.T("accounts.attachDocument")),
+		Div(css.Class(uiw.FadeClass("acct-docs-body", expanded.Get())),
+			If(n == 0, P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.35rem 0")))), uistate.T("accounts.documentsEmpty"))),
+			If(n > 0, Div(css.Class("rows", tw.Mt1), rows)),
+			Div(css.Class(tw.Mt2), Attr("data-testid", "acct-docs-attach-"+a.ID),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "acct-doc-label-"+a.ID),
+						css.Class(css.New(css.Flex(css.Num(1), css.Num(1), css.Length("12rem")))),
+						Placeholder(uistate.T("accounts.documentLabelPh")), AriaLabel(uistate.T("accounts.documentLabelField")), OnInput(onLabel), uiw.FieldValue(labelS.Get())),
+					Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-doc-expiry-"+a.ID),
+						AriaLabel(uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(expiryS.Get())),
+					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-doc-attach-btn-"+a.ID),
+						OnClick(attach), uistate.T("accounts.attachDocument")),
+				),
+				P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.25rem 0 0")))), uistate.T("accounts.documentExpiryHint")),
 			),
-			P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.25rem 0 0")))), uistate.T("accounts.documentExpiryHint")),
 		),
 	)
 }

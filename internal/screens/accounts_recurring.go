@@ -50,27 +50,34 @@ type accountRecurProps struct {
 // accountRecurringPanel renders the collapsed "N charges here repeat" disclosure.
 // Its own component: it owns the disclosure state, and the discovery run stays
 // lazy behind it.
+// recurSlot is the empty line a row keeps when it has no recurring charges, so every row is the
+// same height whether or not it has some.
+func recurSlot() ui.Node {
+	return Div(css.Class("acct-recur acct-recur-empty"), Attr("aria-hidden", "true"))
+}
+
 func accountRecurringPanel(props accountRecurProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	expanded := ui.UseState(false)
+	listMounted := uiw.UsePanelFade(expanded.Get())
 	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 
 	app := appstate.Default
 	settings := uistate.LoadSmartSettings()
 
 	if app == nil || props.Account.Archived {
-		return Fragment()
+		return recurSlot()
 	}
 	if !settings.IsEnabled(acctRecurCode) || settings.IsMuted(acctRecurCode) {
-		return Fragment()
+		return recurSlot()
 	}
 	if !settings.DensityOrDefault().Shows(smart.AffordanceTooltip) {
-		return Fragment()
+		return recurSlot()
 	}
 
 	cands, base := accountRecurCandidates(app, props.Account.ID)
 	if len(cands) == 0 {
-		return Fragment()
+		return recurSlot()
 	}
 
 	open := expanded.Get()
@@ -82,7 +89,7 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
 
 	var body ui.Node = Fragment()
-	if open {
+	if open || listMounted {
 		rows := make([]ui.Node, 0, len(cands))
 		for _, c := range cands {
 			rows = append(rows, ui.CreateElement(accountRecurRow, accountRecurRowProps{
@@ -91,7 +98,7 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 				Base:      base,
 			}))
 		}
-		body = Div(css.Class("acct-recur-list"), Attr("id", listID), rows)
+		body = Div(css.Class(uiw.FadeClass("acct-recur-list", open)), Attr("id", listID), rows)
 	}
 	return Div(css.Class("acct-recur"), Attr("data-testid", "acct-recur-"+props.Account.ID), head, body)
 }

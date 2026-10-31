@@ -169,6 +169,22 @@ func registerAccountsSurface() {
 		prop("min-width", "0"),
 	)
 	// The Details toggle is a quiet link — small, dim, never louder than the meta.
+	// Every row reserves the recurring-charges line, so rows with and without charges match in height.
+	rule(".acct-recur",
+		prop("height", "calc(var(--type-14) * 1.6)"),
+	)
+	// Comfortable reading size for the account row's secondary text, all from the type scale:
+	// the meta line and toggles at the body step, the badges one step up from the caption, and
+	// the name at the card-title step so it leads the row.
+	rule(".acct-row .row-desc",
+		prop("font-size", "var(--type-16)"),
+	)
+	rule(".acct-row .row-meta, .acct-row .acct-details-toggle, .acct-row .budget-drivers-toggle",
+		prop("font-size", "var(--type-14)"),
+	)
+	rule(".acct-row .badge",
+		prop("font-size", "var(--type-13)"),
+	)
 	rule(".acct-details-chev",
 		prop("transition", "transform 150ms ease"),
 	)

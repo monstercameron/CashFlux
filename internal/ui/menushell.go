@@ -23,7 +23,7 @@ type MenuControl struct {
 // unconditionally at a stable render position, with the id of the menu's wrapper.
 func UseMenu(id string) MenuControl {
 	open := uic.UseState(false)
-	mounted := usePanelFade(open.Get())
+	mounted := UsePanelFade(open.Get())
 	placement := uic.UseState("")
 	dismissOverflowMenu(open.Get(), id, func() { open.Set(false) })
 	anchorOverflowMenu(open.Get(), id, placement.Set)

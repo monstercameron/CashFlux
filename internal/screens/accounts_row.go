@@ -364,11 +364,14 @@ func AccountRow(props accountRowProps) ui.Node {
 	// render position (AccountRow is itself the per-row component, so this is not a
 	// loop-level hook).
 	projExpanded := ui.UseState(false)
+	projMounted := uiw.UsePanelFade(projExpanded.Get())
 	toggleProj := ui.UseEvent(Prevent(func() { projExpanded.Set(!projExpanded.Get()) }))
 	// AC-series detail (90-day trend, this-period flow, projection, filed documents,
 	// notes, custom fields) is folded behind a quiet per-row disclosure so the resting
 	// list reads as name → balance and nothing competes; one click reveals the rest.
 	detailsOpen := ui.UseState(false)
+	// Each disclosure keeps its content mounted for the fade-out, so opening and closing both animate.
+	detailsMounted := uiw.UsePanelFade(detailsOpen.Get())
 	toggleDetails := ui.UseEvent(Prevent(func() { detailsOpen.Set(!detailsOpen.Get()) }))
 	// C413: the account-detail chart's range picker (90d / 12m / all) keeps its
 	// selection in the row's own state (stable hook position; AccountRow is the
@@ -530,8 +533,8 @@ func AccountRow(props accountRowProps) ui.Node {
 			toggleLabel = uistate.T("accounts.projectedHide")
 		}
 		var driverNode ui.Node = Fragment()
-		if projExpanded.Get() {
-			rows := []any{css.Class("acct-proj-drivers"), Attr("data-testid", "acct-proj-drivers-"+a.ID),
+		if projExpanded.Get() || projMounted {
+			rows := []any{css.Class(uiw.FadeClass("acct-proj-drivers", projExpanded.Get())), Attr("data-testid", "acct-proj-drivers-"+a.ID),
 				Div(css.Class("row-meta", tw.TextDim), uistate.T("accounts.projectedDrivers"))}
 			for _, d := range props.Projection.Drivers {
 				amt := money.New(d.Amount, a.Currency)
@@ -579,7 +582,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// resting row stays a clean name → balance line (child components' hooks are their own,
 	// so conditional mounting here is safe).
 	var detailsNode ui.Node = Fragment()
-	if detailsOpen.Get() {
+	if detailsOpen.Get() || detailsMounted {
 		var chart ui.Node
 		validBalance := true
 		if props.DetailContext != nil {
@@ -590,7 +593,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		} else {
 			chart = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 		}
-		detailsNode = Div(css.Class("acct-row-details"), Attr("data-testid", "acct-details-"+a.ID),
+		detailsNode = Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("data-testid", "acct-details-"+a.ID),
 			valChange,
 			projNode,
 			billNode,
