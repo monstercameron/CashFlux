@@ -94,6 +94,9 @@ func OverflowMenu(props OverflowMenuProps) uic.Node {
 func overflowMenu(props OverflowMenuProps) uic.Node {
 	open := uic.UseState(false)
 	panelMounted := usePanelFade(open.Get())
+	// placement holds the flip classes the anchor picked for the open menu. It lives in state so
+	// the menu renders with it, and it survives the fade-out.
+	placement := uic.UseState("")
 	// Stable per-instance id on the wrapper so the document-level dismissal
 	// listeners can tell clicks inside THIS menu from clicks in another instance
 	// (many overflow menus can be on a page at once).
@@ -121,7 +124,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	dismissOverflowMenu(open.Get(), id, func() { open.Set(false) })
 	// Keep the popover inside the viewport (the ⋯ trigger usually sits near a row's
 	// right edge): flip it left/up when its natural below-right position would overflow.
-	anchorOverflowMenu(open.Get(), id)
+	anchorOverflowMenu(open.Get(), id, placement.Set)
 
 	// Use the `hidden-menu` class: it's the one the stylesheet actually hides
 	// (display:none on `.add-menu`). The bare `hidden` class is unstyled.
@@ -164,7 +167,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	}
 
 	shown := open.Get() || panelMounted
-	menuClass := "add-menu fade-panel"
+	menuClass := "add-menu fade-panel" + placement.Get()
 	if !open.Get() {
 		if panelMounted {
 			menuClass += " is-leaving"
@@ -341,10 +344,22 @@ func dismissOverflowMenu(isOpen bool, wrapID string, onClose func()) {
 	}, openKey)
 }
 
+// menuPlacementClass names the flip classes an open menu takes.
+func menuPlacementClass(openLeft, openUp bool) string {
+	class := ""
+	if openLeft {
+		class += " open-left"
+	}
+	if openUp {
+		class += " open-up"
+	}
+	return class
+}
+
 // anchorOverflowMenu keeps an open menu attached to its trigger and flips it
 // within its nearest transaction table when possible. Browser APIs are checked
 // before use so a partial test DOM simply skips visual placement.
-func anchorOverflowMenu(isOpen bool, wrapID string) {
+func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
 	openKey := "closed"
 	if isOpen {
 		openKey = "open"
@@ -368,12 +383,6 @@ func anchorOverflowMenu(isOpen bool, wrapID string) {
 			if !menu.Truthy() || menu.Get("getBoundingClientRect").Type() != js.TypeFunction {
 				return nil
 			}
-			cl := menu.Get("classList")
-			if !cl.Truthy() || cl.Get("remove").Type() != js.TypeFunction || cl.Get("add").Type() != js.TypeFunction {
-				return nil
-			}
-			cl.Call("remove", "open-left")
-			cl.Call("remove", "open-up")
 			st := menu.Get("style")
 			st.Set("maxHeight", "")
 			st.Set("overflowY", "")
@@ -388,24 +397,21 @@ func anchorOverflowMenu(isOpen bool, wrapID string) {
 					boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-margin)
 				}
 			}
-			if r.Get("right").Float() > vw-margin {
-				cl.Call("add", "open-left")
-			}
+			openLeft := r.Get("right").Float() > vw-margin
 			// The menu grows in over its fade, so judge its flip and height by the height it
 			// settles at, not the height it has reached.
 			fullHeight := max(r.Get("height").Float(), menu.Get("scrollHeight").Float())
-			if r.Get("top").Float()+fullHeight > boundaryBottom {
-				cl.Call("add", "open-up")
-			}
+			openUp := r.Get("top").Float()+fullHeight > boundaryBottom
 			wr := w.Call("getBoundingClientRect")
 			avail := boundaryBottom - wr.Get("bottom").Float() - 6
-			if cl.Get("contains").Type() == js.TypeFunction && cl.Call("contains", "open-up").Bool() {
+			if openUp {
 				avail = wr.Get("top").Float() - boundaryTop - 6
 			}
 			if fullHeight > avail && avail > 80 {
 				st.Set("maxHeight", fmt.Sprintf("%.0fpx", avail))
 				st.Set("overflowY", "auto")
 			}
+			setPlacement(menuPlacementClass(openLeft, openUp))
 			return nil
 		})
 		raf := win.Call("requestAnimationFrame", reposition)

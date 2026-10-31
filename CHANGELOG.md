@@ -34,6 +34,7 @@ and every commit updates this file under `Unreleased`.
 - The More menu keeps its row raised through the fade-out, so the next row no longer paints over it as it closes.
 - Card headings read their size, weight, leading, tracking and colour from shared heading tokens (--heading-*), so every card heading is set in one place.
 - The bento tile and its menu stay raised while the More menu fades out, keyed on the menu being present rather than on the trigger's aria-expanded, so a neighbouring tile no longer paints over a menu that is closing.
+- The More menu keeps its open placement while it fades out, so it no longer jumps to the right when it closes. The flip is now part of the menu's state, not patched onto it after render.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.
