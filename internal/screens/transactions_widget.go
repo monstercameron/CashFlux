@@ -1202,6 +1202,8 @@ func txnRowSelectionCell(props *txnFrameRowProps) ui.Node {
 func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
 	r := props.Row
 	edit := ui.UseEvent(func(e ui.Event) { e.StopPropagation(); r.OnOpen(r.ID) })
+	filterAtom := uistate.UseTxFilter()
+	setFilter := func(mut func(*uistate.TxFilter)) { setTxFilterOn(filterAtom, mut) }
 	return Td(ClassStr("row-desc-cell txn-col-description"),
 		Div(css.Class("row-desc-inner"),
 			Div(css.Class("txn-desc-mainline"),
@@ -1213,8 +1215,8 @@ func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
 				// marks line up down the ledger whatever the length of the description.
 				Span(css.Class("txn-desc-status"),
 					txnRowDescriptionBadge(r),
-					If(r.Cleared, txnRowClearedGlyph()),
-					If(r.HasNote, ui.CreateElement(txnRowNote, txnRowNoteProps{Note: r.Note})),
+					If(r.Cleared, ui.CreateElement(txnMark, txnMarkProps{TestID: "txn-cleared", Label: uistate.T("uxt5.cleared"), Content: txnRowClearedGlyph(), Detail: uistate.T("txnmark.clearedDetail"), CTA: uistate.T("txnmark.clearedCTA"), OnCTA: txnMarkClearedFilter(setFilter)})),
+					If(r.HasNote, ui.CreateElement(txnRowNote, txnRowNoteProps{Note: r.Note, OnEdit: func() { r.OnOpen(r.ID) }})),
 					If(props.SaveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), props.SaveStatus)),
 					If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0, FollowUps: r.FollowUps,
 						OnReceipt: func() {
@@ -1232,7 +1234,12 @@ func txnRowDescriptionBadge(props *txnFrameRowProps) ui.Node {
 	case txntable.BadgeDuplicate:
 		return ui.CreateElement(txnFlagChip, txnFlagChipProps{TxnID: props.ID, Duplicate: true})
 	case txntable.BadgeReview:
-		return Span(css.Class("txn-review-pill"), Attr("data-testid", "txn-review-pill"), Attr("role", "img"), Attr("title", txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T)), Attr("aria-label", txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T)), uistate.T("r4c.review"))
+		return ui.CreateElement(txnMark, txnMarkProps{
+			TestID: "txn-review", Label: txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T),
+			Content: Span(css.Class("txn-review-pill"), Attr("data-testid", "txn-review-pill"), Attr("role", "img"),
+				Attr("aria-label", txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T)), Attr("title", txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T)), uistate.T("r4c.review")),
+			Detail: uistate.T("txnmark.reviewDetail"), CTA: uistate.T("txnmark.reviewCTA"), OnCTA: uistate.OpenReviewInbox,
+		})
 	case txntable.BadgeSpike:
 		return ui.CreateElement(txnFlagChip, txnFlagChipProps{TxnID: props.ID, SpikeWhy: props.SpikeWhy})
 	}

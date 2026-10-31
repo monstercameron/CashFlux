@@ -366,13 +366,11 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 	spikeOpen := ui.UseState(false)
 	spikeAnchorID := ui.UseId()
 
-	openDupes := ui.UseEvent(func() { dupOpen.Set(true) })
 	openTxn := ui.UseEvent(Prevent(func() {
 		spikeOpen.Set(false)
 		uistate.SetTxnEdit(props.TxnID)
 	}))
 	toggleSpike := ui.UseEvent(Prevent(func() { spikeOpen.Set(!spikeOpen.Get()) }))
-	openDupesClick := OnClick(openDupes)
 	openTxnClick := OnClick(openTxn)
 	toggleSpikeClick := OnClick(toggleSpike)
 
@@ -382,13 +380,13 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 	}
 
 	if props.Duplicate {
-		return Button(css.Class("txn-flag is-dupe", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "txn-flag-dupe"),
-			Attr("aria-label", uistate.T("sm8.hint")+": "+uistate.T("sm8.chip")),
-			Title(uistate.T("sm8.detail")),
-			openDupesClick,
-			uiw.Icon(icon.Copy, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
-			Span(uistate.T("sm8.chip")))
+		return ui.CreateElement(txnMark, txnMarkProps{
+			TestID: "txn-flag-dupe", Label: uistate.T("sm8.hint") + ": " + uistate.T("sm8.chip"),
+			Content: Span(css.Class("txn-flag is-dupe", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+				uiw.Icon(icon.Copy, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
+				Span(uistate.T("sm8.chip"))),
+			Detail: uistate.T("sm8.detail"), CTA: uistate.T("txnmark.dupCTA"), OnCTA: func() { dupOpen.Set(true) },
+		})
 	}
 	if props.SpikeWhy != "" {
 		return Fragment(
@@ -435,30 +433,18 @@ func txnRowClearedGlyph() ui.Node {
 }
 
 type txnRowNoteProps struct {
-	Note string
+	Note   string
+	OnEdit func()
 }
 
-// txnRowNote is the note glyph. A click opens the note in a popover anchored to the glyph, so the
-// note never adds height to the row. The popover owns its open state and stops the click, so the
-// row's editor does not open with it.
+// txnRowNote is the note mark. Its popover shows the note text and the call to action that opens
+// the transaction's editor, where the note is written.
 func txnRowNote(props txnRowNoteProps) ui.Node {
-	open := ui.UseState(false)
-	anchorID := ui.UseId()
-	toggle := ui.UseEvent(func(e ui.Event) {
-		e.StopPropagation()
-		e.PreventDefault()
-		open.Set(!open.Get())
+	return ui.CreateElement(txnMark, txnMarkProps{
+		TestID: "txn-note", Label: uistate.T("uxt5.hasNote"),
+		Content: uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Detail:  uistate.T("txnmark.noteDetail"),
+		Body:    Div(css.Class("txn-mark-note"), Attr("data-testid", "txn-row-note"), props.Note),
+		CTA:     uistate.T("txnmark.editCTA"), OnCTA: props.OnEdit,
 	})
-	close := func() { open.Set(false) }
-	return Fragment(
-		uiw.ToolButton(uiw.ToolButtonProps{
-			Icon: icon.FileText, AriaLabel: uistate.T("uxt5.hasNote"), Title: uistate.T("transactions.showNote"),
-			TestID: "txn-row-note-toggle", Open: open.Get(),
-		}, ID(anchorID), Attr("aria-expanded", ariaBool(open.Get())), OnClick(toggle)),
-		uiw.Overlay(uiw.OverlayProps{
-			Open: open.Get(), Kind: uiw.OverlayPopover, Label: uistate.T("uxt5.hasNote"),
-			AnchorID: anchorID, OnClose: close, TestID: "txn-row-note",
-			Body: Div(css.Class("txn-row-note-pop"), props.Note),
-		}),
-	)
 }

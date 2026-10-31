@@ -25,7 +25,7 @@ func TestRowNoteGlyphOpensNoteWithoutOpeningEditor(t *testing.T) {
 	if byTestID(f, "span", "txn-row-cleared") == nil {
 		t.Fatal("cleared row has no check glyph")
 	}
-	toggle := byTestID(f, "button", "txn-row-note-toggle")
+	toggle := byTestID(f, "button", "txn-note")
 	if toggle == nil {
 		t.Fatal("row with a note has no note glyph")
 	}
@@ -34,7 +34,7 @@ func TestRowNoteGlyphOpensNoteWithoutOpeningEditor(t *testing.T) {
 	}
 	toggle.Click()
 	f.Stabilize()
-	if got := byTestID(f, "button", "txn-row-note-toggle"); got == nil || got.Attr("aria-expanded") != "true" {
+	if got := byTestID(f, "button", "txn-note"); got == nil || got.Attr("aria-expanded") != "true" {
 		t.Fatal("clicking the note glyph does not open the note")
 	}
 	if opened != 0 {

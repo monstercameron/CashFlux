@@ -92,6 +92,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Fixed
 - The follow-up button on a transaction row previews its open follow-ups in a popover first. The popover holds the way on to the To-do page, and a receipt button when the row has one.
+- Each Transactions status mark opens a popover with what it means and one action that goes to its data: cleared shows the cleared charges, review opens the review inbox, duplicate opens the duplicates list, and note opens the transaction to edit.
 - The info mark on Transactions rows is centred on the row line with the cleared check, instead of sitting a few pixels low.
 - Transactions row elements line up: the status marks (duplicate, review, cleared, note, info) sit in one fixed column at the right of each description, and the tags stay on the description line instead of wrapping under it.
 - Every Transactions row is the same height. The plain info line, the automatic category note and the tag line now sit behind the row's info button, and the note opens in its own popover. The description and tags truncate on one line.

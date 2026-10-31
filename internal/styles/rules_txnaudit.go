@@ -8,6 +8,49 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// A status mark is a bare trigger: the glyph or chip is the control, with a visible focus ring.
+	rule(".txn-mark",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0"),
+		border("0"),
+		background("transparent"),
+		color("inherit"),
+		font("inherit"),
+		cursor("pointer"),
+	)
+	rule(".txn-mark:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+		borderRadius("var(--radius-sm)"),
+	)
+	// The popover: the detail in the body text, the note as it was written, and one action.
+	rule(".txn-mark-pop",
+		display("grid"),
+		gap("0.6rem"),
+		minWidth("14rem"),
+		maxWidth("22rem"),
+		padding("0.25rem 0.1rem"),
+	)
+	rule(".txn-mark-detail",
+		margin("0"),
+		fontSize("var(--fs-body)"),
+		lineHeight("1.45"),
+		color("var(--text)"),
+	)
+	rule(".txn-mark-note",
+		padding("0.4rem 0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md)"),
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
+		fontSize("var(--fs-meta)"),
+		whiteSpace("pre-wrap"),
+	)
+	rule(".txn-mark-actions",
+		display("flex"),
+		justifyContent("flex-end"),
+	)
 	// The info mark is a 24px centred box, so its centre sits on the row's centre line with the
 	// cleared check beside it.
 	rule(".bento-ledger .txn-table .txn-desc-status .txn-row-info-wrap",

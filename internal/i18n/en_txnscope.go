@@ -78,6 +78,13 @@ var txnScopeKeys = Catalog{
 	"transactions.calPreviewLoading": "Loading this day…",
 	"transactions.calPreviewEmpty":   "No transactions on this day.",
 	"transactions.calPreviewMore":    "+%d more",
+	"txnmark.clearedDetail":          "This charge has cleared your bank. Cleared charges make up the cleared balance.",
+	"txnmark.clearedCTA":             "Show cleared charges",
+	"txnmark.reviewDetail":           "This charge is waiting for a look. Confirm its category, amount and account before it counts as final.",
+	"txnmark.reviewCTA":              "Open review inbox",
+	"txnmark.dupCTA":                 "Open duplicates",
+	"txnmark.noteDetail":             "This charge has a note.",
+	"txnmark.editCTA":                "Edit transaction",
 	// The global "+" menu names the same three kinds the page's Add menu does, so a
 	// user meets one vocabulary wherever they start (C573).
 	"addmenu.expense": "Expense",
