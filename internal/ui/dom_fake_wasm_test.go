@@ -10,8 +10,8 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/interop"
 )
 
-// fakeObject returns a bare JavaScript object built through GWC's interop wrapper, so a test
-// can stand in for a DOM node and record what the helpers call on it.
+// fakeObject returns a bare JavaScript object (Object.create(null)) so a test can stand in for
+// a DOM node. Methods are added with fakeMethod.
 func fakeObject(t *testing.T) interop.Value {
 	t.Helper()
 	global, err := interop.GlobalThis()

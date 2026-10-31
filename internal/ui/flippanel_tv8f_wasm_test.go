@@ -16,6 +16,7 @@ import (
 func TestFlipPanelTV8FTitleUsesUnbalancedLeftTitleSlot(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
+	defer unmountFlipPanel(f)
 	f.Render(Body(ID("tv8f-flip-body"), uic.CreateElement(flipPanel, FlipPanelProps{
 		Title:    "Review transactions",
 		Back:     Button(Type("button"), "Done"),

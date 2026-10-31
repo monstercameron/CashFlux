@@ -21,9 +21,9 @@ func domElement(id string) (interop.Element, bool) {
 	return element, true
 }
 
-// domNode finds an element by id as a raw interop.Value. GWC's typed Element has no contains,
-// querySelectorAll, classList or style accessors, so DOM traversal and inline-style writes use
-// the same interop.Value wrapper the framework provides for them.
+// domNode finds an element by id and returns it as a raw interop.Value. The typed Element has no
+// contains, querySelectorAll, classList or style accessors, so traversal and style writes go
+// through domValue and domSet instead.
 func domNode(id string) interop.Value {
 	return domValue(domDocument(), "getElementById", id)
 }
@@ -38,7 +38,8 @@ var domRoot = func() interop.Value {
 	return global.Get("document")
 }
 
-// domDocument returns the page's document as an interop.Value, or the zero Value off the page.
+// domDocument returns the page's document as an interop.Value. Off the page it is empty, so
+// Truthy reports false.
 func domDocument() interop.Value {
 	return domRoot()
 }
@@ -53,8 +54,8 @@ func domValue(target interop.Value, method string, args ...any) interop.Value {
 	return result
 }
 
-// domSet writes a property on a DOM value. A write to a node that has already left the page
-// fails harmlessly, so the error is dropped.
+// domSet writes a property on a DOM value. The error is ignored, which suits style and attribute
+// writes on a node that may have already left the page.
 func domSet(target interop.Value, property string, value any) {
 	_ = target.Set(property, value)
 }
