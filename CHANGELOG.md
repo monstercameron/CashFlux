@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Menus, popovers, the picker and the filter toolbar talk to the browser only through GWC: document and window listeners use the framework hooks, timers and frames use GWC's scheduler, and DOM lookups use its interop wrapper. Account menus now measure their settled height before choosing where to open. Pointer and focus containment no longer compare event targets.
 - Row ⋯ menus open on the side and direction that fit. The menu now measures its settled height before choosing where to open, so a menu opened near the bottom of the screen opens upward instead of running off it.
 - Account screens read in the user's own date style (the date preference) instead of fixed English formats, and the missing-exchange-rate and excluded-balance notes are translation keys. The balance button names its account, and the details toggle names the panel it controls.
 - Everything under an account row's head (the recurring-charges line and the details panel) indents to the account name's column, so nested content reads as belonging to the name instead of the row edge.

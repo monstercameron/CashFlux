@@ -8,12 +8,12 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/interop"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
@@ -67,28 +67,22 @@ func pickerViewportPosition(top, bottom, panelHeight, viewportHeight float64) pi
 // pickerPanelPlacement measures the trigger and the open panel, found by element id, and
 // returns where the panel sits beside the trigger. ok is false when the trigger is missing.
 func pickerPanelPlacement(triggerID, panelID string) (placement pickerPosition, ok bool) {
-	document := js.Global().Get("document")
-	if !document.Truthy() || document.Get("getElementById").Type() != js.TypeFunction {
+	trigger := domNode(triggerID)
+	if !trigger.Truthy() {
 		return pickerPosition{}, false
 	}
-	trigger := document.Call("getElementById", triggerID)
-	if !trigger.Truthy() || trigger.Get("getBoundingClientRect").Type() != js.TypeFunction {
-		return pickerPosition{}, false
-	}
-	bounds := trigger.Call("getBoundingClientRect")
+	bounds := domValue(trigger, "getBoundingClientRect")
 	panelHeight := 420.0
-	panel := document.Call("getElementById", panelID)
-	if panel.Truthy() && panel.Get("getBoundingClientRect").Type() == js.TypeFunction {
-		measuredHeight := panel.Call("getBoundingClientRect").Get("height").Float()
-		contentHeight := panel.Get("scrollHeight")
-		if contentHeight.Type() == js.TypeNumber && contentHeight.Float() > measuredHeight {
+	if panel := domNode(panelID); panel.Truthy() {
+		measuredHeight := domValue(panel, "getBoundingClientRect").Get("height").Float()
+		if contentHeight := panel.Get("scrollHeight"); contentHeight.Present() && contentHeight.Float() > measuredHeight {
 			measuredHeight = contentHeight.Float()
 		}
 		if measuredHeight > 0 {
 			panelHeight = measuredHeight
 		}
 	}
-	viewportHeight := js.Global().Get("window").Get("innerHeight").Float()
+	viewportHeight := domDocument().Get("defaultView").Get("innerHeight").Float()
 	placement = pickerViewportPosition(bounds.Get("top").Float(), bounds.Get("bottom").Float(), panelHeight, viewportHeight)
 	placement.Left = int(math.Round(bounds.Get("left").Float()))
 	placement.Width = int(math.Round(bounds.Get("width").Float()))
@@ -100,49 +94,47 @@ func pickerPanelPlacement(triggerID, panelID string) (placement pickerPosition, 
 // is coalesced into one animation frame, and a placement equal to the last one is not
 // handed on, so the picker only re-renders when the panel really moves.
 func usePickerPlacement(open bool, id string, setPosition func(pickerPosition)) {
-	uic.UseEffect(func() func() {
-		if !open {
-			return nil
+	last := uic.UseRef(pickerPosition{})
+	placed := uic.UseRef(false)
+	queued := uic.UseRef(false)
+	cancelFrame := uic.UseRef(func() {})
+	place := func() {
+		placement, ok := pickerPanelPlacement(id, id+"-surface")
+		if !ok || (placed.Get() && placement == last.Get()) {
+			return
 		}
-		var last pickerPosition
-		placed := false
-		place := func() {
-			placement, ok := pickerPanelPlacement(id, id+"-surface")
-			if !ok || (placed && placement == last) {
-				return
-			}
-			last, placed = placement, true
-			setPosition(placement)
-		}
-		place()
-		window := js.Global().Get("window")
-		if !window.Truthy() || window.Get("addEventListener").Type() != js.TypeFunction {
-			return nil
-		}
-		frame := js.Undefined()
-		queued := false
-		onFrame := js.FuncOf(func(js.Value, []js.Value) any {
-			queued = false
+		last.Set(placement)
+		placed.Set(true)
+		setPosition(placement)
+	}
+	// Measure on open, before paint, so the panel never shows at a stale spot.
+	uic.UseLayoutEffect(func() func() {
+		if open {
+			placed.Set(false)
 			place()
-			return nil
-		})
-		onScroll := js.FuncOf(func(js.Value, []js.Value) any {
-			if !queued {
-				queued = true
-				frame = window.Call("requestAnimationFrame", onFrame)
-			}
-			return nil
-		})
-		window.Call("addEventListener", "resize", onScroll)
-		window.Call("addEventListener", "scroll", onScroll, true)
+		}
+		return nil
+	}, open, id)
+	// Scroll events arrive in bursts, so each burst is coalesced into one animation frame.
+	onMove := func(uic.Event) {
+		if !open || queued.Get() {
+			return
+		}
+		queued.Set(true)
+		cancelFrame.Set(interop.RequestAnimationFrame(func(float64) {
+			queued.Set(false)
+			place()
+		}))
+	}
+	uic.UseWindowEvent("resize", onMove, open, id)
+	uic.UseWindowEvent("scroll", onMove, open, id)
+	// A frame still queued when the panel closes is cancelled, so it cannot re-place a closed panel.
+	uic.UseLayoutEffect(func() func() {
 		return func() {
-			window.Call("removeEventListener", "resize", onScroll)
-			window.Call("removeEventListener", "scroll", onScroll, true)
-			if queued {
-				window.Call("cancelAnimationFrame", frame)
+			if queued.Get() {
+				cancelFrame.Get()()
+				queued.Set(false)
 			}
-			onScroll.Release()
-			onFrame.Release()
 		}
 	}, open, id)
 }
@@ -160,10 +152,12 @@ func multiSheetSurfaceStyle(place pickerPosition) map[string]string {
 	}
 }
 
-// pickerContains reports whether node sits inside the element with the given id.
-func pickerContains(containerID string, node js.Value) bool {
-	container := js.Global().Get("document").Call("getElementById", containerID)
-	return container.Truthy() && container.Call("contains", node).Bool()
+// pickerSurfaceHasFocus reports whether keyboard focus currently sits inside the element with
+// the given id. It reads the document's active element, so it needs no event target.
+func pickerSurfaceHasFocus(surfaceID string) bool {
+	surface := domNode(surfaceID)
+	active := domDocument().Get("activeElement")
+	return surface.Truthy() && active.Truthy() && domValue(surface, "contains", active).Bool()
 }
 
 // PickerProps configures a searchable, explicit-commit picker.
@@ -460,16 +454,14 @@ func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	// leave closes the sheet when focus lands outside it. A blur with no destination
 	// means focus left the page, so it closes too. A blur from a row that a re-render
 	// has already removed is ignored, so a pick never closes the sheet it was made in.
-	leave := func(event uic.Event) {
-		if next := event.JSValue().Get("relatedTarget"); next.Truthy() {
-			if !pickerContains(surfaceID, next) {
+	// The check runs one frame later, once the browser has moved focus to its new owner, so a
+	// focus move inside the sheet counts as staying in it. The event's own target is not needed.
+	leave := func(uic.Event) {
+		interop.RequestAnimationFrame(func(float64) {
+			if !pickerSurfaceHasFocus(surfaceID) {
 				dismiss()
 			}
-			return
-		}
-		if event.JSValue().Get("target").Get("isConnected").Truthy() {
-			dismiss()
-		}
+		})
 	}
 
 	trigger := []any{
@@ -577,11 +569,8 @@ func containsPickerValue(values []string, target string) bool {
 }
 
 func focusPickerID(id string) {
-	document := js.Global().Get("document")
-	if document.Truthy() {
-		if element := document.Call("getElementById", id); element.Truthy() {
-			element.Call("focus")
-		}
+	if element := domNode(id); element.Truthy() {
+		domValue(element, "focus")
 	}
 }
 

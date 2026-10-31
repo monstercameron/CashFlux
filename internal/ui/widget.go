@@ -7,7 +7,6 @@ package ui
 import (
 	"fmt"
 	"strings"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -362,7 +361,7 @@ func widget(props WidgetProps) uic.Node {
 				e.PreventDefault()
 				if grabbed {
 					// MOVE / RESIZE the grabbed tile.
-					if e.JSValue().Get("shiftKey").Bool() {
+					if e.GetShiftKey() {
 						dc, dr := 0, 0
 						if key == "ArrowLeft" {
 							dc = -1
@@ -426,10 +425,8 @@ func widget(props WidgetProps) uic.Node {
 				}
 				nextID := bk[ni].ID
 				rovingAtom.Set(nextID)
-				if doc := js.Global().Get("document"); doc.Truthy() {
-					if el := doc.Call("querySelector", "[data-widget=\""+nextID+"\"]"); el.Truthy() && el.Get("focus").Type() == js.TypeFunction {
-						el.Call("focus")
-					}
+				if el := domValue(domDocument(), "querySelector", "[data-widget=\"" + nextID + "\"]"); el.Truthy() {
+					domValue(el, "focus")
 				}
 			}),
 			OnDragStart(func() {

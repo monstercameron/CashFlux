@@ -5,46 +5,37 @@
 package ui
 
 import (
-	"syscall/js"
 	"testing"
+
+	"github.com/monstercameron/GoWebComponents/v7/interop"
 )
 
 func TestTC4N11OverflowSubmenuFocusUsesWrapper(t *testing.T) {
 	lookups := []string{}
 	focused := false
-	var funcs []js.Func
-	makeFunc := func(fn func(js.Value, []js.Value) any) js.Func {
-		f := js.FuncOf(fn)
-		funcs = append(funcs, f)
-		return f
-	}
-	t.Cleanup(func() {
-		for _, f := range funcs {
-			f.Release()
-		}
-	})
-	child := js.Global().Get("Object").New()
-	child.Set("focus", makeFunc(func(js.Value, []js.Value) any { focused = true; return nil }))
-	menu := js.Global().Get("Object").New()
-	menu.Set("querySelector", makeFunc(func(_ js.Value, args []js.Value) any {
+	child := fakeObject(t)
+	fakeMethod(t, child, "focus", func(...interop.Value) any { focused = true; return nil })
+	menu := fakeObject(t)
+	fakeMethod(t, menu, "querySelector", func(args ...interop.Value) any {
 		lookups = append(lookups, args[0].String())
 		return child
-	}))
-	wrapper := js.Global().Get("Object").New()
-	wrapper.Set("querySelector", makeFunc(func(_ js.Value, args []js.Value) any {
+	})
+	wrapper := fakeObject(t)
+	fakeMethod(t, wrapper, "querySelector", func(args ...interop.Value) any {
 		lookups = append(lookups, args[0].String())
 		return menu
-	}))
-	doc := js.Global().Get("Object").New()
-	doc.Set("getElementById", makeFunc(func(_ js.Value, args []js.Value) any {
+	})
+	doc := fakeObject(t)
+	fakeMethod(t, doc, "getElementById", func(args ...interop.Value) any {
 		lookups = append(lookups, args[0].String())
 		if args[0].String() == "parent-wrap" {
 			return wrapper
 		}
-		return js.Null()
-	}))
+		return nil
+	})
+	useFakeDocument(t, doc)
 
-	focusOverflowSubmenu(doc, "parent")
+	focusOverflowSubmenu("parent")
 	if !focused {
 		t.Fatal("opening a submenu did not focus its first item")
 	}

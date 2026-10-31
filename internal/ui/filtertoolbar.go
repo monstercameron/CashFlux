@@ -6,7 +6,6 @@ package ui
 
 import (
 	"strconv"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/debounce"
@@ -124,15 +123,15 @@ const filterSearchDebounce = 250 * time.Millisecond
 // lands, and that render writes the same two values. When the query commits, the
 // ordinary render puts the note back to idle — nothing here has to undo itself.
 func markSearchPending(searchID, pendingID, resultsSelector string) {
-	doc := js.Global().Get("document")
+	doc := domDocument()
 	if !doc.Truthy() {
 		return
 	}
-	if el := doc.Call("getElementById", searchID); el.Truthy() {
-		el.Call("setAttribute", "aria-busy", "true")
+	if el := domNode(searchID); el.Truthy() {
+		domValue(el, "setAttribute", "aria-busy", "true")
 	}
-	if el := doc.Call("getElementById", pendingID); el.Truthy() {
-		el.Get("classList").Call("remove", "is-idle")
+	if el := domNode(pendingID); el.Truthy() {
+		domValue(el.Get("classList"), "remove", "is-idle")
 	}
 	setSearchStale(resultsSelector, true)
 }
@@ -145,15 +144,15 @@ func markSearchPending(searchID, pendingID, resultsSelector string) {
 // stays "idle" the whole time, the vdom sees no change, and the note this revealed
 // by hand would sit there saying "Searching…" forever.
 func clearSearchPending(searchID, pendingID, resultsSelector string) {
-	doc := js.Global().Get("document")
+	doc := domDocument()
 	if !doc.Truthy() {
 		return
 	}
-	if el := doc.Call("getElementById", searchID); el.Truthy() {
-		el.Call("setAttribute", "aria-busy", "false")
+	if el := domNode(searchID); el.Truthy() {
+		domValue(el, "setAttribute", "aria-busy", "false")
 	}
-	if el := doc.Call("getElementById", pendingID); el.Truthy() {
-		el.Get("classList").Call("add", "is-idle")
+	if el := domNode(pendingID); el.Truthy() {
+		domValue(el.Get("classList"), "add", "is-idle")
 	}
 	setSearchStale(resultsSelector, false)
 }
@@ -166,17 +165,17 @@ func setSearchStale(selector string, stale bool) {
 	if selector == "" {
 		return
 	}
-	doc := js.Global().Get("document")
+	doc := domDocument()
 	if !doc.Truthy() {
 		return
 	}
-	nodes := doc.Call("querySelectorAll", selector)
-	for i := 0; i < nodes.Length(); i++ {
-		cl := nodes.Index(i).Get("classList")
+	nodes := domValue(doc, "querySelectorAll", selector)
+	for i := range nodes.Get("length").Int() {
+		classes := domValue(nodes, "item", i).Get("classList")
 		if stale {
-			cl.Call("add", "is-search-stale")
+			domValue(classes, "add", "is-search-stale")
 		} else {
-			cl.Call("remove", "is-search-stale")
+			domValue(classes, "remove", "is-search-stale")
 		}
 	}
 }
@@ -198,20 +197,12 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	onPanelKey := uic.UseEvent(func(e uic.KeyboardEvent) {
 		if e.GetKey() == "Escape" && open.Get() {
 			e.PreventDefault()
-			if doc := js.Global().Get("document"); doc.Truthy() {
-				if trigger := doc.Call("getElementById", "filter-trigger-"+uid); trigger.Truthy() {
-					trigger.Call("focus")
-				}
-			}
+			focusFilterTrigger(uid)
 			open.Set(false)
 		}
 	})
 	closePanel := func() {
-		if doc := js.Global().Get("document"); doc.Truthy() {
-			if trigger := doc.Call("getElementById", "filter-trigger-"+uid); trigger.Truthy() {
-				trigger.Call("focus")
-			}
-		}
+		focusFilterTrigger(uid)
 		open.Set(false)
 	}
 	panelMounted := UsePanelFade(open.Get())
@@ -269,39 +260,23 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	n := len(props.Chips)
 
 	// C56: press "f" to open the filter panel (ignored while typing in a field or
-	// with a modifier held). Document listener added on mount, removed on unmount.
-	uic.UseEffect(func() func() {
-		doc := js.Global().Get("document")
-		if !doc.Truthy() {
-			return nil
+	// with a modifier held). A document listener, active while the toolbar is mounted.
+	uic.UseDocumentEvent("keydown", func(e uic.Event) {
+		if e.GetKey() != "f" || e.GetMetaKey() || e.GetCtrlKey() || e.GetAltKey() {
+			return
 		}
-		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
+		if active := domDocument().Get("activeElement"); active.Truthy() {
+			switch active.Get("tagName").String() {
+			case "INPUT", "TEXTAREA", "SELECT":
+				return
 			}
-			e := args[0]
-			if e.Get("key").String() != "f" || e.Get("metaKey").Bool() || e.Get("ctrlKey").Bool() || e.Get("altKey").Bool() {
-				return nil
+			if active.Get("isContentEditable").Bool() {
+				return
 			}
-			if ae := doc.Get("activeElement"); ae.Truthy() {
-				switch ae.Get("tagName").String() {
-				case "INPUT", "TEXTAREA", "SELECT":
-					return nil
-				}
-				if ae.Get("isContentEditable").Bool() {
-					return nil
-				}
-			}
-			e.Call("preventDefault")
-			open.Set(true)
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", cb)
-		return func() {
-			doc.Call("removeEventListener", "keydown", cb)
-			cb.Release()
 		}
-	}, "filter-shortcut")
+		e.PreventDefault()
+		open.Set(true)
+	})
 
 	// C57: accessible name conveys the active count (the badge is aria-hidden).
 	ariaLabel := props.FiltersLabel
@@ -533,4 +508,11 @@ func filterChip(props filterChipProps) uic.Node {
 			}),
 			Icon(icon.Close, css.Class(tw.W3, tw.H3))),
 	)
+}
+
+// focusFilterTrigger returns keyboard focus to the Filters button of the toolbar with the given uid.
+func focusFilterTrigger(uid string) {
+	if trigger := domNode("filter-trigger-" + uid); trigger.Truthy() {
+		domValue(trigger, "focus")
+	}
 }

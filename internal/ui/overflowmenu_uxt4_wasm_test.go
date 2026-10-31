@@ -5,9 +5,9 @@
 package ui
 
 import (
-	"syscall/js"
 	"testing"
 
+	"github.com/monstercameron/GoWebComponents/v7/interop"
 	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
@@ -97,20 +97,18 @@ func uxt4MenuByTestID(f *render.Fixture, id string) *render.QueryNode {
 }
 
 func TestUXT4MenuFocusDoesNotScroll(t *testing.T) {
+	item := fakeObject(t)
 	called := false
-	var options js.Value
-	focus := js.FuncOf(func(_ js.Value, args []js.Value) any {
+	preventScroll := false
+	fakeMethod(t, item, "focus", func(args ...interop.Value) any {
 		called = true
 		if len(args) > 0 {
-			options = args[0]
+			preventScroll = args[0].Get("preventScroll").Bool()
 		}
 		return nil
 	})
-	defer focus.Release()
-	item := js.Global().Get("Object").New()
-	item.Set("focus", focus)
 	focusMenuItem(item)
-	if !called || !options.Truthy() || !options.Get("preventScroll").Bool() {
+	if !called || !preventScroll {
 		t.Fatal("menu focus did not request preventScroll")
 	}
 }

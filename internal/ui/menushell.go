@@ -25,7 +25,7 @@ func UseMenu(id string) MenuControl {
 	open := uic.UseState(false)
 	mounted := UsePanelFade(open.Get())
 	placement := uic.UseState("")
-	dismissOverflowMenu(open.Get(), id, func() { open.Set(false) })
+	DismissPopover(open.Get(), id, func() { open.Set(false) })
 	anchorOverflowMenu(open.Get(), id, placement.Set)
 	return MenuControl{
 		Open:      open.Get(),

@@ -6,14 +6,12 @@ package ui
 
 import (
 	"fmt"
-	"strings"
-	"syscall/js"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/interop"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
@@ -162,121 +160,6 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	return Div(css.Class(menu.WrapClass("add-wrap")), Attr("id", id), trigger, panel)
 }
 
-// dismissOverflowMenu installs the menu-button keyboard and outside-pointer
-// listeners when the host DOM supports them. The component testkit intentionally
-// has a small DOM surface, so missing browser APIs must not panic a wasm effect.
-func dismissOverflowMenu(isOpen bool, wrapID string, onClose func()) {
-	openKey := "closed"
-	if isOpen {
-		openKey = "open"
-	}
-	uic.UseEffect(func() func() {
-		if !isOpen || wrapID == "" || onClose == nil {
-			return nil
-		}
-		doc := js.Global().Get("document")
-		if !doc.Truthy() || doc.Get("addEventListener").Type() != js.TypeFunction || doc.Get("removeEventListener").Type() != js.TypeFunction {
-			return nil
-		}
-		var typeahead string
-		lastType := time.Time{}
-		keyCB := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 {
-				return nil
-			}
-			e := args[0]
-			key := e.Get("key").String()
-			if key == "Escape" {
-				onClose()
-				if doc.Get("getElementById").Type() == js.TypeFunction {
-					w := doc.Call("getElementById", wrapID)
-					if w.Truthy() && w.Get("querySelector").Type() == js.TypeFunction {
-						if trigger := w.Call("querySelector", "button"); trigger.Truthy() && trigger.Get("focus").Type() == js.TypeFunction {
-							trigger.Call("focus")
-						}
-					}
-				}
-				return nil
-			}
-			if doc.Get("getElementById").Type() != js.TypeFunction {
-				return nil
-			}
-			w := doc.Call("getElementById", wrapID)
-			active := doc.Get("activeElement")
-			if !w.Truthy() || !active.Truthy() || w.Get("contains").Type() != js.TypeFunction || !w.Call("contains", active).Bool() || w.Get("querySelectorAll").Type() != js.TypeFunction {
-				return nil
-			}
-			items := w.Call("querySelectorAll", `[role="menuitem"]`)
-			n := items.Get("length").Int()
-			if n == 0 {
-				return nil
-			}
-			cur := -1
-			for i := range n {
-				if items.Index(i).Equal(active) {
-					cur = i
-					break
-				}
-			}
-			next := -1
-			switch key {
-			case "ArrowDown":
-				next = (cur + 1) % n
-			case "ArrowUp":
-				next = (cur - 1 + n) % n
-			case "Home":
-				next = 0
-			case "End":
-				next = n - 1
-			default:
-				if len(key) != 1 || e.Get("ctrlKey").Bool() || e.Get("altKey").Bool() || e.Get("metaKey").Bool() {
-					return nil
-				}
-				now := time.Now()
-				if now.Sub(lastType) > 700*time.Millisecond {
-					typeahead = ""
-				}
-				lastType = now
-				typeahead += strings.ToLower(key)
-				start := (cur + 1) % n
-				for offset := range n {
-					idx := (start + offset) % n
-					label := strings.ToLower(strings.TrimSpace(items.Index(idx).Get("textContent").String()))
-					if strings.HasPrefix(label, typeahead) {
-						next = idx
-						break
-					}
-				}
-				if next < 0 {
-					return nil
-				}
-			}
-			e.Call("preventDefault")
-			items.Index(next).Call("focus")
-			return nil
-		})
-		downCB := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			if len(args) == 0 || doc.Get("getElementById").Type() != js.TypeFunction {
-				return nil
-			}
-			w := doc.Call("getElementById", wrapID)
-			target := args[0].Get("target")
-			if w.Truthy() && target.Truthy() && w.Get("contains").Type() == js.TypeFunction && !w.Call("contains", target).Bool() {
-				onClose()
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", keyCB)
-		doc.Call("addEventListener", "pointerdown", downCB)
-		return func() {
-			doc.Call("removeEventListener", "keydown", keyCB)
-			doc.Call("removeEventListener", "pointerdown", downCB)
-			keyCB.Release()
-			downCB.Release()
-		}
-	}, openKey)
-}
-
 // menuPlacementClass names the flip classes an open menu takes.
 func menuPlacementClass(openLeft, openUp bool) string {
 	class := ""
@@ -289,91 +172,70 @@ func menuPlacementClass(openLeft, openUp bool) string {
 	return class
 }
 
-// anchorOverflowMenu keeps an open menu attached to its trigger and flips it
-// within its nearest transaction table when possible. Browser APIs are checked
-// before use so a partial test DOM simply skips visual placement.
+// anchorOverflowMenu keeps an open menu attached to its trigger and flips it to the side and
+// direction that fit, within its nearest transaction table when possible. Placement is decided
+// before paint (UseLayoutEffect), and again whenever the window resizes or scrolls while open.
 func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
-	openKey := "closed"
-	if isOpen {
-		openKey = "open"
+	uic.UseLayoutEffect(func() func() {
+		if isOpen {
+			placeOverflowMenu(wrapID, setPlacement)
+		}
+		return nil
+	}, isOpen, wrapID)
+	reposition := func(uic.Event) {
+		if isOpen {
+			placeOverflowMenu(wrapID, setPlacement)
+		}
 	}
-	uic.UseEffect(func() func() {
-		if !isOpen || wrapID == "" {
-			return nil
-		}
-		win := js.Global()
-		doc := win.Get("document")
-		if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction || win.Get("requestAnimationFrame").Type() != js.TypeFunction {
-			return nil
-		}
-		const margin = 8.0
-		reposition := js.FuncOf(func(_ js.Value, _ []js.Value) any {
-			w := doc.Call("getElementById", wrapID)
-			if !w.Truthy() || w.Get("querySelector").Type() != js.TypeFunction || w.Get("getBoundingClientRect").Type() != js.TypeFunction {
-				return nil
-			}
-			menu := w.Call("querySelector", ".add-menu")
-			if !menu.Truthy() || menu.Get("getBoundingClientRect").Type() != js.TypeFunction {
-				return nil
-			}
-			st := menu.Get("style")
-			st.Set("maxHeight", "")
-			st.Set("overflowY", "")
-			// The panel grows in over its fade, so its height reads low until the animation settles.
-			// Suspend the animation to measure the height the panel settles at, then hand it back.
-			st.Set("animation", "none")
-			r := menu.Call("getBoundingClientRect")
-			vw := win.Get("innerWidth").Float()
-			vh := win.Get("innerHeight").Float()
-			boundaryTop, boundaryBottom := margin, vh-margin
-			if w.Get("closest").Type() == js.TypeFunction {
-				if table := w.Call("closest", ".txn-table"); table.Truthy() && table.Get("getBoundingClientRect").Type() == js.TypeFunction {
-					tableRect := table.Call("getBoundingClientRect")
-					boundaryTop = max(boundaryTop, tableRect.Get("top").Float()+margin)
-					boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-margin)
-				}
-			}
-			// Decide the side from where the menu sits by default, not where it is now. The flip
-			// classes are already applied, so measuring the current rect would flip the answer on
-			// every open.
-			wr := w.Call("getBoundingClientRect")
-			openLeft := wr.Get("left").Float()+r.Get("width").Float() > vw-margin
-			fullHeight := max(r.Get("height").Float(), menu.Get("scrollHeight").Float())
-			st.Set("animation", "")
-			openUp := wr.Get("bottom").Float()+6+fullHeight > boundaryBottom
-			avail := boundaryBottom - wr.Get("bottom").Float() - 6
-			if openUp {
-				avail = wr.Get("top").Float() - boundaryTop - 6
-			}
-			if fullHeight > avail && avail > 80 {
-				st.Set("maxHeight", fmt.Sprintf("%.0fpx", avail))
-				st.Set("overflowY", "auto")
-			}
-			setPlacement(menuPlacementClass(openLeft, openUp))
-			return nil
-		})
-		raf := win.Call("requestAnimationFrame", reposition)
-		if win.Get("addEventListener").Type() != js.TypeFunction || win.Get("removeEventListener").Type() != js.TypeFunction {
-			return func() {
-				if win.Get("cancelAnimationFrame").Type() == js.TypeFunction {
-					win.Call("cancelAnimationFrame", raf)
-				}
-				reposition.Release()
-			}
-		}
-		resizeCB := js.FuncOf(func(_ js.Value, _ []js.Value) any { reposition.Invoke(); return nil })
-		win.Call("addEventListener", "resize", resizeCB)
-		win.Call("addEventListener", "scroll", resizeCB, map[string]any{"capture": true, "passive": true})
-		return func() {
-			if win.Get("cancelAnimationFrame").Type() == js.TypeFunction {
-				win.Call("cancelAnimationFrame", raf)
-			}
-			win.Call("removeEventListener", "resize", resizeCB)
-			win.Call("removeEventListener", "scroll", resizeCB, map[string]any{"capture": true})
-			reposition.Release()
-			resizeCB.Release()
-		}
-	}, openKey)
+	uic.UseWindowEvent("resize", reposition, isOpen, wrapID)
+	uic.UseWindowEvent("scroll", reposition, isOpen, wrapID)
+}
+
+// placeOverflowMenu measures an open menu against its trigger and the viewport, or the
+// transaction table around it, and reports the flip classes that fit.
+func placeOverflowMenu(wrapID string, setPlacement func(string)) {
+	const margin = 8.0
+	wrap := domNode(wrapID)
+	if !wrap.Truthy() {
+		return
+	}
+	menu := domValue(wrap, "querySelector", ".add-menu")
+	if !menu.Truthy() {
+		return
+	}
+	style := menu.Get("style")
+	domSet(style, "maxHeight", "")
+	domSet(style, "overflowY", "")
+	// The menu grows in over its fade, so its height reads low until the animation settles.
+	// Suspend the animation to measure the height it settles at, then hand it back.
+	domSet(style, "animation", "none")
+	rect := domValue(menu, "getBoundingClientRect")
+	window := domDocument().Get("defaultView")
+	vw := window.Get("innerWidth").Float()
+	vh := window.Get("innerHeight").Float()
+	boundaryTop, boundaryBottom := margin, vh-margin
+	if table := domValue(wrap, "closest", ".txn-table"); table.Truthy() {
+		tableRect := domValue(table, "getBoundingClientRect")
+		boundaryTop = max(boundaryTop, tableRect.Get("top").Float()+margin)
+		boundaryBottom = min(boundaryBottom, tableRect.Get("bottom").Float()-margin)
+	}
+	// Decide the side from where the menu sits by default, not where it is now. The flip
+	// classes are already applied, so measuring the current rect would flip the answer on
+	// every open.
+	wrapRect := domValue(wrap, "getBoundingClientRect")
+	openLeft := wrapRect.Get("left").Float()+rect.Get("width").Float() > vw-margin
+	fullHeight := max(rect.Get("height").Float(), menu.Get("scrollHeight").Float())
+	domSet(style, "animation", "")
+	openUp := wrapRect.Get("bottom").Float()+6+fullHeight > boundaryBottom
+	avail := boundaryBottom - wrapRect.Get("bottom").Float() - 6
+	if openUp {
+		avail = wrapRect.Get("top").Float() - boundaryTop - 6
+	}
+	if fullHeight > avail && avail > 80 {
+		domSet(style, "maxHeight", fmt.Sprintf("%.0fpx", avail))
+		domSet(style, "overflowY", "auto")
+	}
+	setPlacement(menuPlacementClass(openLeft, openUp))
 }
 
 // overflowMenuItemProps carries the item data plus the close callback into the
@@ -391,21 +253,11 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	onSelect := item.OnSelect
 	submenuOpen := uic.UseState(false)
 	itemID := uic.UseId()
-	uic.UseEffect(func() func() {
-		if !submenuOpen.Get() {
-			return nil
+	// Focus the first entry of a freshly opened submenu once it is in the DOM, before paint.
+	uic.UseLayoutEffect(func() func() {
+		if submenuOpen.Get() {
+			focusOverflowSubmenu(itemID)
 		}
-		doc := js.Global().Get("document")
-		if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
-			return nil
-		}
-		var cb js.Func
-		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			defer cb.Release()
-			focusOverflowSubmenu(doc, itemID)
-			return nil
-		})
-		js.Global().Call("setTimeout", cb, 0)
 		return nil
 	}, submenuOpen.Get())
 	onKey := uic.UseEvent(func(e uic.KeyboardEvent) {
@@ -489,30 +341,25 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 
 // focusOverflowSubmenu moves focus into an opened submenu. The submenu is a
 // sibling of its parent button, so the lookup must start at the item's wrapper.
-func focusOverflowSubmenu(doc js.Value, itemID string) {
-	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+func focusOverflowSubmenu(itemID string) {
+	wrap := docMenuItem(itemID + "-wrap")
+	if !wrap.Truthy() {
 		return
 	}
-	wrap := doc.Call("getElementById", itemID+"-wrap")
-	if !wrap.Truthy() || wrap.Get("querySelector").Type() != js.TypeFunction {
-		return
-	}
-	menu := wrap.Call("querySelector", ".add-submenu")
-	if menu.Truthy() && menu.Get("querySelector").Type() == js.TypeFunction {
-		focusMenuItem(menu.Call("querySelector", `[role="menuitem"]`))
+	menu := domValue(wrap, "querySelector", ".add-submenu")
+	if menu.Truthy() {
+		focusMenuItem(domValue(menu, "querySelector", `[role="menuitem"]`))
 	}
 }
 
-func docMenuItem(id string) js.Value {
-	doc := js.Global().Get("document")
-	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
-		return js.Null()
-	}
-	return doc.Call("getElementById", id)
+// docMenuItem returns the element with the given id, or the zero Value when it is not on the page.
+func docMenuItem(id string) interop.Value {
+	return domNode(id)
 }
 
-func focusMenuItem(item js.Value) {
-	if item.IsNull() || item.IsUndefined() || item.Get("focus").Type() != js.TypeFunction {
+// focusMenuItem focuses a menu entry without scrolling the page to it.
+func focusMenuItem(item interop.Value) {
+	if !item.Truthy() {
 		return
 	}
 	item.Call("focus", map[string]any{"preventScroll": true})
