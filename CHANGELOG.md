@@ -15,7 +15,8 @@ and every commit updates this file under `Unreleased`.
 - The set-institution prompt lists the institutions already in the household as quick picks under its entry. Choosing one fills the entry, and the person can still type a new name. The list is empty, and not shown, when the household has no institutions yet.
 
 ### Changed
-- Four UI test files are renamed without their ticket tags: `overflowmenu_focus_wasm_test.go`, `overflowmenu_entries_wasm_test.go`, `flippanel_closeonly_wasm_test.go` and `flippanel_title_wasm_test.go`. Their test ids are descriptive (`menu-*`, `flip-title-body`).
+-- The account add form gives its error message a per-form id, so the name field's error link no longer relies on a hard-coded id, and its liability checkbox uses GWC's CheckedIf.
+ Four UI test files are renamed without their ticket tags: `overflowmenu_focus_wasm_test.go`, `overflowmenu_entries_wasm_test.go`, `flippanel_closeonly_wasm_test.go` and `flippanel_title_wasm_test.go`. Their test ids are descriptive (`menu-*`, `flip-title-body`).
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed

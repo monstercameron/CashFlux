@@ -81,6 +81,9 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		return true
 	}()
 
+	// The error message's id is unique to this form instance, so the name field can point at it
+	// through aria-describedby without a hard-coded id that a second form on the page would share.
+	errID := strings.ReplaceAll(ui.UseId(), ":", "-") + "-err"
 	name := ui.UseState("")
 	ev := useEntityVarField(accountVarKind, name, "")
 	curr := ui.UseState(baseCur)
@@ -322,7 +325,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		// it: an edge case shouldn't be the first field a new user meets.)
 		Div(css.Class("acct-add-wide"),
 			labeledField(uistate.T("common.name"),
-				Input(append(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
+				Input(append(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs(errID, errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
 		// G5: the copy-existing starter (only once accounts exist to copy), demoted
 		// below the name field.
 		If(len(app.Accounts()) > 0, Div(css.Class("acct-add-wide"),
@@ -342,7 +345,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		// net-worth/debt formulas count it.
 		If(isOther, Div(css.Class("acct-add-wide"),
 			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiab.Get())...)...),
+				Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), CheckedIf(asLiab.Get()), OnChange(onToggleAsLiab)),
 				Div(css.Class("row-main"),
 					Span(uistate.T("accounts.countAsLiability")),
 					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint")))))),
@@ -465,6 +468,6 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 		}),
-		errText("acct-err", errMsg.Get()),
+		errText(errID, errMsg.Get()),
 	)
 }
