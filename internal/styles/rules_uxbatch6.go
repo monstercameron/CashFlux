@@ -15,7 +15,7 @@ func registerUxbatch6() {
 	rule(".bento-ledger .txn-table th.td-user", textAlign("center"))
 	rule(".bento-ledger .txn-table th.td-amount, .bento-ledger .txn-table td.td-amount", width("112px"))
 	rule(".bento-ledger .txn-table th.td-source, .bento-ledger .txn-table td.td-source", width("92px"))
-	rule(".bento-ledger .txn-table th.td-actions, .bento-ledger .txn-table td.td-actions", width("96px"))
+	rule(".bento-ledger .txn-table th.td-actions, .bento-ledger .txn-table td.td-actions", width("104px"))
 	rule(".bento-ledger .txn-table th.row-desc-col, .bento-ledger .txn-table td.row-desc-cell", width("auto"))
 	rule(".bento-ledger .txn-table td.td-acct", overflow("hidden"), textOverflow("ellipsis"), whiteSpace("nowrap"))
 	rule(".txn-transfer-category", color("var(--text-dim)"), whiteSpace("nowrap"))

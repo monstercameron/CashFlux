@@ -8,6 +8,17 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// The row's Edit and ⋯ buttons sit in one group with the Accounts row gap between them.
+	rule(".txn-row-actions",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("flex-end"),
+		gap("0.75rem"),
+	)
+	// Each action keeps its own size: the group spaces them and never shrinks one.
+	rule(".txn-row-actions > *",
+		flex("0 0 auto"),
+	)
 	// The ledger's title sits on the left of its count line, as the Accounts list title does.
 	rule(".txn-table-head",
 		display("flex"),

@@ -1281,12 +1281,13 @@ func txnRowActionsCell(props *txnFrameRowProps) ui.Node {
 	stop := ui.UseEvent(func(e ui.Event) { e.StopPropagation() })
 	edit := ui.UseEvent(func(e ui.Event) { e.StopPropagation(); props.OnOpen(props.ID) })
 	return Td(ClassStr("td-actions txn-col-actions"), OnClick(stop),
-		uiw.ToolButton(uiw.ToolButtonProps{
-			Icon: icon.Pencil, TestID: "txn-rowedit",
-			AriaLabel: txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount),
-			Title:     uistate.T("transactions.rowEditHint"),
-		}, OnClick(edit)),
-		txnRowMenu(*props))
+		Div(css.Class("txn-row-actions"),
+			uiw.ToolButton(uiw.ToolButtonProps{
+				Icon: icon.Pencil, TestID: "txn-rowedit",
+				AriaLabel: txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount),
+				Title:     uistate.T("transactions.rowEditHint"),
+			}, OnClick(edit)),
+			txnRowMenu(*props)))
 }
 
 func flashTransactionRow(doc js.Value, txnID string) func() {
