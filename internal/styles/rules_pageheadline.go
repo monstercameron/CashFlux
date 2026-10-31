@@ -108,13 +108,15 @@ func registerPageHeadline() {
 	rule(".txn-summary-frame > .txn-top-actions",
 		position("absolute"), top("0"), right("0"),
 	)
-	rule(".txn-summary-frame > .page-headline",
+	// The top-right actions float over the copy column only. The padding sits on that
+	// column, not on the headline, so the category bar in the footer still spans the card.
+	rule(".txn-summary-frame > .page-headline > .page-headline-top > .page-headline-stack",
 		paddingRight("16rem"),
 	)
 	ruleMedia("(max-width: 720px)", ".txn-summary-frame > .txn-top-actions",
 		position("static"),
 	)
-	ruleMedia("(max-width: 720px)", ".txn-summary-frame > .page-headline",
+	ruleMedia("(max-width: 720px)", ".txn-summary-frame > .page-headline > .page-headline-top > .page-headline-stack",
 		paddingRight("0"),
 	)
 	// The trend draws in from the left, rising a few pixels as it fades up, so a chart

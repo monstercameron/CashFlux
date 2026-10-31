@@ -76,9 +76,10 @@ func registerUXT1() {
 		fontFeatureSettings("tnum"),
 		whiteSpace("nowrap"),
 	)
+	// Labels take the Accounts fact-label tokens: body size, regular weight, dimmed.
 	rule(".txn-count-label",
-		fontSize("var(--fs-meta)"),
-		fontWeight("500"),
+		fontSize("var(--fs-body)"),
+		fontWeight("400"),
 		lineHeight("1.3"),
 		color("var(--text-dim)"),
 	)
@@ -162,8 +163,8 @@ func registerUXT1() {
 		border("0"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("var(--fs-meta)"),
-		fontWeight("500"),
+		fontSize("var(--fs-body)"),
+		fontWeight("400"),
 		textAlign("left"),
 		cursor("pointer"),
 		maxWidth("22%"),
@@ -194,7 +195,7 @@ func registerUXT1() {
 	rule(".txn-category-more",
 		flex("0 0 auto"),
 		color("var(--text-dim)"),
-		fontSize("var(--fs-meta)"),
+		fontSize("var(--fs-body)"),
 	)
 	rule(".txn-category-item.is-selected, .txn-category-item:hover",
 		color("var(--accent)"),
@@ -205,8 +206,11 @@ func registerUXT1() {
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 	)
+	// The amount reads as a value, as the Accounts fact values do: semibold, full text colour.
 	rule(".txn-category-amount",
 		flexShrink("0"),
+		fontWeight("600"),
+		color("var(--text)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".txn-count-secondary",

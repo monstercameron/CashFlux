@@ -37,6 +37,7 @@ and every commit updates this file under `Unreleased`.
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed
+- The Transactions summary bar runs the full width of the card. The top-right actions had pushed the whole footer in by 16rem; that padding now sits on the figure column only. The count labels and category legend use the Accounts fact tokens: body size, regular dimmed labels, semibold text-coloured values.
 - Each overflow menu entry names its section as its accessible description, so a screen reader hears which group an entry is in. Section headings stay hidden from the accessibility tree.
 - The bulk bar on the Transactions page sits at the bottom of the screen when rows are selected. The page entrance animation now fills backwards, so the page no longer keeps a transform that made it the container for the fixed bar. The bar wraps its actions and clears the phone tab bar on narrow screens.
 - Excluding or deleting a transaction reads the ledger with a checked read. If the ledger cannot be read, the confirm does not open and the person is told nothing was changed.
