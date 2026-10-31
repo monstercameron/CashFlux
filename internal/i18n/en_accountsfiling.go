@@ -16,7 +16,6 @@ var accountsFilingKeys = Catalog{
 	"accounts.addInstitution":          "Add institution",
 	"accounts.editInstitution":         "Edit institution",
 	// %s = number of accounts linked, e.g. "3 accounts".
-	"accounts.institutionAccountCount": "%s linked",
 	"accounts.institutionNameLabel":    "Name",
 	"accounts.institutionNamePh":       "Chase, Fidelity, Ally…",
 	"accounts.institutionNameRequired": "Give the institution a name.",
@@ -29,13 +28,12 @@ var accountsFilingKeys = Catalog{
 	"accounts.institutionNotePh":       "Branch, account manager, reminders…",
 	"accounts.institutionSaved":        "Institution saved.",
 	// %s = institution name.
-	"accounts.institutionDeleted":        "Removed \"%s\". Its accounts now show no institution.",
-	"accounts.institutionDeleteConfirm":  "Delete \"%s\"? Its accounts will show no institution — nothing else changes.",
-	"accounts.deleteInstitution":         "Delete institution",
-	"accounts.institutionChipAria":       "Institution: %s",
-	"accounts.institutionNone":           "No institution",
-	"accounts.institutionDirectoryLabel": "Institution",
-	"accounts.manageInstitutionsLink":    "Manage institutions",
+	"accounts.institutionDeleted":       "Removed \"%s\". Its accounts now show no institution.",
+	"accounts.institutionDeleteConfirm": "Delete \"%s\"? Its accounts will show no institution — nothing else changes.",
+	"accounts.deleteInstitution":        "Delete institution",
+	"accounts.institutionChipAria":      "Institution: %s",
+	"accounts.institutionNone":          "No institution",
+	"accounts.manageInstitutionsLink":   "Manage institutions",
 
 	// AC8 / AC17 — account documents drawer + renewal reminders.
 	"accounts.documentsSection": "Documents",

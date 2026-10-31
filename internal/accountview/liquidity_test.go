@@ -48,7 +48,7 @@ func TestLiquidityDisclosesInvalidFXBalancesAndOverflow(t *testing.T) {
 	accounts := []domain.Account{{ID: "huge", Currency: "USD", Type: domain.TypeChecking}, {ID: "overflow", Currency: "USD", Type: domain.TypeChecking}, {ID: "fx", Currency: "GBP"}, {ID: "invalid", Currency: "EUR"}}
 	balances := map[string]money.Money{"huge": money.New(math.MaxInt64, "USD"), "overflow": money.New(1, "USD"), "fx": money.New(100, "GBP")}
 	got := Liquidity(accounts, balances, currency.Rates{Base: "USD"}, "USD", time.Time{})
-	if got.Totals[liquidity.Available] != math.MaxInt64 || !got.Incomplete || !reflect.DeepEqual(got.ExcludedCurrencies, []string{"EUR", "GBP", "USD"}) {
+	if got.Totals[liquidity.Available] != math.MaxInt64 || !got.Incomplete || !got.Overflow || !reflect.DeepEqual(got.ExcludedCurrencies, []string{"EUR", "GBP"}) {
 		t.Fatalf("omissions not explicit: %+v", got)
 	}
 }

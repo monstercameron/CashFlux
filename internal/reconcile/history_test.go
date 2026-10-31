@@ -93,3 +93,23 @@ func TestRecordKeepsForcedDiscrepancy(t *testing.T) {
 		t.Errorf("forced discrepancy not preserved: %+v", h[0])
 	}
 }
+
+func TestRecordInsertsInThroughDateOrder(t *testing.T) {
+	newest := rec(1, 20)
+	older := rec(2, 5)
+	same := rec(3, 20)
+	base := []domain.Reconciliation{newest}
+
+	out := Record(base, older)
+	if len(out) != 2 || !out[0].At.Equal(older.At) || !out[1].At.Equal(newest.At) {
+		t.Fatalf("earlier statement not placed before the newest: %+v", out)
+	}
+	if len(base) != 1 || !base[0].At.Equal(newest.At) {
+		t.Error("input slice was mutated")
+	}
+
+	out = Record(out, same)
+	if len(out) != 3 || !out[2].At.Equal(same.At) {
+		t.Errorf("an equal through date must go after existing events: %+v", out)
+	}
+}

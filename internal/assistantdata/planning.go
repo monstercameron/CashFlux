@@ -257,7 +257,7 @@ func (p *Planning) Project(id string, asOf time.Time, days int) (ProjectionFact,
 			}
 		}
 		if err == nil {
-			projected, err = accountview.PrepareProjectionInputs(active).Project(id, bal, asOf, days)
+			projected, err = accountview.PrepareProjectionInputs(active).ProjectFor(a, bal, asOf, days)
 		}
 	}
 	if err != nil {

@@ -89,7 +89,7 @@ func Prepare(in Input) Model {
 	}
 	accountIDs := make(map[string]bool, len(in.Accounts))
 	for _, account := range in.Accounts {
-		if account.Archived || !isInvestmentAccount(account.Type) {
+		if account.Archived || !account.Type.IsInvestment() {
 			continue
 		}
 		m.Accounts = append(m.Accounts, account)
@@ -210,13 +210,4 @@ func Prepare(in Input) Model {
 		return a.Amount > b.Amount
 	})
 	return m
-}
-
-func isInvestmentAccount(t domain.AccountType) bool {
-	switch t {
-	case domain.TypeInvestment, domain.TypeRetirement, domain.TypeCrypto:
-		return true
-	default:
-		return false
-	}
 }

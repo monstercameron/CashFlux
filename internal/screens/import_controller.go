@@ -228,7 +228,7 @@ func (c *documentsController) useNav() {
 	c.defaultAcc = ui.UseMemo(func() string {
 		return resolveInitialImportAccount(accountselect.ResolveInput{
 			Accounts: c.accounts, Transactions: c.app.Transactions(), ActiveMemberID: c.defaultMemberID,
-			Members: c.app.Members(), WorkspaceDefaultID: c.app.DefaultAccountID(),
+			Members: c.app.Members(), WorkspaceDefaultID: c.app.DefaultAccountID(), Now: time.Now(),
 		})
 	}, c.app, c.app.Rev(), c.defaultMemberID)
 	c.imageURL = ui.UseState("")

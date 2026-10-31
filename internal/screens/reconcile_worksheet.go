@@ -106,7 +106,7 @@ func worksheetRow(label, amount string, total bool) ui.Node {
 		cls = "t-body"
 	}
 	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Span(ClassStr(cls), css.Class(tw.Flex1), label),
+		Span(css.Class(cls, tw.Flex1), label),
 		Span(ClassStr(cls+" fig"), amount),
 	)
 }

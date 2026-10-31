@@ -5,9 +5,11 @@
 package screens
 
 import (
+	"log/slog"
 	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/accountdetail"
 	"github.com/monstercameron/CashFlux/internal/accountflow"
 	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -25,13 +27,12 @@ import (
 
 // --- grouping ---------------------------------------------------------------------
 
-// acctGroupSection is one rendered section on the /accounts list: a group header
-// (empty ID = the default "Ungrouped" section) plus the member accounts, already
-// filtered to the visible set, with the group's net subtotal in the base currency.
+// acctGroupSection is one rendered section on the /accounts list; it is
+// accountview.GroupSection under the name the list tiles use.
 type acctGroupSection = accountview.GroupSection
 
-// groupSections splits the visible accounts into group sections. It reuses the shared
-// account snapshot, so grouping adds no ledger scans.
+// groupSections splits the visible accounts into group sections with
+// accountview.Groups, which the list tiles call by this name.
 func groupSections(shown []domain.Account, groups []domain.AccountGroup, balances map[string]money.Money, rates currency.Rates, base string) []acctGroupSection {
 	return accountview.Groups(shown, groups, balances, rates, base)
 }
@@ -43,8 +44,8 @@ func groupSections(shown []domain.Account, groups []domain.AccountGroup, balance
 const ungroupedCollapseID = "_ungrouped"
 
 // acctGroupCollapseKey is the preserved-settings KV key holding whether the group
-// with the given ID is collapsed on the accounts list. Persisted per group so a
-// household's chosen shape survives reloads (durable via RequestPersist).
+// with the given ID is collapsed on the accounts list. Kept per group so the chosen shape survives
+// reloads.
 func acctGroupCollapseKey(groupID string) string {
 	if groupID == "" {
 		groupID = ungroupedCollapseID
@@ -58,29 +59,31 @@ func isAcctGroupCollapsed(groupID string) bool {
 	return uistate.SettingKVGet(acctGroupCollapseKey(groupID)) == "1"
 }
 
-// toggleAcctGroupCollapsed flips and persists a group section's collapsed state,
-// then bumps the data revision so the list tile (and this header) re-render with
-// the new shape. A plain func — the header component owns the click hook.
+// toggleAcctGroupCollapsed flips a group section's collapsed state, then bumps the
+// data revision so the list tile (and this header) re-render with the new shape. Collapsing is
+// a viewer preference, like the rail's open folders, so it is written with the deferred setter:
+// the dataset is saved on the trailing debounce rather than once per click. A plain func — the
+// header component owns the click hook.
 func toggleAcctGroupCollapsed(groupID string) {
+	next := "1"
 	if isAcctGroupCollapsed(groupID) {
-		uistate.SettingKVDelete(acctGroupCollapseKey(groupID))
-	} else {
-		uistate.SettingKVSet(acctGroupCollapseKey(groupID), "1")
+		next = "0"
 	}
-	uistate.RequestPersist()
+	uistate.SettingKVSetDeferred(acctGroupCollapseKey(groupID), next)
 	uistate.BumpDataRevision()
+}
+
+// acctGroupHeaderProps configures one group header. Collapsed is a prop so the
+// memoized header re-renders when the collapsed state changes.
+type acctGroupHeaderProps struct {
+	Section   accountview.GroupSection
+	Collapsed bool
 }
 
 // acctGroupHeader renders a group's header row: a collapse/expand toggle wrapping
 // its name and member count, a net subtotal, and, for a real group (non-empty ID),
 // an edit button that opens the group editor. It is its own component so the click
-// hooks stay stable across a variable list of groups. The Collapsed prop is passed
-// through so the memoized header re-renders when the collapsed state changes.
-type acctGroupHeaderProps struct {
-	Section   acctGroupSection
-	Collapsed bool
-}
-
+// hooks stay stable across a variable list of groups.
 func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	g := props.Section.Group
 	name := g.Name
@@ -94,7 +97,7 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 
 	editBtn := If(isReal, Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
 		Attr("data-testid", "acct-group-edit-"+g.ID),
-		AriaLabel(uistate.T("accounts.editGroupTitle")),
+		AriaLabel(uistate.T("accounts.editGroupAria", name)),
 		Title(uistate.T("accounts.editGroupTitle")), OnClick(openEdit),
 		uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))))
 
@@ -121,23 +124,21 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 		AriaLabel(uistate.T("accounts.groupRowAria", name)),
 		// The whole label (chevron, name and count) is the collapse toggle: a wide,
 		// keyboard-reachable target that shows or hides the section's rows.
-		// aria-expanded reflects the open state. It is styled inline as bare text with a
+		// aria-expanded reflects the open state. It is styled as bare text with a
 		// chevron so it reads as a section header rather than a default button.
 		Button(css.Class("acct-group-toggle", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			css.Class(css.New(css.Bg(css.Color("transparent")), css.BorderStyle(css.LineNone), css.Padding(css.Length("0")), css.Margin(css.Length("0")), tw.CursorPointer, css.TextColor(css.Color("var(--text)")), tw.TextLeft)),
 			Attr("data-testid", toggleTestID), Title(toggleTitle),
 			AriaExpanded(!props.Collapsed),
 			AriaLabel(uistate.T("accountsGroup.toggleAria", name)),
 			OnClick(toggle),
 			uiw.Icon(chevron, css.Class("acct-group-chevron", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-group-name", tw.FontMedium), name),
-			Span(css.Class("acct-group-count", tw.TextDim), plural(len(props.Section.Accounts), "account")),
+			Span(css.Class("acct-group-count", tw.TextDim), uistate.TN("accounts.groupCountOne", "accounts.groupCountMany", len(props.Section.Accounts))),
 		),
 		Span(css.Class("acct-group-subtotal", tw.TextDim, tw.MlAuto),
-			AriaLabel(uistate.T("accounts.groupSubtotalAria", fmtMoney(props.Section.Subtotal))),
 			uistate.T("accounts.groupSubtotal", fmtMoney(props.Section.Subtotal)),
 			If(props.Section.Incomplete, Span(css.Class("t-caption", tw.TextDim),
-				Attr("data-testid", "acct-group-incomplete-"+g.ID), Title(subtotalNote), " · "+subtotalNote))),
+				Attr("data-testid", "acct-group-incomplete-"+g.ID), Title(subtotalNote), uistate.T("accounts.groupSubtotalNote", subtotalNote)))),
 		editBtn,
 	)
 }
@@ -193,21 +194,21 @@ func accountSparkline(a domain.Account, series []int64) ui.Node {
 }
 
 // accountBalanceChart is the account-detail balance chart with an optional range
-// picker: 90 days, 12 months, or all. When hasRange is false (an account with no
+// picker: 90 days, 12 months, or all. series is the window selected by sel (a range
+// key from the accountdetail package). When hasRange is false (an account with no
 // history beyond 90 days) it renders the plain 90-day sparkline. Otherwise a small
-// segmented picker sits above the figure and switches the drawn window. sel is the
-// selected range key ("90d", "12m" or "all"), and onSelect (a plain func, safe here)
-// updates the row's range state.
-func accountBalanceChart(a domain.Account, s90, s12m, sall []int64, hasRange bool, sel string, onSelect func(string)) ui.Node {
+// segmented picker sits above the figure and switches the drawn window. onSelect (a
+// plain func, safe here) updates the row's range state.
+func accountBalanceChart(a domain.Account, series []int64, hasRange bool, sel string, onSelect func(string)) ui.Node {
 	if !hasRange {
-		return accountSparkline(a, s90)
+		return accountSparkline(a, series)
 	}
-	series, ariaKey, flatKey, captionKey := s90, "accounts.sparklineAria", "accounts.sparklineFlat", "accounts.sparklineCaption"
+	ariaKey, flatKey, captionKey := "accounts.sparklineAria", "accounts.sparklineFlat", "accounts.sparklineCaption"
 	switch sel {
-	case "12m":
-		series, ariaKey, flatKey, captionKey = s12m, "accountsRange.aria12m", "accountsRange.flat12m", "accountsRange.caption12m"
-	case "all":
-		series, ariaKey, flatKey, captionKey = sall, "accountsRange.ariaAll", "accountsRange.flatAll", "accountsRange.captionAll"
+	case accountdetail.Range12m:
+		ariaKey, flatKey, captionKey = "accountsRange.aria12m", "accountsRange.flat12m", "accountsRange.caption12m"
+	case accountdetail.RangeAll:
+		ariaKey, flatKey, captionKey = "accountsRange.ariaAll", "accountsRange.flatAll", "accountsRange.captionAll"
 	}
 	aria := uistate.T(ariaKey, a.Name)
 	if seriesFlat(series) {
@@ -218,9 +219,9 @@ func accountBalanceChart(a domain.Account, s90, s12m, sall []int64, hasRange boo
 		Value:    sel,
 		OnChange: onSelect,
 		Options: []uiw.RadioOption{
-			{Value: "90d", Label: uistate.T("accountsRange.d90"), TestID: "acct-range-90d-" + a.ID},
-			{Value: "12m", Label: uistate.T("accountsRange.m12"), TestID: "acct-range-12m-" + a.ID},
-			{Value: "all", Label: uistate.T("accountsRange.all"), TestID: "acct-range-all-" + a.ID},
+			{Value: accountdetail.Range90d, Label: uistate.T("accountsRange.d90"), TestID: "acct-range-90d-" + a.ID},
+			{Value: accountdetail.Range12m, Label: uistate.T("accountsRange.m12"), TestID: "acct-range-12m-" + a.ID},
+			{Value: accountdetail.RangeAll, Label: uistate.T("accountsRange.all"), TestID: "acct-range-all-" + a.ID},
 		},
 	})
 	return Div(css.Class("acct-spark-ranged"), Attr("data-testid", "acct-spark-ranged-"+a.ID),
@@ -238,10 +239,8 @@ func accountFlowFigures(a domain.Account, f accountflow.Flow, show bool) ui.Node
 		return Fragment()
 	}
 	tone := ""
-	if f.Net.Amount > 0 {
-		tone = tw.ColorClass("pos")
-	} else if f.Net.Amount < 0 {
-		tone = tw.ColorClass("neg")
+	if t := figTone(f.Net); t != "" {
+		tone = tw.ColorClass(t)
 	}
 	return Div(css.Class("acct-flow"), Attr("data-testid", "acct-flow-"+a.ID),
 		AriaLabel(uistate.T("accounts.flowAria", fmtMoney(f.In), fmtMoney(f.Out), fmtMoney(f.Net))),
@@ -301,13 +300,16 @@ type AccountGroupsFormProps struct {
 func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 	app := appstate.Default
 	var accounts []domain.Account
+	archivedIDs := map[string]bool{}
 	if app != nil {
 		for _, a := range app.Accounts() {
-			if !a.Archived {
-				accounts = append(accounts, a)
+			if a.Archived {
+				archivedIDs[a.ID] = true
+				continue
 			}
+			accounts = append(accounts, a)
 		}
-		sort.SliceStable(accounts, func(i, j int) bool { return accounts[i].Name < accounts[j].Name })
+		sort.SliceStable(accounts, func(i, j int) bool { return domain.NameLess(accounts[i].Name, accounts[j].Name) })
 	}
 	isNew := props.ID == "" || props.ID == "new"
 	var existing domain.AccountGroup
@@ -354,18 +356,26 @@ func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 			errS.Set(uistate.T("accounts.groupNameRequired"))
 			return
 		}
-		// Keep the user's chosen order stable: iterate the sorted account list.
+		// Keep the user's chosen order stable: iterate the sorted account list. Archived
+		// members are not offered in the picker, so they keep their place in the group.
 		var ids []string
+		selected := selS.Get()
 		for _, a := range accounts {
-			if selS.Get()[a.ID] {
+			if selected[a.ID] {
 				ids = append(ids, a.ID)
+			}
+		}
+		for _, aid := range existing.AccountIDs {
+			if archivedIDs[aid] {
+				ids = append(ids, aid)
 			}
 		}
 		g := existing
 		g.Name = name
 		g.AccountIDs = ids
 		if _, err := app.PutAccountGroup(g); err != nil {
-			errS.Set(err.Error())
+			slog.Error("save account group", "group", g.ID, "error", err)
+			errS.Set(acctWriteErrorText(err))
 			return
 		}
 		uistate.RequestPersist()
@@ -378,14 +388,19 @@ func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 		if app == nil || isNew {
 			return
 		}
-		if err := app.DeleteAccountGroup(existing.ID); err != nil {
-			errS.Set(err.Error())
-			return
-		}
-		uistate.RequestPersist()
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("accounts.groupDeleted", existing.Name), false)
-		done()
+		uistate.ConfirmModal(uistate.T("accounts.groupDeleteConfirm", existing.Name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := app.DeleteAccountGroup(existing.ID); err != nil {
+				postAcctWriteError("delete account group", err)
+				return
+			}
+			uistate.RequestPersist()
+			uistate.BumpDataRevision()
+			uistate.PostNotice(uistate.T("accounts.groupDeleted", existing.Name), false)
+			done()
+		})
 	}))
 
 	toggles := MapKeyed(accounts, func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {

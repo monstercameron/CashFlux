@@ -9,7 +9,9 @@ package domain
 type AccountClass string
 
 const (
-	ClassAsset     AccountClass = "asset"
+	// ClassAsset is something you own or are owed.
+	ClassAsset AccountClass = "asset"
+	// ClassLiability is something you owe.
 	ClassLiability AccountClass = "liability"
 )
 
@@ -32,28 +34,41 @@ func (c AccountClass) Valid() bool {
 type AccountType string
 
 const (
-	TypeChecking     AccountType = "checking"
-	TypeDebit        AccountType = "debit"
-	TypeSavings      AccountType = "savings"
-	TypeCash         AccountType = "cash"
-	TypeCreditCard   AccountType = "credit_card"
+	// TypeChecking is an everyday bank checking account.
+	TypeChecking AccountType = "checking"
+	// TypeDebit is a debit-card account.
+	TypeDebit AccountType = "debit"
+	// TypeSavings is a savings account.
+	TypeSavings AccountType = "savings"
+	// TypeCash is physical cash held outside a bank.
+	TypeCash AccountType = "cash"
+	// TypeCreditCard is a revolving credit card, a liability.
+	TypeCreditCard AccountType = "credit_card"
+	// TypeLineOfCredit is a revolving line of credit, a liability.
 	TypeLineOfCredit AccountType = "line_of_credit"
-	TypeLoan         AccountType = "loan"
+	// TypeLoan is an installment loan, a liability.
+	TypeLoan AccountType = "loan"
+	// TypePersonalLoan is a personal installment loan, a liability.
 	TypePersonalLoan AccountType = "personal_loan"
-	TypeMortgage     AccountType = "mortgage"
+	// TypeMortgage is a home loan, a liability.
+	TypeMortgage AccountType = "mortgage"
 	// TypeUtilities is a utility/HOA/service account — a recurring obligation you
 	// owe (electric, water, HOA dues), so it classes as a liability.
-	TypeUtilities  AccountType = "utilities"
+	TypeUtilities AccountType = "utilities"
+	// TypeInvestment is a brokerage or other investment account.
 	TypeInvestment AccountType = "investment"
+	// TypeRetirement is a retirement account such as a 401(k) or IRA.
 	TypeRetirement AccountType = "retirement"
-	TypeCrypto     AccountType = "crypto"
+	// TypeCrypto is a cryptocurrency holding.
+	TypeCrypto AccountType = "crypto"
 	// TypeProperty represents a real-estate asset (e.g. a home) whose value is a
 	// periodic user-entered estimate rather than a reconciled cash balance.
 	TypeProperty AccountType = "property"
 	// TypeVehicle represents a vehicle asset (e.g. a car) whose value is a
 	// periodic user-entered estimate rather than a reconciled cash balance.
 	TypeVehicle AccountType = "vehicle"
-	TypeOther   AccountType = "other"
+	// TypeOther is any account that fits no other type.
+	TypeOther AccountType = "other"
 )
 
 // AllAccountTypes lists every valid account type.
@@ -173,15 +188,27 @@ func (t AccountType) IsInstallment() bool {
 	return false
 }
 
-// IsRevolving reports whether this liability type carries a revolving balance —
-// the complement of IsInstallment within liabilities, stated positively so a
-// caller need not write a negation that would also catch non-liabilities.
+// IsRevolving reports whether this liability type carries a revolving balance: a
+// credit card or line of credit. Installment loans are not revolving, and neither
+// are utilities, which are a recurring obligation rather than borrowed principal,
+// so it is not the complement of IsInstallment within liabilities.
 func (t AccountType) IsRevolving() bool {
 	switch t {
 	case TypeCreditCard, TypeLineOfCredit:
 		return true
 	}
 	return false
+}
+
+// IsInvestment reports whether the type holds investment positions: brokerage,
+// retirement, or crypto. These are the accounts shown on the Investments page.
+func (t AccountType) IsInvestment() bool {
+	switch t {
+	case TypeInvestment, TypeRetirement, TypeCrypto:
+		return true
+	default:
+		return false
+	}
 }
 
 // IsSavingsLike reports whether the type is a savings or investment vehicle you

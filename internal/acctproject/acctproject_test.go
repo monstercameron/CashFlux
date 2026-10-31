@@ -226,7 +226,7 @@ func TestSeriesRejectsMinIntDebitMagnitude(t *testing.T) {
 	}
 }
 
-func TestSeriesAddsSameDayClosingPointWithoutReplacingOpening(t *testing.T) {
+func TestSeriesEmitsOnePointPerDayWithClosingDayZero(t *testing.T) {
 	p, err := Project(1000, c381Day(16), []Driver{
 		{Label: "pay", Date: c381Day(16), Amount: 300},
 		{Label: "bill", Date: c381Day(16), Amount: -100},
@@ -238,14 +238,59 @@ func TestSeriesAddsSameDayClosingPointWithoutReplacingOpening(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(points) != 4 {
-		t.Fatalf("got %d points, want opening, same-day close, and two following closes", len(points))
+	if len(points) != 3 {
+		t.Fatalf("got %d points, want horizon+1 = 3", len(points))
 	}
-	if points[0].Balance != 1000 || points[0].In != 0 || points[0].Out != 0 {
-		t.Fatalf("opening point changed: %+v", points[0])
+	for i, pt := range points {
+		if want := c381Day(16 + i); !pt.Date.Equal(want) {
+			t.Fatalf("point %d dated %s, want %s", i, pt.Date.Format("2006-01-02"), want.Format("2006-01-02"))
+		}
 	}
-	if !points[1].Date.Equal(c381Day(16)) || points[1].Balance != 1200 || points[1].In != 300 || points[1].Out != 100 {
-		t.Fatalf("same-day close mislabeled or wrong: %+v", points[1])
+	if points[0].Balance != 1200 || points[0].In != 300 || points[0].Out != 100 {
+		t.Fatalf("day zero is not the closing balance: %+v", points[0])
+	}
+	if points[2].Balance != 1200 {
+		t.Fatalf("end = %d, want 1200", points[2].Balance)
+	}
+}
+
+func TestSeriesIgnoresDriversBeforeItsOwnAsOf(t *testing.T) {
+	p, err := Project(1000, c381Day(16), []Driver{{Label: "early", Date: c381Day(17), Amount: -400}}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	points, err := p.Series(c381Day(20), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 4 || points[3].Balance != 1000 {
+		t.Fatalf("driver before the series start leaked into the line: %+v", points)
+	}
+}
+
+// Same-day drivers are one closing balance: neither the label order nor an
+// intra-day dip that recovers by close may move Low, LowDate or FirstNegative.
+func TestSameDayDriversUseTheClosingBalance(t *testing.T) {
+	for _, labels := range [][2]string{{"A pay", "B rent"}, {"B pay", "A rent"}} {
+		p := mustProject(1000, c381Day(16), []Driver{
+			{Label: labels[0], Date: c381Day(18), Amount: 5000},
+			{Label: labels[1], Date: c381Day(18), Amount: -5500},
+		}, 10)
+		if p.Low != 500 || !p.LowDate.Equal(c381Day(18)) {
+			t.Errorf("labels %v: Low = %d on %s, want 500 on the 18th", labels, p.Low, p.LowDate.Format("2006-01-02"))
+		}
+		if _, ok := p.mustFirstNegative(c381Day(16)); ok {
+			t.Errorf("labels %v: a day that closes at 500 was reported negative", labels)
+		}
+	}
+
+	p := mustProject(1000, c381Day(16), []Driver{
+		{Label: "A rent", Date: c381Day(18), Amount: -1500},
+		{Label: "B pay", Date: c381Day(18), Amount: 200},
+	}, 10)
+	at, ok := p.mustFirstNegative(c381Day(16))
+	if !ok || !at.Equal(c381Day(18)) || p.Low != -300 {
+		t.Errorf("FirstNegative = %s,%v Low = %d, want the 18th, true, -300", at.Format("2006-01-02"), ok, p.Low)
 	}
 }
 
@@ -269,4 +314,29 @@ func (p Projection) mustFirstNegative(asOf time.Time) (time.Time, bool) {
 		panic(err)
 	}
 	return at, ok
+}
+
+func TestProjectUsesTheWallClockCalendarDay(t *testing.T) {
+	west := time.FixedZone("UTC-8", -8*60*60)
+	east := time.FixedZone("UTC+9", 9*60*60)
+	cases := []struct {
+		name string
+		asOf time.Time
+		due  time.Time
+		want time.Time
+	}{
+		{"evening in the west is still that calendar day", time.Date(2026, 10, 20, 22, 0, 0, 0, west), time.Date(2026, 10, 20, 23, 0, 0, 0, west), time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)},
+		{"morning in the east is that calendar day", time.Date(2026, 10, 20, 1, 0, 0, 0, east), time.Date(2026, 10, 20, 0, 30, 0, 0, east), time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Project(1000, tc.asOf, []Driver{{Label: "bill", Date: tc.due, Amount: -100}}, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Drivers) != 1 || !got.Drivers[0].Date.Equal(tc.want) || !got.LowDate.Equal(tc.want) {
+				t.Fatalf("drivers = %+v, low date %v, want day %v", got.Drivers, got.LowDate, tc.want)
+			}
+		})
+	}
 }

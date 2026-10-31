@@ -17,6 +17,8 @@
 package screens
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -85,8 +87,18 @@ type textField interface {
 type entityVarState struct {
 	VarName   ui.State[string]
 	touched   ui.State[bool]
+	kind      entityVarKind
 	OnName    ui.Handler // wire onto the entity's NAME input (sets name + autosuggests the slug)
 	OnVarName ui.Handler // wire onto the var-name input (marks touched, records the value)
+}
+
+// SuggestFor refills the variable name from name, unless the person has edited the variable
+// field. OnName calls it on every keystroke, and a form that sets the name without typing it
+// (the add form's copy-an-account starter) calls it too.
+func (s entityVarState) SuggestFor(name string) {
+	if !s.touched.Get() {
+		s.VarName.Set(s.kind.Slug(name))
+	}
 }
 
 // Reset clears the var name and the touched flag (so autosuggest resumes) — used by add
@@ -105,23 +117,23 @@ func (s entityVarState) Reset() {
 func useEntityVarField(kind entityVarKind, nameS textField, initialVar string) entityVarState {
 	varS := ui.UseState(initialVar)
 	touchedS := ui.UseState(initialVar != "")
+	state := entityVarState{VarName: varS, touched: touchedS, kind: kind}
 	onName := ui.UseEvent(func(v string) {
 		nameS.Set(v)
-		if !touchedS.Get() {
-			varS.Set(kind.Slug(v))
-		}
+		state.SuggestFor(v)
 	})
 	onVarName := ui.UseEvent(func(v string) {
 		touchedS.Set(true)
 		varS.Set(v)
 	})
-	return entityVarState{VarName: varS, touched: touchedS, OnName: onName, OnVarName: onVarName}
+	state.OnName, state.OnVarName = onName, onVarName
+	return state
 }
 
 // entityVarBase is the base handle an entity exposes ("<prefix>_<slug>"), from the explicit
 // var name when set else the display name.
 func entityVarBase(kind entityVarKind, varName, name string) string {
-	src := varName
+	src := strings.TrimSpace(varName)
 	if src == "" {
 		src = name
 	}
@@ -144,7 +156,7 @@ func entityVarPlaceholder(kind entityVarKind, name string) string {
 // clashes with a sibling's variable — so two entities can't silently produce the same
 // handle. Empty when there's no clash.
 func entityVarCollision(kind entityVarKind, siblings []varEntity, selfID, varName, name string) string {
-	src := varName
+	src := strings.TrimSpace(varName)
 	if src == "" {
 		src = name
 	}
@@ -173,14 +185,19 @@ func entityVarCollision(kind entityVarKind, siblings []varEntity, selfID, varNam
 func entityVarField(kind entityVarKind, siblings []varEntity, selfID, inputID, warnTestID, varName, name string, onInput ui.Handler) ui.Node {
 	base := entityVarBase(kind, varName, name)
 	warn := entityVarCollision(kind, siblings, selfID, varName, name)
+	warnID := inputID + "-warn"
+	input := []any{css.Class("field"), Attr("id", inputID), Type("text"),
+		Placeholder(entityVarPlaceholder(kind, name)), OnInput(onInput), uiw.FieldValue(varName)}
+	if warn != "" {
+		input = append(input, Attr("aria-invalid", "true"), Attr("aria-describedby", warnID))
+	}
 	return Div(css.Class("entity-var-block"),
-		Input(css.Class("field"), Attr("id", inputID), Type("text"),
-			Placeholder(entityVarPlaceholder(kind, name)), OnInput(onInput), uiw.FieldValue(varName)),
+		Input(input...),
 		Div(css.Class("entity-var-preview"),
 			Span(css.Class("entity-var-preview-lead"), uistate.T("budgets.varNameGenerates")),
 			Span(ClassStr("entity-var-chip"), base+"_"+kind.ChipField),
 			Span(css.Class("entity-var-preview-fields"), uistate.T(kind.FieldsHintKey)),
 		),
-		If(warn != "", Span(css.Class("cover-fx-err"), Attr("data-testid", warnTestID), warn)),
+		If(warn != "", Span(css.Class("cover-fx-err"), Attr("id", warnID), Attr("role", "alert"), Attr("data-testid", warnTestID), warn)),
 	)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
@@ -29,6 +30,15 @@ func AccountTransferHost() uic.Node {
 		return Fragment()
 	}
 	closeModal := func() { open.Set(false) }
+	// The form needs the loaded app; until then the panel says the page is not ready.
+	var form uic.Node
+	if app := appstate.Default; app != nil {
+		form = uic.CreateElement(screens.AccountPageTransferForm, screens.AccountPageTransferProps{
+			App: app, OnDone: closeModal,
+		})
+	} else {
+		form = P(css.Class("empty"), uistate.T("common.notReady"))
+	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("accounts.transferTitle"),
 		Width:     uiw.FlipMediumW,
@@ -36,8 +46,6 @@ func AccountTransferHost() uic.Node {
 		NoFooter:  true,
 		FlushBody: true, // the form splits into a scrolling field region + a pinned .modal-foot
 		OnClose:   closeModal,
-		Back: uic.CreateElement(screens.AccountPageTransferForm, screens.AccountPageTransferProps{
-			App: appstate.Default, OnDone: closeModal,
-		}),
+		Back:      form,
 	})
 }

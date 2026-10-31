@@ -3,6 +3,7 @@
 package reconcile
 
 import (
+	"math"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -234,6 +235,83 @@ func TestAdjustmentLandsOnTheStatementInBothConventions(t *testing.T) {
 			}
 			if got := Diff(Stated(after, conv), c.statementMinor); !got.Reconciled {
 				t.Errorf("reconciling again = %+v, want a clean match", got)
+			}
+		})
+	}
+}
+
+func TestConventionOfHonoursADeclaredLiabilitySign(t *testing.T) {
+	declared := func(sign domain.LiabilitySign, openingMinor int64) domain.Account {
+		a := acct(domain.ClassLiability, openingMinor)
+		a.LiabilitySign = sign
+		return a
+	}
+	tests := []struct {
+		name        string
+		acc         domain.Account
+		bookedMinor int64
+		want        Convention
+	}{
+		{"declared negative beats a positive opening", declared(domain.LiabilityNegativeOwed, 50000), 50000, NegativeOwed},
+		{"declared positive beats a negative opening", declared(domain.LiabilityPositiveOwed, -50000), -50000, PositiveOwed},
+		{"declared positive with no opening is a reading, not a guess", declared(domain.LiabilityPositiveOwed, 0), -100, PositiveOwed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, known := ConventionOf(tt.acc, tt.bookedMinor)
+			if got != tt.want || !known {
+				t.Errorf("ConventionOf = %v, known %v; want %v, true", got, known, tt.want)
+			}
+			if got != ConventionFor(tt.acc) {
+				t.Errorf("ConventionOf = %v disagrees with ConventionFor = %v", got, ConventionFor(tt.acc))
+			}
+		})
+	}
+}
+
+func TestStatedAndStoredSaturateAtMinInt64(t *testing.T) {
+	tests := []struct {
+		name string
+		got  int64
+		want int64
+	}{
+		{"Stated positive-owed", Stated(math.MinInt64, PositiveOwed), math.MaxInt64},
+		{"Stored positive-owed", Stored(math.MinInt64, PositiveOwed), math.MaxInt64},
+		{"Stated negative-owed passes through", Stated(math.MinInt64, NegativeOwed), math.MinInt64},
+		{"Stored as-stated passes through", Stored(math.MinInt64, AsStated), math.MinInt64},
+		{"Stated MaxInt64 positive-owed", Stated(math.MaxInt64, PositiveOwed), -math.MaxInt64},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("got %d, want %d", tt.got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConventionFor(t *testing.T) {
+	liability := func(sign domain.LiabilitySign, openingMinor int64) domain.Account {
+		a := acct(domain.ClassLiability, openingMinor)
+		a.LiabilitySign = sign
+		return a
+	}
+	tests := []struct {
+		name string
+		acc  domain.Account
+		want Convention
+	}{
+		{"asset", acct(domain.ClassAsset, 100), AsStated},
+		{"explicit positive owed", liability(domain.LiabilityPositiveOwed, 0), PositiveOwed},
+		{"explicit negative owed", liability(domain.LiabilityNegativeOwed, 0), NegativeOwed},
+		{"explicit sign beats opening balance", liability(domain.LiabilityNegativeOwed, 5000), NegativeOwed},
+		{"unset sign, zero opening", liability("", 0), PositiveOwed},
+		{"unset sign, negative opening", liability("", -5000), NegativeOwed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ConventionFor(tt.acc); got != tt.want {
+				t.Errorf("ConventionFor = %v, want %v", got, tt.want)
 			}
 		})
 	}

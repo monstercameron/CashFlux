@@ -10,7 +10,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/docexpiry"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -51,8 +50,9 @@ func Accounts() ui.Node {
 
 	// On entering /accounts, reconcile the document-expiry reminder tasks against the
 	// current document set. This creates any newly due renewal nudge and resolves any
-	// whose document has since been renewed. It runs on mount only; per-change
-	// reconciles happen in accounts_docs.go when a document is attached or removed.
+	// whose document has since been renewed. It runs on mount only, and saves the dataset when it
+	// changed a task; per-change reconciles happen in accounts_docs.go when a document is attached
+	// or removed.
 	ui.UseEffect(func() func() {
 		created, resolved, err := app.ReconcileDocExpiryTasks(time.Now(), docexpiry.DefaultLeadDays)
 		if err != nil {
@@ -60,6 +60,7 @@ func Accounts() ui.Node {
 			return nil
 		}
 		if created > 0 || resolved > 0 {
+			uistate.RequestPersist()
 			uistate.BumpDataRevision()
 		}
 		return nil
@@ -69,22 +70,16 @@ func Accounts() ui.Node {
 	formulasAtom := uistate.UseAcctShowFormulas()
 	f := filterAtom.Get()
 
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	base, rates := accountBaseAndRates(app)
 	accounts := app.Accounts()
-	txns := app.Transactions()
-	activeMemberID := acctActiveMemberID()
-	_, archived := accountview.Assets(accounts, accountSnapshot(app).Balances, rates, base, activeMemberID)
+	archived := accountview.Archived(accounts, acctActiveMemberID())
 
-	// The engine render context: the live data every tile body reads from.
+	// The engine render context. The tile bodies read the live store through App, so the context
+	// carries the app, the accounts, the base currency and the rates, and leaves the ledger slices empty.
 	rctx := widgetrender.RenderCtx{
-		App: app, Accounts: accounts, Txns: txns,
-		ScopedAccounts: accounts, ScopedTxns: txns,
+		App: app, Accounts: accounts,
 		Rates: rates, Base: base,
-		Start: time.Time{}, End: time.Now(),
+		End: time.Now(),
 	}
 
 	// The placement set. Welcome appears only on an empty app, and the archived and
@@ -104,7 +99,7 @@ func Accounts() ui.Node {
 	}
 
 	// Each spec renders through the engine's per-widget error boundary, keyed on the
-	// spec id so inserting the transfer or archived tile never shifts another tile's
+	// spec id so adding or removing the archived tile never shifts another tile's
 	// identity (its hooks stay aligned across renders). The sweep proposal cards sit
 	// above the bento, like the payday-waterfall card on /goals. They appear only when
 	// a sweep rule is due.

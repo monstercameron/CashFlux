@@ -5,6 +5,7 @@
 package accountedit
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -22,6 +24,9 @@ type Field string
 // The fields an issue can name.
 const (
 	FieldName         Field = "name"
+	FieldType         Field = "type"
+	FieldOwner        Field = "owner"
+	FieldCurrency     Field = "currency"
 	FieldOpening      Field = "opening"
 	FieldCreditLimit  Field = "credit-limit"
 	FieldAPR          Field = "apr"
@@ -36,6 +41,7 @@ const (
 	FieldSnoozeUntil  Field = "snooze-until"
 	FieldRevalueDays  Field = "revalue-days"
 	FieldOwnerShares  Field = "owner-shares"
+	FieldVarName      Field = "var-name"
 )
 
 // Reason says why a field has an issue.
@@ -48,6 +54,38 @@ const (
 	Range    Reason = "range"
 	Total    Reason = "total"
 )
+
+// The limits Apply holds the figures to. A rate is a percentage a year: an APR or an APY is never
+// negative, and an expected return cannot lose more than everything.
+const (
+	maxRatePercent       = 1000
+	minReturnPercent     = -100
+	maxRevalueDays       = 3650
+	maxScore             = 100
+	maxDueDay            = 28
+	maxStatementDay      = 31
+	ownershipTotalShares = 100
+)
+
+// RangeOf returns the whole-number bounds a field is held to, for a field whose range issue the form
+// states in its message. ok is false for a field with no stated range.
+func RangeOf(f Field) (lo, hi int, ok bool) {
+	switch f {
+	case FieldDueDay:
+		return 1, maxDueDay, true
+	case FieldStatementDay:
+		return 1, maxStatementDay, true
+	case FieldLiquidity, FieldStability, FieldOwnerShares:
+		return 0, maxScore, true
+	case FieldRevalueDays:
+		return 0, maxRevalueDays, true
+	case FieldAPR, FieldAPY:
+		return 0, maxRatePercent, true
+	case FieldExpectedRet:
+		return minReturnPercent, maxRatePercent, true
+	}
+	return 0, 0, false
+}
 
 // Issue is one problem with the entered fields. Sum is set for a share total that is not 100.
 type Issue struct {
@@ -86,11 +124,30 @@ type Fields struct {
 	VarName         string
 	// Shares is the split-ownership map, or nil when the account is not split.
 	Shares map[string]int
+	// MemberIDs lists the members that exist. When it is not nil, an owner outside it (other than the
+	// group) is refused, and shares for a member outside it are ignored. A nil list skips both checks.
+	MemberIDs []string
+}
+
+// ClassOf is the class of an account of the given type. An "Other" account has no natural class, so
+// it is a liability only when asLiability says so; every other type has the class its type gives.
+func ClassOf(t domain.AccountType, asLiability bool) domain.AccountClass {
+	if t == domain.TypeOther && asLiability {
+		return domain.ClassLiability
+	}
+	return t.Class()
+}
+
+// CountsAsDebt reports whether an existing account is an "Other" account that is counted as a debt,
+// which is what the forms' "counts as a debt" switch starts from. It is the inverse of ClassOf.
+func CountsAsDebt(t domain.AccountType, c domain.AccountClass) bool {
+	return t == domain.TypeOther && c == domain.ClassLiability
 }
 
 // Apply writes the entered fields onto base and returns the result. base supplies the fields the form
 // does not own (the ID, the custom values and the as-of date). When there are issues, the returned
-// account is not meant to be saved.
+// account is not meant to be saved. A type, currency or owner that the person left as it already was
+// on base is not checked again, so an account saved before a rule existed can still be edited.
 func Apply(base domain.Account, f Fields) (domain.Account, []Issue) {
 	var issues []Issue
 	add := func(field Field, reason Reason) { issues = append(issues, Issue{Field: field, Reason: reason}) }
@@ -100,6 +157,12 @@ func Apply(base domain.Account, f Fields) (domain.Account, []Issue) {
 		add(FieldName, Required)
 	}
 	cur := strings.ToUpper(strings.TrimSpace(f.Currency))
+	switch {
+	case cur == "":
+		add(FieldCurrency, Required)
+	case cur != strings.ToUpper(strings.TrimSpace(base.Currency)) && !isCurrencyCode(cur):
+		add(FieldCurrency, Invalid)
+	}
 	opening, ok := parseMoney(f.Opening, cur)
 	if !ok {
 		add(FieldOpening, Invalid)
@@ -108,25 +171,34 @@ func Apply(base domain.Account, f Fields) (domain.Account, []Issue) {
 	a := base
 	a.Name = name
 	a.VarName = strings.TrimSpace(f.VarName)
+	if a.VarName != "" && engineenv.AccountVarSlug(a.VarName) == "" {
+		add(FieldVarName, Invalid)
+	}
 	a.Currency = cur
 	a.OpeningBalance = opening
+	if f.MemberIDs != nil && f.Owner != base.OwnerID && f.Owner != domain.GroupOwnerID && !contains(f.MemberIDs, f.Owner) {
+		add(FieldOwner, Invalid)
+	}
 	a.OwnerID = f.Owner
 	a.Scope = domain.ScopeIndividual
 	if f.Owner == domain.GroupOwnerID {
 		a.Scope = domain.ScopeShared
 	}
 	typ := domain.AccountType(f.Type)
+	if !typ.Valid() && (typ == "" || typ != base.Type) {
+		add(FieldType, Invalid)
+	}
 	a.Type = typ
-	a.Class = typ.Class()
-	if typ == domain.TypeOther && f.AsLiability {
-		a.Class = domain.ClassLiability
-	}
+	a.Class = ClassOf(typ, f.AsLiability)
 	a.ExcludeFromNetWorth = f.ExcludeNetWorth
-	a.Institution = titleCase(strings.TrimSpace(f.Institution))
-	if a.Institution == "" && strings.TrimSpace(f.Lender) != "" {
-		a.Institution = titleCase(strings.TrimSpace(f.Lender))
+	a.InstitutionID = strings.TrimSpace(f.InstitutionID)
+	a.Institution = strings.TrimSpace(f.Institution)
+	if a.InstitutionID == "" {
+		a.Institution = titleCase(a.Institution)
 	}
-	a.InstitutionID = f.InstitutionID
+	if lender := strings.TrimSpace(f.Lender); a.Institution == "" && a.InstitutionID == "" && a.Class == domain.ClassLiability && lender != "" {
+		a.Institution = titleCase(lender)
+	}
 	a.Notes = strings.TrimSpace(f.Notes)
 	a.BeneficiaryNote = strings.TrimSpace(f.BeneficiaryNote)
 	a.FreshnessExempt = f.FreshnessExempt
@@ -137,8 +209,11 @@ func Apply(base domain.Account, f Fields) (domain.Account, []Issue) {
 		a.FreshnessSnoozeUntil = snooze
 	}
 	revalue, ok := parseInt(f.RevalueDays)
-	if !ok || revalue < 0 {
+	switch {
+	case !ok:
 		add(FieldRevalueDays, Invalid)
+	case revalue < 0 || revalue > maxRevalueDays:
+		add(FieldRevalueDays, Range)
 	}
 	a.RevalueDays = revalue
 
@@ -150,14 +225,13 @@ func Apply(base domain.Account, f Fields) (domain.Account, []Issue) {
 
 	a.OwnershipShares = nil
 	if f.Shares != nil {
-		sum := 0
-		for _, v := range f.Shares {
-			sum += v
-		}
-		if sum != 100 {
+		shares := sharesOf(f.Shares, f.MemberIDs)
+		if sharesOutOfRange(shares) {
+			add(FieldOwnerShares, Range)
+		} else if sum := sumShares(shares); sum != ownershipTotalShares {
 			issues = append(issues, Issue{Field: FieldOwnerShares, Reason: Total, Sum: sum})
 		}
-		a.OwnershipShares = cloneShares(f.Shares)
+		a.OwnershipShares = shares
 	}
 	return a, issues
 }
@@ -167,14 +241,19 @@ func applyLiability(a *domain.Account, f Fields, cur string, add func(Field, Rea
 	a.CreditLimit = money.Money{}
 	if limit, ok := parseMoney(f.CreditLimit, cur); !ok {
 		add(FieldCreditLimit, Invalid)
+	} else if limit.Amount < 0 {
+		add(FieldCreditLimit, Range)
 	} else if limit.Amount > 0 {
 		a.CreditLimit = limit
 	}
-	switch rate, state := parseRate(f.APR); state {
-	case rateInvalid:
+	switch rate, state := parseRate(f.APR); {
+	case state == rateInvalid:
 		add(FieldAPR, Invalid)
 		*a = a.WithoutRateAPR()
-	case rateBlank:
+	case state == rateBlank:
+		*a = a.WithoutRateAPR()
+	case rate < 0 || rate > maxRatePercent:
+		add(FieldAPR, Range)
 		*a = a.WithoutRateAPR()
 	default:
 		*a = a.WithRateAPR(rate)
@@ -182,16 +261,18 @@ func applyLiability(a *domain.Account, f Fields, cur string, add func(Field, Rea
 	a.MinPayment = money.Money{}
 	if minPay, ok := parseMoney(f.MinPayment, cur); !ok {
 		add(FieldMinPayment, Invalid)
+	} else if minPay.Amount < 0 {
+		add(FieldMinPayment, Range)
 	} else if minPay.Amount > 0 {
 		a.MinPayment = minPay
 	}
 	dueDay, ok := parseInt(f.DueDay)
-	if !ok || (dueDay != 0 && (dueDay < 1 || dueDay > 28)) {
+	if !ok || (dueDay != 0 && (dueDay < 1 || dueDay > maxDueDay)) {
 		add(FieldDueDay, Range)
 	}
 	a.DueDayOfMonth = dueDay
 	statementDay, ok := parseInt(f.StatementDay)
-	if !ok || statementDay < 0 || statementDay > 31 {
+	if !ok || statementDay < 0 || statementDay > maxStatementDay {
 		add(FieldStatementDay, Range)
 	}
 	a.StatementDay = statementDay
@@ -206,22 +287,28 @@ func applyLiability(a *domain.Account, f Fields, cur string, add func(Field, Rea
 // applyAsset writes the asset-only figures and clears the debt-only ones.
 func applyAsset(a *domain.Account, f Fields, add func(Field, Reason)) {
 	expected, ok := parseFloat(f.ExpectedReturn)
-	if !ok {
+	switch {
+	case !ok:
 		add(FieldExpectedRet, Invalid)
+	case expected < minReturnPercent || expected > maxRatePercent:
+		add(FieldExpectedRet, Range)
 	}
 	a.ExpectedReturnAPR = expected
 	apy, ok := parseFloat(f.APY)
-	if !ok {
+	switch {
+	case !ok:
 		add(FieldAPY, Invalid)
+	case apy < 0 || apy > maxRatePercent:
+		add(FieldAPY, Range)
 	}
 	a.APY = apy
 	liquidity, ok := parseInt(f.Liquidity)
-	if !ok || liquidity < 0 || liquidity > 100 {
+	if !ok || liquidity < 0 || liquidity > maxScore {
 		add(FieldLiquidity, Range)
 	}
 	a.LiquidityScore = liquidity
 	stability, ok := parseInt(f.Stability)
-	if !ok || stability < 0 || stability > 100 {
+	if !ok || stability < 0 || stability > maxScore {
 		add(FieldStability, Range)
 	}
 	a.StabilityScore = stability
@@ -255,8 +342,8 @@ func parseRate(raw string) (float64, rateState) {
 	if s == "" {
 		return 0, rateBlank
 	}
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
+	v, ok := parseDecimal(s)
+	if !ok {
 		return 0, rateInvalid
 	}
 	return v, rateSet
@@ -291,8 +378,22 @@ func parseFloat(raw string) (float64, bool) {
 	if s == "" {
 		return 0, true
 	}
+	return parseDecimal(s)
+}
+
+// parseDecimal reads a plain decimal number, with an optional sign and exponent. Words such as NaN
+// and Inf, hexadecimal and digit separators are refused, and so is a value too large to hold.
+func parseDecimal(s string) (float64, bool) {
+	for _, r := range s {
+		if !strings.ContainsRune("0123456789+-.eE", r) {
+			return 0, false
+		}
+	}
 	v, err := strconv.ParseFloat(s, 64)
-	return v, err == nil
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, false
+	}
+	return v, true
 }
 
 // parseDate reads a calendar date. A blank box is the zero time.
@@ -305,10 +406,14 @@ func parseDate(raw string) (time.Time, bool) {
 	return d, err == nil
 }
 
-// titleCase capitalises each word of an institution name.
+// titleCase capitalises the first letter of each word of an institution name. A word that already
+// has a capital in it ("eToro", "BNP") is left as written.
 func titleCase(s string) string {
 	words := strings.Fields(s)
 	for i, w := range words {
+		if strings.IndexFunc(w, unicode.IsUpper) >= 0 {
+			continue
+		}
 		runes := []rune(w)
 		runes[0] = unicode.ToUpper(runes[0])
 		words[i] = string(runes)
@@ -316,11 +421,140 @@ func titleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-// cloneShares copies a share map so the account does not alias the form's map.
-func cloneShares(src map[string]int) map[string]int {
+// isCurrencyCode reports whether code has the shape of a currency code: three capital letters. The
+// registry knows only the common currencies and a household may add rates for others, so the shape
+// is what is checked, not membership.
+func isCurrencyCode(code string) bool {
+	if len(code) != 3 {
+		return false
+	}
+	for _, r := range code {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+// contains reports whether list has s.
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// sharesOf copies the shares that count: all of them when memberIDs is nil, otherwise only those of
+// members that exist. The copy keeps the account from aliasing the form's map.
+func sharesOf(src map[string]int, memberIDs []string) map[string]int {
 	out := make(map[string]int, len(src))
 	for k, v := range src {
+		if memberIDs == nil || contains(memberIDs, k) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// sumShares adds up the shares.
+func sumShares(shares map[string]int) int {
+	sum := 0
+	for _, v := range shares {
+		sum += v
+	}
+	return sum
+}
+
+// sharesOutOfRange reports whether any share is below 0 or above 100.
+func sharesOutOfRange(shares map[string]int) bool {
+	for _, v := range shares {
+		if v < 0 || v > ownershipTotalShares {
+			return true
+		}
+	}
+	return false
+}
+
+// minSplitMembers is the fewest members a split needs: ownership is divided between at least two.
+const minSplitMembers = 2
+
+// SplitAvailable reports whether there are enough members for the split-ownership editor to be
+// offered. Both account forms use it to decide whether to show the editor and whether to hold the
+// account to a share total of 100.
+func SplitAvailable(memberCount int) bool { return memberCount >= minSplitMembers }
+
+// ShareTotal is the sum of the ownership shares that count: all of them when memberIDs is nil,
+// otherwise only those of members that exist. The forms show it, and Apply checks the same figure.
+func ShareTotal(shares map[string]int, memberIDs []string) int {
+	return sumShares(sharesOf(shares, memberIDs))
+}
+
+// SharesValid reports whether the shares that count are each from 0 to 100 and total 100, which is
+// what Apply requires of a split.
+func SharesValid(shares map[string]int, memberIDs []string) bool {
+	counted := sharesOf(shares, memberIDs)
+	return !sharesOutOfRange(counted) && sumShares(counted) == ownershipTotalShares
+}
+
+// DefaultBaseCurrency is the currency the forms use while the household has not chosen a base.
+const DefaultBaseCurrency = "USD"
+
+// BaseCurrencyOrDefault returns the household's base currency, or DefaultBaseCurrency when none is
+// set. The account and service add forms both read their starting currency through it.
+func BaseCurrencyOrDefault(base string) string {
+	if strings.TrimSpace(base) == "" {
+		return DefaultBaseCurrency
+	}
+	return base
+}
+
+// MoneyStep is the step of a money box in the currency: "0.01" for two decimals, "0.001" for three
+// and "1" for none, so a box accepts exactly the figures the currency can hold.
+func MoneyStep(cur string) string { return stepOfDecimals(currency.Decimals(cur)) }
+
+// stepOfDecimals is the smallest step of a box that holds the given number of decimal places.
+func stepOfDecimals(decimals int) string {
+	if decimals <= 0 {
+		return "1"
+	}
+	return "0." + strings.Repeat("0", decimals-1) + "1"
+}
+
+// IsLockable reports whether a lock-until date is offered at creation time for the account type: the
+// asset types that can be locked or held to a maturity date (savings, investment, retirement, crypto,
+// property, vehicle and the catch-all other). The liquid everyday types (checking, debit, cash) can
+// still reach the field through Advanced.
+func IsLockable(t domain.AccountType) bool {
+	switch t {
+	case domain.TypeSavings, domain.TypeInvestment, domain.TypeRetirement, domain.TypeCrypto,
+		domain.TypeProperty, domain.TypeVehicle, domain.TypeOther:
+		return true
+	}
+	return false
+}
+
+// ParseShare reads one member's ownership percentage from a form box. A blank box is zero. Anything
+// that is not a whole number from 0 to 100 is rejected, so the form keeps the previous figure
+// instead of turning mistyped input into zero.
+func ParseShare(raw string) (int, bool) {
+	n, ok := parseInt(raw)
+	if !ok || n < 0 || n > ownershipTotalShares {
+		return 0, false
+	}
+	return n, true
+}
+
+// WithShare returns a copy of shares with one member's share set from the text typed in its box. A
+// figure that is not a whole percentage leaves the share as it was.
+func WithShare(shares map[string]int, memberID, raw string) map[string]int {
+	out := make(map[string]int, len(shares)+1)
+	for k, v := range shares {
 		out[k] = v
+	}
+	if n, ok := ParseShare(raw); ok {
+		out[memberID] = n
 	}
 	return out
 }

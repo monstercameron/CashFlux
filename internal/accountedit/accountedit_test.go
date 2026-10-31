@@ -61,12 +61,14 @@ func TestApplyRejectsAnUnreadableOpeningBalance(t *testing.T) {
 func TestApplyTreatsAnOtherAccountAsALiabilityOnlyWhenAskedTo(t *testing.T) {
 	f := valid()
 	f.Type = string(domain.TypeOther)
-	a, _ := Apply(domain.Account{}, f)
+	a, issues := Apply(domain.Account{}, f)
+	issuesOf(t, issues)
 	if a.Class != domain.ClassAsset {
 		t.Fatalf("other without the debt override = %q, want asset", a.Class)
 	}
 	f.AsLiability = true
-	a, _ = Apply(domain.Account{}, f)
+	a, issues = Apply(domain.Account{}, f)
+	issuesOf(t, issues)
 	if a.Class != domain.ClassLiability {
 		t.Fatalf("other with the debt override = %q, want liability", a.Class)
 	}
@@ -155,12 +157,14 @@ func TestApplyFallsBackToTheLenderForTheInstitution(t *testing.T) {
 	f := valid()
 	f.Type = string(domain.TypeCreditCard)
 	f.Lender = "first bank"
-	a, _ := Apply(domain.Account{}, f)
+	a, issues := Apply(domain.Account{}, f)
+	issuesOf(t, issues)
 	if a.Institution != "First Bank" {
 		t.Fatalf("institution = %q, want the title-cased lender", a.Institution)
 	}
 	f.Institution = "  credit union "
-	a, _ = Apply(domain.Account{}, f)
+	a, issues = Apply(domain.Account{}, f)
+	issuesOf(t, issues)
 	if a.Institution != "Credit Union" {
 		t.Fatalf("institution = %q, want the typed name title-cased", a.Institution)
 	}
@@ -172,7 +176,7 @@ func TestApplyChecksTheOwnershipSharesTotal(t *testing.T) {
 	a, issues := Apply(domain.Account{}, f)
 	issuesOf(t, issues, Issue{Field: FieldOwnerShares, Reason: Total, Sum: 90})
 	if a.OwnershipShares == nil {
-		t.Fatal("the shares were dropped while the split is on")
+		t.Fatal("the shares were lost while the split is on")
 	}
 	f.Shares = map[string]int{"m1": 60, "m2": 40}
 	_, issues = Apply(domain.Account{}, f)
@@ -182,7 +186,8 @@ func TestApplyChecksTheOwnershipSharesTotal(t *testing.T) {
 func TestApplyDoesNotAliasTheFormsShares(t *testing.T) {
 	f := valid()
 	f.Shares = map[string]int{"m1": 100}
-	a, _ := Apply(domain.Account{}, f)
+	a, issues := Apply(domain.Account{}, f)
+	issuesOf(t, issues)
 	f.Shares["m1"] = 0
 	if a.OwnershipShares["m1"] != 100 {
 		t.Fatal("the account's shares changed when the form's map did")
@@ -191,8 +196,111 @@ func TestApplyDoesNotAliasTheFormsShares(t *testing.T) {
 
 func TestApplyLeavesTheSplitOffWhenNoSharesAreGiven(t *testing.T) {
 	base := domain.Account{OwnershipShares: map[string]int{"m1": 100}}
-	a, _ := Apply(base, valid())
+	a, issues := Apply(base, valid())
+	issuesOf(t, issues)
 	if a.OwnershipShares != nil {
 		t.Fatalf("shares = %v, want nil when the split is off", a.OwnershipShares)
+	}
+}
+
+func TestBaseCurrencyOrDefault(t *testing.T) {
+	tests := []struct{ name, base, want string }{
+		{"set", "EUR", "EUR"},
+		{"empty", "", "USD"},
+		{"blank", "  ", "USD"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := BaseCurrencyOrDefault(tt.base); got != tt.want {
+				t.Fatalf("BaseCurrencyOrDefault(%q) = %q, want %q", tt.base, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsLockable(t *testing.T) {
+	tests := []struct {
+		typ  domain.AccountType
+		want bool
+	}{
+		{domain.TypeSavings, true},
+		{domain.TypeInvestment, true},
+		{domain.TypeRetirement, true},
+		{domain.TypeCrypto, true},
+		{domain.TypeProperty, true},
+		{domain.TypeVehicle, true},
+		{domain.TypeOther, true},
+		{domain.TypeChecking, false},
+		{domain.TypeCash, false},
+		{domain.TypeCreditCard, false},
+		{domain.TypeLoan, false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.typ), func(t *testing.T) {
+			if got := IsLockable(tt.typ); got != tt.want {
+				t.Fatalf("IsLockable(%q) = %v, want %v", tt.typ, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseShare(t *testing.T) {
+	tests := []struct {
+		raw    string
+		want   int
+		wantOK bool
+	}{
+		{"", 0, true},
+		{" 40 ", 40, true},
+		{"100", 100, true},
+		{"0", 0, true},
+		{"abc", 0, false},
+		{"12.5", 0, false},
+		{"-5", 0, false},
+		{"101", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			got, ok := ParseShare(tt.raw)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("ParseShare(%q) = %d, %v, want %d, %v", tt.raw, got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestApplyRejectsAVariableNameThatSlugsToNothing(t *testing.T) {
+	for _, name := range []string{"!!!", "é", "  --  "} {
+		f := valid()
+		f.VarName = name
+		_, issues := Apply(domain.Account{}, f)
+		issuesOf(t, issues, Issue{Field: FieldVarName, Reason: Invalid})
+	}
+}
+
+func TestApplyTreatsABlankVariableNameAsNone(t *testing.T) {
+	f := valid()
+	f.VarName = "   "
+	a, issues := Apply(domain.Account{}, f)
+	issuesOf(t, issues)
+	if a.VarName != "" {
+		t.Fatalf("var name = %q, want none", a.VarName)
+	}
+	f.VarName = " Main_Checking "
+	a, issues = Apply(domain.Account{}, f)
+	issuesOf(t, issues)
+	if a.VarName != "Main_Checking" {
+		t.Fatalf("var name = %q, want it trimmed", a.VarName)
+	}
+}
+
+func TestSplitAvailableNeedsTwoMembers(t *testing.T) {
+	for _, tc := range []struct {
+		members int
+		want    bool
+	}{{0, false}, {1, false}, {2, true}, {5, true}} {
+		if got := SplitAvailable(tc.members); got != tc.want {
+			t.Errorf("SplitAvailable(%d) = %v, want %v", tc.members, got, tc.want)
+		}
 	}
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// accounts_integrity.go is the UI for the earmark-integrity check (XC7): a quiet
+// accounts_integrity.go is the UI for the earmark-integrity check: a quiet
 // warn-tone line on an over-earmarked account's row. Checked currency and
 // availability facts come from goals.BuildAccountReservations; this only renders.
 

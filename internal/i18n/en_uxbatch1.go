@@ -16,16 +16,6 @@ var uxbatch1Keys = Catalog{
 	// English; the call site now passes a pluralized "N day(s)" string, so the
 	// template takes %s here instead of "%dd" (review #36).
 	"dashboard.attentionTaskOverdue": "%s · %s overdue",
-
-	// Accounts stale badge suffix — "· 47d" → "· 47 days" (pluralized string
-	// supplied by the caller). Renders in the badge pill's existing uppercase
-	// style, consistent with the sibling badges (review #36).
-	"accounts.staleDaysSuffix": " · %s",
-
-	// Recurring "Post due now" — when nothing is auto-postable but items are
-	// overdue, explain that those overdue items are manual and posted by hand,
-	// so the "OVERDUE 3 / Post due now (0)" pairing reads honestly (review #23).
-	"recurring.postDueTitleManual": "Nothing here to auto-post. The %s above must be entered by hand — open each flow to record it.",
 }
 
 func init() {

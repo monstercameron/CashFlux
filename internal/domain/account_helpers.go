@@ -8,30 +8,33 @@ import (
 )
 
 // UniqueInstitutions returns a sorted, deduplicated list of institution names
-// drawn from the given accounts. Empty Institution values are skipped. When
-// two accounts carry the same institution name differing only in case, the
-// first-seen casing is preserved and the later occurrence is suppressed.
-// The returned slice is sorted case-insensitively.
+// drawn from the given accounts. Names are trimmed and blank ones are skipped.
+// When two accounts carry the same institution name differing only in case, the
+// first-seen casing is preserved and the later occurrence is suppressed. The
+// returned slice is sorted case-insensitively.
 func UniqueInstitutions(accounts []Account) []string {
-	// seen maps lowercased name → original-casing first occurrence.
-	seen := make(map[string]string, len(accounts))
+	names := make([]string, 0, len(accounts))
 	for _, a := range accounts {
-		if a.Institution == "" {
+		names = append(names, a.Institution)
+	}
+	return UniqueNames(names)
+}
+
+// UniqueNames trims the names, drops blank ones, removes case-insensitive
+// duplicates keeping the first-seen casing, and returns the rest sorted with
+// NameLess.
+func UniqueNames(names []string) []string {
+	seen := make(map[string]bool, len(names))
+	var result []string
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		key := strings.ToLower(name)
+		if name == "" || seen[key] {
 			continue
 		}
-		key := strings.ToLower(a.Institution)
-		if _, exists := seen[key]; !exists {
-			seen[key] = a.Institution
-		}
+		seen[key] = true
+		result = append(result, name)
 	}
-
-	// Collect originals and sort by their lowercased form.
-	result := make([]string, 0, len(seen))
-	for _, orig := range seen {
-		result = append(result, orig)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return strings.ToLower(result[i]) < strings.ToLower(result[j])
-	})
+	sort.SliceStable(result, func(i, j int) bool { return NameLess(result[i], result[j]) })
 	return result
 }

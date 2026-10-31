@@ -22,8 +22,6 @@ var acctSweepKeys = Catalog{
 	"acctSweepCfg.empty": "No sweep rules yet. Add one below.",
 	// %s from, %s keep amount, %s to, %s cadence.
 	"acctSweepCfg.ruleLine":    "Keep %s in %s, move the rest to %s %s",
-	"acctSweepCfg.keep":        "Keep",
-	"acctSweepCfg.moveTo":      "move extra to",
 	"acctSweepCfg.source":      "Account to keep money in",
 	"acctSweepCfg.dest":        "Account to move extra into",
 	"acctSweepCfg.keepAmount":  "Amount to keep",

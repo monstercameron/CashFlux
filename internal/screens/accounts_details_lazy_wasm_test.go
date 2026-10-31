@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/accountflow"
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -29,16 +30,35 @@ func clearAccountDetailCaches() {
 	accountProjectionInputsCache.Clear()
 }
 
-func TestAccountsHostDefersDetailsAndReusesSelectedHistory(t *testing.T) {
-	app := primaryAccountsGoalsApp(t)
+// resetAccountsListFilters clears the accounts filter and household lens for one
+// test and restores them afterwards.
+func resetAccountsListFilters(t *testing.T) {
+	t.Helper()
 	filters := state.NewGlobalAtom("accounts:filter", uistate.AccountsFilter{})
 	previousFilter := filters.Get()
 	filters.Set(uistate.AccountsFilter{})
 	lens := state.NewGlobalAtom("household:activeScope", scope.ReportScope{})
 	previousLens := lens.Get()
 	lens.Set(scope.ReportScope{})
-	t.Cleanup(func() { filters.Set(previousFilter); lens.Set(previousLens); clearAccountDetailCaches() })
+	t.Cleanup(func() { filters.Set(previousFilter); lens.Set(previousLens) })
+}
+
+// lazyAccountsFixture is the Accounts screen over a shared checking account with an
+// old, a recent and a report-excluded transaction, one near-term and one far-off
+// recurring debit, and a locked savings account.
+type lazyAccountsFixture struct {
+	app      *appstate.App
+	f        *render.Fixture
+	checking domain.Account
+	now      time.Time
+}
+
+func newLazyAccountsFixture(t *testing.T) *lazyAccountsFixture {
+	t.Helper()
+	app := primaryAccountsGoalsApp(t)
+	resetAccountsListFilters(t)
 	clearAccountDetailCaches()
+	t.Cleanup(clearAccountDetailCaches)
 	now := time.Now()
 	checking := domain.Account{ID: "checking", Name: "Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
 		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(10000, "USD"), BalanceAsOf: now}
@@ -58,153 +78,262 @@ func TestAccountsHostDefersDetailsAndReusesSelectedHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := app.Store().PutRecurring(domain.Recurring{ID: "rent", Label: "Rent", AccountID: checking.ID,
-		Amount: money.New(-3000, "USD"), NextDue: now.AddDate(0, 0, 1), Cadence: domain.CadenceMonthly}); err != nil {
-		t.Fatal(err)
-	}
-	if err := app.Store().PutRecurring(domain.Recurring{ID: "late-reserve", Label: "Later reserve", AccountID: checking.ID,
-		Amount: money.New(-50000, "USD"), NextDue: now.AddDate(0, 0, 60), Cadence: domain.CadenceMonthly}); err != nil {
-		t.Fatal(err)
-	}
-	f := render.New(t, render.WithQueuedScheduler())
-	defer f.Cleanup()
-	f.Render(ui.CreateElement(Accounts))
-	f.Stabilize()
-	if byTestID(f, "button", "acct-details-toggle-checking") == nil || byTestID(f, "button", "acct-details-toggle-locked") == nil {
-		t.Fatalf("actual account host did not render its rows: %s", f.Text())
-	}
-	if accountHistoryCache.Len() != 0 || accountSeriesCache.Len() != 0 || accountDetailFactsCache.Len() != 0 || accountProjectionInputsCache.Len() != 0 {
-		t.Fatal("compact host eagerly prepared account detail facts")
-	}
-	if !strings.Contains(byTestID(f, "button", "acct-balance-btn-checking").Text(), "91.00") || byTestID(f, "div", "acct-details-checking") != nil {
-		t.Fatalf("compact exact balance or disclosure changed: %s", f.Text())
-	}
-	var order []string
-	for _, row := range f.AllByTag("div") {
-		if id := row.Attr("data-testid"); strings.HasPrefix(id, "acct-row-") {
-			order = append(order, id)
+	for _, rec := range []domain.Recurring{
+		{ID: "rent", Label: "Rent", AccountID: checking.ID, Amount: money.New(-3000, "USD"), NextDue: now.AddDate(0, 0, 1), Cadence: domain.CadenceMonthly},
+		{ID: "late-reserve", Label: "Later reserve", AccountID: checking.ID, Amount: money.New(-50000, "USD"), NextDue: now.AddDate(0, 0, 60), Cadence: domain.CadenceMonthly},
+	} {
+		if err := app.Store().PutRecurring(rec); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if !reflect.DeepEqual(order, []string{"acct-row-checking", "acct-row-locked"}) {
-		t.Fatalf("account sorting changed: %v", order)
-	}
-	byTestID(f, "button", "acct-details-toggle-checking").Click()
+	f := render.New(t, render.WithQueuedScheduler())
+	t.Cleanup(f.Cleanup)
+	f.Render(ui.CreateElement(Accounts))
 	f.Stabilize()
-	if accountHistoryCache.Len() != 1 || accountSeriesCache.Len() != 1 || accountDetailFactsCache.Len() != 1 || accountProjectionInputsCache.Len() != 1 {
-		t.Fatal("one disclosure did not prepare exactly one selected account/window")
-	}
-	chart := byTestID(f, "svg", "acct-spark-checking")
-	want := accountflow.Polyline(accountflow.BalanceSeries(checking, app.TransactionsByAccount(checking.ID), now, 90), sparklineW, sparklineH, 2)
-	if chart == nil || len(chart.Children()) != 1 || chart.Children()[0].Attr("points") != want || byTestID(f, "div", "acct-proj-checking") == nil {
-		t.Fatal("expanded row's history/projection differs from the previous display")
-	}
-	if byTestID(f, "span", "acct-fwd-negative-checking") == nil {
-		t.Fatalf("90-day forward line missed the recurring debit due after day 30: %s", f.Text())
-	}
-	byTestID(f, "button", "acct-range-all-checking").Click()
-	f.Stabilize()
-	if accountHistoryCache.Len() != 1 || accountSeriesCache.Len() != 2 || accountDetailFactsCache.Len() != 1 {
-		t.Fatal("range switch rebuilt history/projection or prepared unselected windows")
-	}
-	for i := 0; i < 2; i++ {
-		byTestID(f, "button", "acct-details-toggle-checking").Click()
-		f.Stabilize()
-	}
-	if accountSeriesCache.Len() != 2 || accountDetailFactsCache.Len() != 1 || byTestID(f, "button", "acct-range-all-checking").Attr("aria-checked") != "true" {
-		t.Fatalf("collapse/reopen discarded the selected range or repeated its preparation: series=%d facts=%d selected=%s", accountSeriesCache.Len(), accountDetailFactsCache.Len(), byTestID(f, "button", "acct-range-all-checking").Attr("aria-checked"))
-	}
-	byTestID(f, "button", "acct-proj-toggle-checking").Click()
-	f.Stabilize()
-	if drivers := byTestID(f, "div", "acct-proj-drivers-checking"); drivers == nil || !strings.Contains(drivers.Text(), "Rent") || strings.Contains(drivers.Text(), "Later reserve") {
-		t.Fatal("30-day projection explanation lost its near-term driver or included a later flow")
-	}
-	if err := app.Store().PutTransaction(domain.Transaction{ID: "new", AccountID: checking.ID, Date: now, Amount: money.New(-1000, "USD")}); err != nil {
-		t.Fatal(err)
-	}
-	uistate.BumpDataRevision()
-	f.Stabilize()
-	if !strings.Contains(byTestID(f, "button", "acct-balance-btn-checking").Text(), "81.00") || byTestID(f, "div", "acct-details-checking") == nil || byTestID(f, "button", "acct-range-all-checking").Attr("aria-checked") != "true" {
-		t.Fatalf("ledger revision lost disclosure state or kept an obsolete balance: %s", f.Text())
-	}
-	if accountHistoryCache.Len() != 2 || accountSeriesCache.Len() != 3 || accountDetailFactsCache.Len() != 2 {
-		t.Fatal("ledger revision retained stale detail facts or eagerly prepared compact siblings")
-	}
-	// The existing balance action still opens the correct shell editor.
-	editor := state.NewGlobalAtom("accounts:edit", uistate.AccountEdit{})
-	previousEditor := editor.Get()
-	t.Cleanup(func() { editor.Set(previousEditor) })
-	byTestID(f, "button", "acct-balance-btn-checking").Click()
-	f.Stabilize()
-	if got := editor.Get(); got.ID != checking.ID || got.Mode != uistate.AcctEditModeSetBal {
-		t.Fatalf("balance action changed: %+v", got)
-	}
+	return &lazyAccountsFixture{app: app, f: f, checking: checking, now: now}
 }
 
-func TestAccountDetailCachesIncludeAppRatesAndExactTime(t *testing.T) {
-	app := primaryAccountsGoalsApp(t)
-	clearAccountDetailCaches()
-	t.Cleanup(clearAccountDetailCaches)
+func (x *lazyAccountsFixture) click(t *testing.T, testID string) {
+	t.Helper()
+	button := byTestID(x.f, "button", testID)
+	if button == nil {
+		t.Fatalf("no button %q: %s", testID, x.f.Text())
+	}
+	button.Click()
+	x.f.Stabilize()
+}
+
+// chartPoints returns the polyline of the checking account's balance chart, or ""
+// when no chart is drawn.
+func (x *lazyAccountsFixture) chartPoints() string {
+	chart := byTestID(x.f, "svg", "acct-spark-checking")
+	if chart == nil || len(chart.Children()) != 1 {
+		return ""
+	}
+	return chart.Children()[0].Attr("points")
+}
+
+func TestAccountsHostDetailsDisclosure(t *testing.T) {
+	t.Run("compact rows show the exact balance and no details", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		if byTestID(x.f, "button", "acct-details-toggle-checking") == nil || byTestID(x.f, "button", "acct-details-toggle-locked") == nil {
+			t.Fatalf("account host did not render its rows: %s", x.f.Text())
+		}
+		if !strings.Contains(byTestID(x.f, "button", "acct-balance-btn-checking").Text(), "91.00") {
+			t.Fatalf("compact row shows the wrong balance: %s", x.f.Text())
+		}
+		if byTestID(x.f, "div", "acct-details-checking") != nil {
+			t.Fatal("details panel is open before its disclosure was used")
+		}
+		// Detail facts are prepared only for an opened disclosure.
+		if accountDetailFactsCache.Len() != 0 {
+			t.Fatal("compact host prepared account detail facts before any disclosure opened")
+		}
+	})
+
+	t.Run("rows keep their sort order", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		var order []string
+		for _, row := range x.f.AllByTag("div") {
+			if id := row.Attr("data-testid"); strings.HasPrefix(id, "acct-row-") {
+				order = append(order, id)
+			}
+		}
+		if want := []string{"acct-row-checking", "acct-row-locked"}; !reflect.DeepEqual(order, want) {
+			t.Fatalf("row order = %v, want %v", order, want)
+		}
+	})
+
+	t.Run("opening a row shows its history, projection and forward line", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		x.click(t, "acct-details-toggle-checking")
+		want := accountflow.Polyline(accountflow.BalanceSeries(x.checking, x.app.TransactionsByAccount(x.checking.ID), x.now, 90), sparklineW, sparklineH, 2)
+		if got := x.chartPoints(); got != want {
+			t.Fatalf("balance chart points = %q, want %q", got, want)
+		}
+		if byTestID(x.f, "div", "acct-proj-checking") == nil {
+			t.Fatal("projected-low line is missing")
+		}
+		if byTestID(x.f, "span", "acct-fwd-negative-checking") == nil {
+			t.Fatalf("90-day forward line missed the recurring debit due after day 30: %s", x.f.Text())
+		}
+	})
+
+	t.Run("range picker redraws the chart and survives collapse and reopen", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		x.click(t, "acct-details-toggle-checking")
+		ninetyDays := x.chartPoints()
+		x.click(t, "acct-range-all-checking")
+		allHistory := x.chartPoints()
+		if allHistory == "" || allHistory == ninetyDays {
+			t.Fatalf("all-history chart %q should differ from the 90-day chart %q", allHistory, ninetyDays)
+		}
+		x.click(t, "acct-details-toggle-checking")
+		x.click(t, "acct-details-toggle-checking")
+		if got := byTestID(x.f, "button", "acct-range-all-checking").Attr("aria-checked"); got != "true" {
+			t.Fatalf("reopened panel lost the selected range: aria-checked=%q", got)
+		}
+		if got := x.chartPoints(); got != allHistory {
+			t.Fatalf("reopened chart %q differs from the selected range %q", got, allHistory)
+		}
+	})
+
+	t.Run("projection explanation lists near-term drivers only", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		x.click(t, "acct-details-toggle-checking")
+		x.click(t, "acct-proj-toggle-checking")
+		drivers := byTestID(x.f, "div", "acct-proj-drivers-checking")
+		if drivers == nil || !strings.Contains(drivers.Text(), "Rent") {
+			t.Fatal("30-day projection explanation lost its near-term driver")
+		}
+		if strings.Contains(drivers.Text(), "Later reserve") {
+			t.Fatal("30-day projection explanation included a flow beyond 30 days")
+		}
+	})
+
+	t.Run("a ledger change refreshes the balance and keeps the open panel and range", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		x.click(t, "acct-details-toggle-checking")
+		x.click(t, "acct-range-all-checking")
+		if err := x.app.Store().PutTransaction(domain.Transaction{ID: "new", AccountID: x.checking.ID, Date: x.now, Amount: money.New(-1000, "USD")}); err != nil {
+			t.Fatal(err)
+		}
+		uistate.BumpDataRevision()
+		x.f.Stabilize()
+		if !strings.Contains(byTestID(x.f, "button", "acct-balance-btn-checking").Text(), "81.00") {
+			t.Fatalf("balance did not refresh after the ledger changed: %s", x.f.Text())
+		}
+		if byTestID(x.f, "div", "acct-details-checking") == nil {
+			t.Fatal("ledger change closed the details panel")
+		}
+		if got := byTestID(x.f, "button", "acct-range-all-checking").Attr("aria-checked"); got != "true" {
+			t.Fatalf("ledger change lost the selected range: aria-checked=%q", got)
+		}
+	})
+
+	t.Run("balance figure opens the set-balance editor", func(t *testing.T) {
+		x := newLazyAccountsFixture(t)
+		editor := state.NewGlobalAtom("accounts:edit", uistate.AccountEdit{})
+		previous := editor.Get()
+		t.Cleanup(func() { editor.Set(previous) })
+		x.click(t, "acct-balance-btn-checking")
+		if got := editor.Get(); got.ID != x.checking.ID || got.Mode != uistate.AcctEditModeSetBal {
+			t.Fatalf("balance action opened %+v", got)
+		}
+	})
+}
+
+func TestAccountDetailContextIdentity(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
 	account := domain.Account{ID: "checking", Name: "Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
 		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(1000, "USD")}
-	if err := app.PutAccount(account); err != nil {
-		t.Fatal(err)
+	newApp := func(t *testing.T) *appstate.App {
+		t.Helper()
+		app := primaryAccountsGoalsApp(t)
+		clearAccountDetailCaches()
+		t.Cleanup(clearAccountDetailCaches)
+		if err := app.PutAccount(account); err != nil {
+			t.Fatal(err)
+		}
+		if err := app.Store().PutRecurring(domain.Recurring{ID: "intraday", Label: "Later today", AccountID: account.ID,
+			Amount: money.New(-100, "USD"), NextDue: now.Add(time.Hour), Cadence: domain.CadenceMonthly}); err != nil {
+			t.Fatal(err)
+		}
+		return app
 	}
-	if err := app.Store().PutRecurring(domain.Recurring{ID: "intraday", Label: "Later today", AccountID: account.ID,
-		Amount: money.New(-100, "USD"), NextDue: now.Add(time.Hour), Cadence: domain.CadenceMonthly}); err != nil {
-		t.Fatal(err)
-	}
-	rates := currency.Rates{Base: "USD"}
-	context := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now)
-	first := context.facts(account)
-	if context.facts(account) != first || len(first.Projection.Drivers) != 1 {
-		t.Fatal("identical context did not reuse the prepared projection")
-	}
-	later := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now.Add(2*time.Hour)).facts(account)
-	if later == first || len(later.Projection.Drivers) != 0 {
-		t.Fatal("exact occurrence time retained a projection from earlier in the day")
-	}
-	changedRates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 2}}
-	if changed := newAccountDetailContext(app, accountSnapshot(app), changedRates, "USD", now).facts(account); changed == first {
-		t.Fatal("rate/presentation context shared another facts identity")
-	}
-	series, _ := context.series(account, "90d")
-	otherZone := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.FixedZone("west", -5*60*60))
-	zoned, _ := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", otherZone).series(account, "90d")
-	if &series[0] == &zoned[0] || !reflect.DeepEqual(series, zoned) || accountHistoryCache.Len() != 1 {
-		t.Fatal("same-date timezone contexts shared a series identity or rebuilt the history index")
-	}
-	nextDay, _ := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now.AddDate(0, 0, 1)).series(account, "90d")
-	if &series[0] == &nextDay[0] || accountHistoryCache.Len() != 1 {
-		t.Fatal("day change retained the series or unnecessarily rebuilt its history index")
-	}
-	other := primaryAccountsGoalsApp(t)
-	account.OpeningBalance.Amount = 2000
-	if err := other.PutAccount(account); err != nil {
-		t.Fatal(err)
-	}
-	// The global revision can be identical across these apps. Instance identity
-	// must still separate balances, history and projection facts.
-	left := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now)
-	right := newAccountDetailContext(other, accountSnapshot(other), rates, "USD", now)
-	if left.facts(app.Accounts()[0]).Projection.Start != 1000 || right.facts(account).Projection.Start != 2000 {
-		t.Fatal("account details leaked across app instances")
-	}
-	if err := app.PutSettings(store.Settings{BaseCurrency: "USD", FXRates: map[string]float64{"EUR": 3}}); err != nil {
-		t.Fatal(err)
-	}
-	if newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now).facts(app.Accounts()[0]) == left.facts(app.Accounts()[0]) {
-		t.Fatal("store revision retained old account facts")
-	}
+
+	t.Run("identical context reuses the prepared projection", func(t *testing.T) {
+		app := newApp(t)
+		context := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now)
+		first := context.facts(account)
+		if context.facts(account) != first {
+			t.Fatal("identical context rebuilt the facts")
+		}
+		if len(first.Projection.Drivers) != 1 {
+			t.Fatalf("projection drivers = %d, want the one recurring debit", len(first.Projection.Drivers))
+		}
+	})
+
+	t.Run("the calendar day decides which occurrences count", func(t *testing.T) {
+		app := newApp(t)
+		first := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now).facts(account)
+		later := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now.Add(2*time.Hour)).facts(account)
+		if later != first {
+			t.Fatal("a later time on the same day rebuilt the facts")
+		}
+		if len(later.Projection.Drivers) != 1 {
+			t.Fatal("a bill due earlier today dropped out of today's projection")
+		}
+		nextDay := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now.AddDate(0, 0, 1)).facts(account)
+		if nextDay == first {
+			t.Fatal("a new day reused the previous day's projection")
+		}
+	})
+
+	t.Run("rate changes do not share facts", func(t *testing.T) {
+		app := newApp(t)
+		first := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now).facts(account)
+		changedRates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 2}}
+		if changed := newAccountDetailContext(app, accountSnapshot(app), changedRates, "USD", now).facts(account); changed == first {
+			t.Fatal("different rates shared one facts identity")
+		}
+	})
+
+	t.Run("series is keyed by calendar day, not by time zone", func(t *testing.T) {
+		app := newApp(t)
+		series, _ := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now).series(account, "90d")
+		otherZone := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.FixedZone("west", -5*60*60))
+		zoned, _ := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", otherZone).series(account, "90d")
+		if &series[0] == &zoned[0] {
+			t.Fatal("contexts in different time zones shared one series slice")
+		}
+		if !reflect.DeepEqual(series, zoned) {
+			t.Fatal("same calendar day produced different series in another time zone")
+		}
+		nextDay, _ := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now.AddDate(0, 0, 1)).series(account, "90d")
+		if &series[0] == &nextDay[0] {
+			t.Fatal("a new day reused the previous day's series")
+		}
+	})
+
+	t.Run("app instances do not leak into each other", func(t *testing.T) {
+		app := newApp(t)
+		other := primaryAccountsGoalsApp(t)
+		changed := account
+		changed.OpeningBalance.Amount = 2000
+		if err := other.PutAccount(changed); err != nil {
+			t.Fatal(err)
+		}
+		// The global revision can be identical across these apps. Instance identity
+		// must still separate balances, history and projection facts.
+		left := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now)
+		right := newAccountDetailContext(other, accountSnapshot(other), rates, "USD", now)
+		if got := left.facts(app.Accounts()[0]).Projection.Start; got != 1000 {
+			t.Fatalf("left projection starts at %d, want 1000", got)
+		}
+		if got := right.facts(changed).Projection.Start; got != 2000 {
+			t.Fatalf("right projection starts at %d, want 2000", got)
+		}
+	})
+
+	t.Run("a store change does not reuse old facts", func(t *testing.T) {
+		app := newApp(t)
+		before := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now).facts(app.Accounts()[0])
+		if err := app.PutSettings(store.Settings{BaseCurrency: "USD", FXRates: map[string]float64{"EUR": 3}}); err != nil {
+			t.Fatal(err)
+		}
+		if after := newAccountDetailContext(app, accountSnapshot(app), rates, "USD", now).facts(app.Accounts()[0]); after == before {
+			t.Fatal("store revision retained old account facts")
+		}
+	})
 }
 
 func TestAccountsHostRejectsHistoryAndProjectionForInvalidLedgerBalance(t *testing.T) {
 	app := primaryAccountsGoalsApp(t)
-	filters := state.NewGlobalAtom("accounts:filter", uistate.AccountsFilter{})
-	previous := filters.Get()
-	filters.Set(uistate.AccountsFilter{})
+	resetAccountsListFilters(t)
 	clearAccountDetailCaches()
-	t.Cleanup(func() { filters.Set(previous); clearAccountDetailCaches() })
+	t.Cleanup(clearAccountDetailCaches)
 	account := domain.Account{ID: "invalid", Name: "Invalid", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
 		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(1000, "USD")}
 	if err := app.PutAccount(account); err != nil {
@@ -218,26 +347,29 @@ func TestAccountsHostRejectsHistoryAndProjectionForInvalidLedgerBalance(t *testi
 		t.Fatal(err)
 	}
 	f := render.New(t, render.WithQueuedScheduler())
-	defer f.Cleanup()
+	t.Cleanup(f.Cleanup)
 	f.Render(ui.CreateElement(Accounts))
 	f.Stabilize()
 	byTestID(f, "button", "acct-details-toggle-invalid").Click()
 	f.Stabilize()
-	if byTestID(f, "p", "acct-history-unavailable-invalid") == nil || byTestID(f, "svg", "acct-spark-invalid") != nil || byTestID(f, "p", "acct-proj-unavailable-invalid") == nil || byTestID(f, "p", "acct-fwd-unavailable-invalid") == nil {
-		t.Fatalf("invalid exact balance became a valid chart or plausible-zero projection: %s", f.Text())
-	}
-	if accountHistoryCache.Len() != 0 || accountSeriesCache.Len() != 0 || accountProjectionInputsCache.Len() != 0 {
-		t.Fatal("invalid ledger still prepared misleading financial curves")
-	}
+
+	t.Run("history says it is unavailable and draws no chart", func(t *testing.T) {
+		if byTestID(f, "p", "acct-history-unavailable-invalid") == nil || byTestID(f, "svg", "acct-spark-invalid") != nil {
+			t.Fatalf("invalid exact balance became a valid chart: %s", f.Text())
+		}
+	})
+	t.Run("projections say they are unavailable", func(t *testing.T) {
+		if byTestID(f, "p", "acct-proj-unavailable-invalid") == nil || byTestID(f, "p", "acct-fwd-unavailable-invalid") == nil {
+			t.Fatalf("invalid exact balance became a plausible zero projection: %s", f.Text())
+		}
+	})
 }
 
 func TestAccountsHostShowsUnavailableForProjectionOverflowAcrossConsumers(t *testing.T) {
 	app := primaryAccountsGoalsApp(t)
-	filters := state.NewGlobalAtom("accounts:filter", uistate.AccountsFilter{})
-	previous := filters.Get()
-	filters.Set(uistate.AccountsFilter{})
+	resetAccountsListFilters(t)
 	clearAccountDetailCaches()
-	t.Cleanup(func() { filters.Set(previous); clearAccountDetailCaches() })
+	t.Cleanup(clearAccountDetailCaches)
 	account := domain.Account{ID: "overflow", Name: "Overflow", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
 		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(int64(^uint64(0)>>1), "USD")}
 	if err := app.PutAccount(account); err != nil {
@@ -248,19 +380,23 @@ func TestAccountsHostShowsUnavailableForProjectionOverflowAcrossConsumers(t *tes
 		t.Fatal(err)
 	}
 	accounts := render.New(t, render.WithQueuedScheduler())
-	defer accounts.Cleanup()
-	accounts.Render(ui.CreateElement(Accounts))
-	accounts.Stabilize()
-	byTestID(accounts, "button", "acct-details-toggle-overflow").Click()
-	accounts.Stabilize()
-	if byTestID(accounts, "p", "acct-proj-unavailable-overflow") == nil || byTestID(accounts, "p", "acct-fwd-unavailable-overflow") == nil {
-		t.Fatalf("projection overflow appeared as a healthy or plausible amount: %s", accounts.Text())
-	}
+	t.Cleanup(accounts.Cleanup)
 
-	accounts.Render(ui.CreateElement(AccountEditForm, AccountEditFormProps{AccountID: account.ID, Mode: uistate.AcctEditModeSetBal}))
-	accounts.Stabilize()
-	projected := byTestID(accounts, "span", "acct-bal-projected")
-	if projected == nil || projected.Text() != uistate.T("calculation.unavailable") {
-		t.Fatalf("editor hid projection arithmetic failure: %s", accounts.Text())
-	}
+	t.Run("the list shows both projections as unavailable", func(t *testing.T) {
+		accounts.Render(ui.CreateElement(Accounts))
+		accounts.Stabilize()
+		byTestID(accounts, "button", "acct-details-toggle-overflow").Click()
+		accounts.Stabilize()
+		if byTestID(accounts, "p", "acct-proj-unavailable-overflow") == nil || byTestID(accounts, "p", "acct-fwd-unavailable-overflow") == nil {
+			t.Fatalf("projection overflow appeared as a healthy or plausible amount: %s", accounts.Text())
+		}
+	})
+	t.Run("the balance editor shows the projection as unavailable", func(t *testing.T) {
+		accounts.Render(ui.CreateElement(AccountEditForm, AccountEditFormProps{AccountID: account.ID, Mode: uistate.AcctEditModeSetBal}))
+		accounts.Stabilize()
+		projected := byTestID(accounts, "span", "acct-bal-projected")
+		if projected == nil || projected.Text() != uistate.T("calculation.unavailable") {
+			t.Fatalf("editor hid projection arithmetic failure: %s", accounts.Text())
+		}
+	})
 }

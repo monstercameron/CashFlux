@@ -22,7 +22,7 @@ func init() {
 	english["services.amountRequired"] = "Enter the monthly cost as a positive amount."
 	english["services.added"] = "Added %s as a service."
 	english["services.remove"] = "Remove"
-	english["services.removeConfirm"] = "Remove %s? Its recurring bill and history stop counting toward budgets."
+	english["services.removeConfirm"] = "Remove %s? It leaves your monthly list of services. Services are not part of your budgets."
 	english["services.removed"] = "Removed %s."
 	english["services.perMonth"] = "%s a month"
 }

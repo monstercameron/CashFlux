@@ -5,13 +5,14 @@
 package screens
 
 import (
-	"sort"
+	"log/slog"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/institution"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -26,62 +27,15 @@ import (
 // string. Account rows are colored by their institution, and the emergency pack
 // lists the institutions' support contacts.
 
-// defaultSwatchColor is the color used when an institution has none set.
-const defaultSwatchColor = "#7c83ff"
-
 // sortedInstitutions returns the household's institutions sorted by display name, so
 // the manager list and the edit-form picker present a stable, predictable order.
-// institutionChoices returns the names of the household's institutions, sorted and without
-// duplicates, for the quick picks in the set-institution prompt.
-func institutionChoices(insts map[string]domain.Institution) []string {
-	seen := map[string]bool{}
-	var names []string
-	for _, in := range insts {
-		name := strings.TrimSpace(in.Name)
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
 func sortedInstitutions(app *appstate.App) []domain.Institution {
 	if app == nil {
 		return nil
 	}
 	insts := app.Institutions()
-	sort.SliceStable(insts, func(i, j int) bool {
-		return strings.ToLower(insts[i].TrimmedName()) < strings.ToLower(insts[j].TrimmedName())
-	})
+	institution.SortByName(insts)
 	return insts
-}
-
-// institutionSwatchColor returns the color an institution's chip or stripe is drawn
-// in. The color is stored data that ends up in a generated style, so only a plain
-// #rgb or #rrggbb value is used; anything else falls back to defaultSwatchColor.
-func institutionSwatchColor(in domain.Institution) string {
-	if c := strings.TrimSpace(in.Color); isSwatchHex(c) {
-		return c
-	}
-	return defaultSwatchColor
-}
-
-// isSwatchHex reports whether s is a #rgb or #rrggbb color.
-func isSwatchHex(s string) bool {
-	if len(s) != 4 && len(s) != 7 || s[0] != '#' {
-		return false
-	}
-	for _, r := range s[1:] {
-		switch {
-		case r >= '0' && r <= '9', r >= 'a' && r <= 'f', r >= 'A' && r <= 'F':
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 // institutionChip renders a small colored tag with the institution's name, shown on
@@ -94,9 +48,9 @@ func institutionChip(instByID map[string]domain.Institution, instID string) ui.N
 	}
 	return Span(css.Class("inst-chip", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 		Attr("data-testid", "inst-chip-"+instID),
-		AriaLabel(uistate.T("accounts.institutionChipAria", in.TrimmedName())),
-		Span(css.Class(css.New(css.W(css.Px(8)), css.H(css.Px(8)), css.Rounded(css.Length("50%")), css.Bg(css.Color(institutionSwatchColor(in))), css.Display.InlineBlock, tw.ShrinkO))),
-		Span(css.Class(tw.TextDim), in.TrimmedName()),
+		AriaLabel(uistate.T("accounts.institutionChipAria", in.DisplayName(uistate.T("accounts.institutionUntitled")))),
+		Span(css.Class("inst-dot"), Attr("style", "--inst-color: "+institution.SwatchColor(in))),
+		Span(css.Class(tw.TextDim), in.DisplayName(uistate.T("accounts.institutionUntitled"))),
 	)
 }
 
@@ -115,11 +69,12 @@ type InstitutionsManagerFormProps struct {
 // across the swap.
 func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	editingID := ui.UseState("") // "" = list view; "new" or an institution id = edit sub-form
-
-	done := props.OnDone
-	if done == nil {
-		done = func() {}
-	}
+	startNew := ui.UseEvent(Prevent(func() { editingID.Set("new") }))
+	finish := ui.UseEvent(Prevent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
 
 	if id := editingID.Get(); id != "" {
 		closeSub := func() { editingID.Set("") }
@@ -140,7 +95,6 @@ func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 		}
 	}
 
-	startNew := ui.UseEvent(Prevent(func() { editingID.Set("new") }))
 	startEdit := func(instID string) { editingID.Set(instID) }
 
 	rows := MapKeyed(insts, func(in domain.Institution) any { return in.ID }, func(in domain.Institution) ui.Node {
@@ -150,11 +104,12 @@ func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	})
 
 	return Div(css.Class("inv-pool-modal"),
-		P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0 0 0.75rem")))), uistate.T("accounts.institutionsHint")),
+		P(css.Class("t-caption", tw.TextDim, "acct-hint-roomy"), uistate.T("accounts.institutionsHint")),
 		If(len(insts) == 0, P(css.Class("empty"), uistate.T("accounts.institutionsEmpty"))),
 		Div(css.Class("rows"), rows),
-		Div(css.Class(tw.Mt3),
+		Div(css.Class(tw.Mt3, tw.Flex, tw.Gap2),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "institution-add"), OnClick(startNew), uistate.T("accounts.addInstitution")),
+			If(props.OnDone != nil, Button(css.Class("btn"), Type("button"), Attr("data-testid", "institution-done"), OnClick(finish), uistate.T("action.done"))),
 		),
 	)
 }
@@ -171,14 +126,15 @@ func institutionListRow(props institutionListRowProps) ui.Node {
 	in := props.Inst
 	edit := ui.UseEvent(Prevent(func() { props.OnEdit(in.ID) }))
 	return Div(css.Class("row"), Attr("data-testid", "institution-row-"+in.ID),
-		Span(css.Class(css.New(css.W(css.Px(10)), css.H(css.Px(10)), css.Rounded(css.Length("50%")), css.Bg(css.Color(institutionSwatchColor(in))), tw.ShrinkO))),
+		Span(css.Class("inst-dot inst-dot-lg"), Attr("style", "--inst-color: "+institution.SwatchColor(in))),
 		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), in.TrimmedName()),
-			If(props.AccountCount > 0, Span(css.Class("row-meta"), uistate.T("accounts.institutionAccountCount", plural(props.AccountCount, "account")))),
+			Span(css.Class("row-desc"), in.DisplayName(uistate.T("accounts.institutionUntitled"))),
+			If(props.AccountCount > 0, Span(css.Class("row-meta"), uistate.TN("accounts.institutionLinkedOne", "accounts.institutionLinkedMany", props.AccountCount))),
 			If(strings.TrimSpace(in.SupportPhone) != "", Span(css.Class("row-meta"), in.SupportPhone)),
 		),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "institution-edit-"+in.ID),
-			AriaLabel(uistate.T("accounts.editInstitution")), Title(uistate.T("accounts.editInstitution")), OnClick(edit),
+			AriaLabel(uistate.T("accounts.editInstitutionAria", in.DisplayName(uistate.T("accounts.institutionUntitled")))),
+			Title(uistate.T("accounts.editInstitution")), OnClick(edit),
 			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 	)
 }
@@ -198,10 +154,15 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 	app := appstate.Default
 	isNew := props.ID == "" || props.ID == "new"
 	var existing domain.Institution
+	// found is false when the institution being edited no longer exists, for example because it was
+	// deleted in another tab. Saving or deleting then reports that instead of creating or deleting
+	// something else.
+	found := isNew
 	if !isNew && app != nil {
 		for _, in := range app.Institutions() {
 			if in.ID == props.ID {
 				existing = in
+				found = true
 				break
 			}
 		}
@@ -229,14 +190,24 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 		if app == nil {
 			return
 		}
+		if !found {
+			errS.Set(uistate.T("accounts.institutionGone"))
+			return
+		}
 		name := strings.TrimSpace(nameS.Get())
 		if name == "" {
 			errS.Set(uistate.T("accounts.institutionNameRequired"))
 			return
 		}
+		color, err := institution.NormalizeColor(colorS.Get())
+		if err != nil {
+			slog.Warn("institution colour rejected", "institution", existing.ID, "error", err)
+			errS.Set(uistate.T("accounts.institutionColorInvalid"))
+			return
+		}
 		in := existing
 		in.Name = name
-		in.Color = strings.TrimSpace(colorS.Get())
+		in.Color = color
 		in.SupportPhone = strings.TrimSpace(phoneS.Get())
 		in.SupportURL = strings.TrimSpace(urlS.Get())
 		in.Note = strings.TrimSpace(noteS.Get())
@@ -244,7 +215,8 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 			in.ID = id.New()
 		}
 		if err := app.PutInstitution(in); err != nil {
-			errS.Set(err.Error())
+			slog.Error("save institution", "institution", in.ID, "error", err)
+			errS.Set(acctWriteErrorText(err))
 			return
 		}
 		dataEditSaved()
@@ -256,13 +228,17 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 		if app == nil || isNew {
 			return
 		}
-		name := existing.TrimmedName()
+		if !found {
+			errS.Set(uistate.T("accounts.institutionGone"))
+			return
+		}
+		name := existing.DisplayName(uistate.T("accounts.institutionUntitled"))
 		uistate.ConfirmModal(uistate.T("accounts.institutionDeleteConfirm", name), true, func(ok bool) {
 			if !ok {
 				return
 			}
 			if err := app.DeleteInstitution(existing.ID); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				postAcctWriteError("delete institution", err)
 				return
 			}
 			dataEditSaved()
@@ -283,7 +259,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 
 	swatch := colorS.Get()
 	if swatch == "" {
-		swatch = defaultSwatchColor
+		swatch = institution.DefaultSwatchColor
 	}
 
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "institution-edit-form"), OnSubmit(save),
@@ -320,7 +296,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 func institutionPickerOptions(app *appstate.App) []uiw.SelectOption {
 	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.institutionNone")}}
 	for _, in := range sortedInstitutions(app) {
-		opts = append(opts, uiw.SelectOption{Value: in.ID, Label: in.TrimmedName()})
+		opts = append(opts, uiw.SelectOption{Value: in.ID, Label: in.DisplayName(uistate.T("accounts.institutionUntitled"))})
 	}
 	return opts
 }

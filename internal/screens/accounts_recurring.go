@@ -4,15 +4,14 @@
 
 // The repeats detected on one account.
 //
-// The recurring-charge detector already reports "6 recurring charges on Joint Checking" and
-// links to /subscriptions, where the account context is gone and the list is the
-// household's, not this account's. This panel is the other half: the repeats found here,
-// each with the one action worth having on them — start tracking it as a recurring
+// The recurring-charge detector reports its findings for the whole household on
+// /subscriptions. This panel narrows them to one account: the repeats found here,
+// each with the one action worth having on them, start tracking it as a recurring
 // commitment.
 //
-// The detection is internal/recurdiscover, run once per frame by rhyDiscover and
-// filtered to the account, so opening this panel on five accounts costs one sweep,
-// not five. Confirming goes through the same ConfirmRecurCandidate the review
+// The detection is internal/recurdiscover, run by rhyDiscover and filtered to the
+// account. The run is memoised per frame, so every row's panel reads the same result and
+// five accounts cost one sweep, not five. Confirming goes through the same ConfirmRecurCandidate the review
 // surface uses, back-claim included.
 package screens
 
@@ -20,7 +19,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -35,11 +33,12 @@ import (
 )
 
 // acctRecurCode is the feature code for recurring-charge detection. It is free, so
-// so the panel needs no provider and defaults on.
+// the panel needs no provider and defaults on.
 const acctRecurCode = "SMART-A7"
 
-// acctRecurCap bounds the list. An account with thirty repeats is a list, not a
-// finding; the Bills & recurring surface is where a full roster belongs.
+// acctRecurCap bounds how many repeats the panel lists. An account with thirty repeats is a list,
+// not a finding; the Bills & recurring surface is where a full roster belongs. The panel's count
+// still states every repeat found.
 const acctRecurCap = 6
 
 // accountRecurProps carries the account whose repeats are listed.
@@ -54,7 +53,8 @@ func recurSlot() ui.Node {
 }
 
 // accountRecurringPanel renders the collapsed "N charges here repeat" disclosure. It is its
-// own component: it owns the disclosure state, and the discovery run stays lazy behind it.
+// own component: it owns the disclosure state. The discovery result is read on every render so the
+// count in the header is current, and it is memoised per frame.
 func accountRecurringPanel(props accountRecurProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	expanded := ui.UseState(false)
@@ -84,24 +84,29 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 	head := Button(css.Class("budget-drivers-toggle"), Type("button"),
 		Attr("data-testid", "acct-recur-toggle-"+props.Account.ID),
 		AriaExpanded(open), Attr("aria-controls", listID), OnClick(toggle),
-		Span(uistate.T("sm6.hint", len(cands))),
+		Span(uistate.TN("sm6.hintOne", "sm6.hintMany", len(cands))),
 		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
 
 	body := ui.If(open || listMounted, func() ui.Node {
-		rows := make([]ui.Node, 0, len(cands))
-		for _, c := range cands {
-			rows = append(rows, ui.CreateElement(accountRecurRow, accountRecurRowProps{
-				AccountID: props.Account.ID,
+		listed := cands[:min(len(cands), acctRecurCap)]
+		rows := make([]ui.Node, 0, len(listed)+1)
+		for _, c := range listed {
+			rows = append(rows, WithKey(ui.CreateElement(accountRecurRow, accountRecurRowProps{
+				App:       app,
 				Candidate: c,
 				Base:      base,
-			}))
+			}), c.Signature))
+		}
+		if len(cands) > len(listed) {
+			rows = append(rows, P(css.Class("acct-recur-meta"), Attr("data-testid", "acct-recur-capnote-"+props.Account.ID),
+				uistate.T("sm6.capNote", len(listed))))
 		}
 		return Div(css.Class(uiw.FadeClass("acct-recur-list", open)), Attr("id", listID), rows)
 	})
 	return Div(css.Class("acct-recur"), Attr("data-testid", "acct-recur-"+props.Account.ID), head, body)
 }
 
-// accountRecurCandidates returns the account's UNTRACKED repeats, capped, plus
+// accountRecurCandidates returns all of the account's UNTRACKED repeats, plus
 // the base currency their typical amounts are stated in.
 //
 // It reads rhyDiscover's frame-memoized result rather than running its own sweep:
@@ -109,28 +114,13 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 // the whole ledger for the same answer. Candidates whose commitment already exists
 // are excluded by Discover itself, so what is left is genuinely untracked.
 func accountRecurCandidates(app *appstate.App, accountID string) ([]recurdiscover.Candidate, string) {
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	res := rhyDiscover(app, rates, time.Now())
-	var out []recurdiscover.Candidate
-	for _, c := range res.Candidates {
-		if c.AccountID != accountID {
-			continue
-		}
-		out = append(out, c)
-		if len(out) >= acctRecurCap {
-			break
-		}
-	}
-	return out, base
+	base, rates := accountBaseAndRates(app)
+	return rhyDiscover(app, rates, time.Now()).ForAccount(accountID, 0), base
 }
 
 // accountRecurRowProps is one detected repeat.
 type accountRecurRowProps struct {
-	AccountID string
+	App       *appstate.App
 	Candidate recurdiscover.Candidate
 	Base      string
 }
@@ -141,11 +131,7 @@ type accountRecurRowProps struct {
 func accountRecurRow(props accountRecurRowProps) ui.Node {
 	c := props.Candidate
 	track := ui.UseEvent(Prevent(func() {
-		a := appstate.Default
-		if a == nil {
-			return
-		}
-		if r, ok := ConfirmRecurCandidate(a, c, time.Now(), props.Base); ok {
+		if r, ok := ConfirmRecurCandidate(props.App, c, time.Now(), props.Base); ok {
 			uistate.PostUndoable(uistate.T("sm6.trackedUndo", r.Label))
 		}
 	}))
@@ -158,6 +144,6 @@ func accountRecurRow(props accountRecurRowProps) ui.Node {
 			Span(css.Class("acct-recur-meta"),
 				uistate.T("sm6.rowMeta", cadenceLabel(cad), fmtMoney(amt))),
 		),
-		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("sm6.makeRecur"), Class: "acct-recur-track", TestID: "acct-recur-track-" + c.Signature}, OnClick(track)),
+		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("sm6.makeRecur"), AriaLabel: uistate.T("sm6.makeRecurAria", c.Payee), Class: "acct-recur-track", TestID: "acct-recur-track-" + c.Signature}, OnClick(track)),
 	)
 }

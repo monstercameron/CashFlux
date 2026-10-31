@@ -19,20 +19,38 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
+// checkingFixture is a shared checking account with an opening balance, as the Accounts tests need.
+func checkingFixture(id, name string, openingMinor int64) domain.Account {
+	return domain.Account{ID: id, Name: name, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD",
+		OpeningBalance: money.New(openingMinor, "USD"), BalanceAsOf: time.Now()}
+}
+
+// isolateAccountsView gives a test a clean Accounts view: no household lens, the default account
+// filter and class view, and no cached account details. One cleanup puts all of it back.
+func isolateAccountsView(t *testing.T) {
+	t.Helper()
+	filters := state.NewGlobalAtom("accounts:filter", uistate.AccountsFilter{})
+	lens := state.NewGlobalAtom("household:activeScope", scope.ReportScope{})
+	previousFilter, previousLens := filters.Get(), lens.Get()
+	t.Cleanup(func() {
+		filters.Set(previousFilter)
+		lens.Set(previousLens)
+		uistate.PersistAcctClass("")
+		clearAccountDetailCaches()
+	})
+	lens.Set(scope.ReportScope{})
+}
+
 // TestAccountsServicesViewStaysOnWhenThereAreNoServices checks that choosing Services with no services
 // yet shows an empty state rather than switching back to the asset list.
 func TestAccountsServicesViewStaysOnWhenThereAreNoServices(t *testing.T) {
 	app := primaryAccountsGoalsApp(t)
-	lens := state.NewGlobalAtom("household:activeScope", scope.ReportScope{})
-	previousLens := lens.Get()
-	t.Cleanup(func() { lens.Set(previousLens); uistate.PersistAcctClass(""); clearAccountDetailCaches() })
-	lens.Set(scope.ReportScope{})
+	isolateAccountsView(t)
 
-	now := time.Now()
-	checking := domain.Account{ID: "checking", Name: "Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
-		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(10000, "USD"), BalanceAsOf: now}
+	checking := checkingFixture("checking", "Checking", 10000)
 	card := domain.Account{ID: "card", Name: "Card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
-		Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: money.New(-5000, "USD"), BalanceAsOf: now}
+		Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: money.New(-5000, "USD"), BalanceAsOf: time.Now()}
 	for _, a := range []domain.Account{checking, card} {
 		if err := app.PutAccount(a); err != nil {
 			t.Fatal(err)
@@ -57,17 +75,10 @@ func TestAccountsServicesViewStaysOnWhenThereAreNoServices(t *testing.T) {
 // the recurring services instead of accounts, shows their monthly total, and leaves the accounts out.
 func TestAccountsServicesViewListsServicesWithTheirMonthlyTotal(t *testing.T) {
 	app := primaryAccountsGoalsApp(t)
-	filters := state.NewGlobalAtom("accounts:filter", uistate.AccountsFilter{})
-	previousFilter := filters.Get()
-	lens := state.NewGlobalAtom("household:activeScope", scope.ReportScope{})
-	previousLens := lens.Get()
-	t.Cleanup(func() { filters.Set(previousFilter); lens.Set(previousLens); clearAccountDetailCaches() })
-	lens.Set(scope.ReportScope{})
+	isolateAccountsView(t)
 
 	now := time.Now()
-	checking := domain.Account{ID: "checking", Name: "Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
-		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(10000, "USD"), BalanceAsOf: now}
-	if err := app.PutAccount(checking); err != nil {
+	if err := app.PutAccount(checkingFixture("checking", "Checking", 10000)); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.Store().PutRecurring(services.NewMonthly(services.Draft{ID: "xfinity", Name: "Comcast Xfinity", Provider: "Comcast",
@@ -81,7 +92,6 @@ func TestAccountsServicesViewListsServicesWithTheirMonthlyTotal(t *testing.T) {
 
 	// The class view starts from the saved preference, so select the Services view through it.
 	uistate.PersistAcctClass(serviceClassView)
-	t.Cleanup(func() { uistate.PersistAcctClass("") })
 	f := render.New(t, render.WithQueuedScheduler())
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(Accounts))

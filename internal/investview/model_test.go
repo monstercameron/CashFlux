@@ -168,7 +168,7 @@ func legacyPrepareReference(in Input) legacyModel {
 	out := legacyModel{Balances: map[string]int64{}}
 	var accounts []domain.Account
 	for _, account := range in.Accounts {
-		if !account.Archived && isInvestmentAccount(account.Type) {
+		if !account.Archived && account.Type.IsInvestment() {
 			accounts = append(accounts, account)
 		}
 	}

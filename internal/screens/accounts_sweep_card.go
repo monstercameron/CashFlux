@@ -39,17 +39,24 @@ func accountsSweepCards() ui.Node {
 	if len(proposals) == 0 {
 		return Fragment()
 	}
-	nameOf := map[string]string{}
+	names := map[string]string{}
 	for _, a := range app.Accounts() {
-		nameOf[a.ID] = a.Name
+		names[a.ID] = a.Name
+	}
+	// A proposal whose account no longer exists reads "Unknown account", not a blank name.
+	nameOf := func(accountID string) string {
+		if n := names[accountID]; n != "" {
+			return n
+		}
+		return uistate.T("acctSweepCfg.unknownAccount")
 	}
 	cards := make([]ui.Node, 0, len(proposals))
 	for _, p := range proposals {
-		cards = append(cards, ui.CreateElement(accountsSweepCard, accountsSweepCardProps{
+		cards = append(cards, WithKey(ui.CreateElement(accountsSweepCard, accountsSweepCardProps{
 			Proposal: p,
-			FromName: nameOf[p.SourceAccountID],
-			ToName:   nameOf[p.DestAccountID],
-		}))
+			FromName: nameOf(p.SourceAccountID),
+			ToName:   nameOf(p.DestAccountID),
+		}), p.RuleID))
 	}
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mb2), cards)
 }
@@ -63,15 +70,13 @@ type accountsSweepCardProps struct {
 // accountsSweepCard renders one sweep proposal. Approve runs the transfer; dismiss
 // marks the rule handled so it does not propose again until its next cadence.
 func accountsSweepCard(props accountsSweepCardProps) ui.Node {
+	app := appstate.Default
 	p := props.Proposal
 	hidden := ui.UseState(false)
-	if hidden.Get() {
-		return Fragment()
-	}
 	amtStr := fmtMoney(money.New(p.AmountMinor, p.Currency))
 
 	onApprove := ui.UseEvent(func() {
-		err := appstate.Default.ApproveSweepProposal(p,
+		err := app.ApproveSweepProposal(p,
 			uistate.T("acctSweep.transferDesc", props.ToName), time.Now())
 		switch {
 		case err == nil:
@@ -83,40 +88,58 @@ func accountsSweepCard(props accountsSweepCardProps) ui.Node {
 			// The money has moved, so the card must not be offered again.
 			uistate.BumpDataRevision()
 			uistate.RequestPersist()
-			uistate.PostNotice(err.Error(), true)
+			postAcctWriteError("approve sweep", err)
 			hidden.Set(true)
+		case errors.Is(err, appstate.ErrSweepAlreadyPosted):
+			// The rule's earlier sweep in this window stands and nothing new moved, so say that
+			// instead of reporting this proposal's amount; the rebuilt list drops the card.
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("acctSweep.alreadyPosted"), false)
+			hidden.Set(true)
+		case errors.Is(err, appstate.ErrSweepProposalStale):
+			// The proposals are rebuilt from the current balances and rules, so the stale card goes away.
+			uistate.BumpDataRevision()
+			postAcctWriteError("approve sweep", err)
 		default:
-			uistate.PostNotice(err.Error(), true)
+			postAcctWriteError("approve sweep", err)
 		}
 	})
 	onDismiss := ui.UseEvent(func() {
-		if err := appstate.Default.MarkSweepProposed(p.RuleID, time.Now()); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		if err := app.MarkSweepProposed(p.RuleID, time.Now()); err != nil {
+			postAcctWriteError("dismiss sweep", err)
 			return
 		}
 		uistate.RequestPersist()
 		hidden.Set(true)
 	})
 
+	if hidden.Get() {
+		return Fragment()
+	}
 	return Div(
 		css.Class("catchup-card"),
-		Role("status"),
+		Role("group"),
 		Attr("data-testid", "acct-sweep-card-"+p.RuleID),
 		AriaLabel(uistate.T("acctSweep.aria", props.FromName)),
 		Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Span(css.Class("catchup-card-icon"), "🧹"),
-				Div(css.Class("catchup-card-text"),
-					Strong(uistate.T("acctSweep.title")),
-					P(uistate.T("acctSweep.body", amtStr, props.FromName, props.ToName)),
+			// The live region holds only the text. The approve and dismiss buttons sit outside it so a
+			// screen reader does not announce them as part of the suggestion.
+			Div(Role("status"),
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+					Span(css.Class("catchup-card-icon"), AriaHidden(true), "🧹"),
+					Div(css.Class("catchup-card-text"),
+						Strong(uistate.T("acctSweep.title")),
+						P(uistate.T("acctSweep.body", amtStr, props.FromName, props.ToName)),
+					),
 				),
+				// Explainable breakdown: balance − keep − earmarked = the excess to move.
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-sweep-breakdown-"+p.RuleID),
+					uistate.T("acctSweep.breakdown",
+						fmtMoney(money.New(p.BalanceMinor, p.Currency)),
+						fmtMoney(money.New(p.KeepMinor, p.Currency)),
+						fmtMoney(money.New(p.EarmarkedMinor, p.Currency)))),
 			),
-			// Explainable breakdown: balance − keep − earmarked = the excess to move.
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-sweep-breakdown-"+p.RuleID),
-				uistate.T("acctSweep.breakdown",
-					fmtMoney(money.New(p.BalanceMinor, p.Currency)),
-					fmtMoney(money.New(p.KeepMinor, p.Currency)),
-					fmtMoney(money.New(p.EarmarkedMinor, p.Currency)))),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 				Button(css.Class("btn btn-primary btn-sm"), Type("button"),
 					Attr("data-testid", "acct-sweep-approve-"+p.RuleID), OnClick(onApprove),

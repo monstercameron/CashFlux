@@ -2,7 +2,13 @@
 
 package reconcile
 
-import "testing"
+import (
+	"errors"
+	"math"
+	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 func TestPreviewDelta(t *testing.T) {
 	tests := []struct {
@@ -237,4 +243,68 @@ func TestDiff(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckedArithmeticRejectsOverflowAndPlainVariantsSaturate(t *testing.T) {
+	const maxI, minI = int64(math.MaxInt64), int64(math.MinInt64)
+	t.Run("Diff", func(t *testing.T) {
+		tests := []struct {
+			name              string
+			cleared, statment int64
+			wantDiff          int64
+			wantOverflow      bool
+			wantReconciled    bool
+		}{
+			{"ordinary", 100, 150, 50, false, false},
+			{"equal extremes reconcile", maxI, maxI, 0, false, true},
+			{"positive overflow", minI, maxI, maxI, true, false},
+			{"negative overflow", maxI, minI, minI, true, false},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				got := Diff(tc.cleared, tc.statment)
+				if got.DifferenceMinor != tc.wantDiff || got.Reconciled != tc.wantReconciled {
+					t.Fatalf("Diff = %+v, want diff %d reconciled %v", got, tc.wantDiff, tc.wantReconciled)
+				}
+				checked, err := DiffChecked(tc.cleared, tc.statment)
+				if tc.wantOverflow != errors.Is(err, money.ErrOverflow) {
+					t.Fatalf("DiffChecked err = %v, want overflow %v", err, tc.wantOverflow)
+				}
+				if !tc.wantOverflow && checked != got {
+					t.Fatalf("DiffChecked = %+v, Diff = %+v", checked, got)
+				}
+			})
+		}
+	})
+	t.Run("PreviewDelta", func(t *testing.T) {
+		if got := PreviewDelta(minI, maxI); got.AdjustmentMinor != maxI || !got.NeedsAdjustment {
+			t.Fatalf("PreviewDelta = %+v, want saturated positive adjustment", got)
+		}
+		if _, err := PreviewDeltaChecked(minI, maxI); !errors.Is(err, money.ErrOverflow) {
+			t.Fatalf("PreviewDeltaChecked err = %v, want overflow", err)
+		}
+		if got, err := PreviewDeltaChecked(100, 150); err != nil || got != PreviewDelta(100, 150) {
+			t.Fatalf("PreviewDeltaChecked = %+v, %v", got, err)
+		}
+	})
+	t.Run("PreviewBulkClear", func(t *testing.T) {
+		amounts := []int64{maxI, 1}
+		got := PreviewBulkClear(0, 0, amounts)
+		if got.SumMinor != maxI || got.Count != 2 {
+			t.Fatalf("PreviewBulkClear = %+v, want a saturated sum", got)
+		}
+		if _, err := PreviewBulkClearChecked(0, 0, amounts); !errors.Is(err, money.ErrOverflow) {
+			t.Fatalf("sum overflow err = %v", err)
+		}
+		if _, err := PreviewBulkClearChecked(maxI, 0, []int64{1}); !errors.Is(err, money.ErrOverflow) {
+			t.Fatalf("projected overflow err = %v", err)
+		}
+		if _, err := PreviewBulkClearChecked(minI, maxI, nil); !errors.Is(err, money.ErrOverflow) {
+			t.Fatalf("difference overflow err = %v", err)
+		}
+		ok, err := PreviewBulkClearChecked(100, 150, []int64{20, 30})
+		if err != nil || ok != PreviewBulkClear(100, 150, []int64{20, 30}) || !ok.Result.Reconciled {
+			t.Fatalf("PreviewBulkClearChecked = %+v, %v", ok, err)
+		}
+	})
 }

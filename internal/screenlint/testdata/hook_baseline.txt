@@ -2,17 +2,12 @@
 # One file:function entry; remove entries as each site is fixed.
 screens/accountaddform.go:accountAddForm
 screens/accounts_docs.go:accountDocsDrawer
-screens/accounts_groups.go:AccountGroupsForm
-screens/accounts_groups.go:acctGroupHeader
-screens/accounts_institutions.go:institutionEditForm
 screens/accounts_institutions.go:InstitutionsManagerForm
 screens/accounts_recurring.go:accountRecurringPanel
-screens/accounts_row.go:AccountRow
 screens/accounts_sweep_card.go:accountsSweepCard
 screens/accounts_sweep_card.go:accountsSweepCards
 screens/accounts_sweep_config.go:SweepRulesForm
 screens/accounts_tiles.go:acctIdleCashLine
-screens/accounts_tiles.go:acctInvestmentsBanner
 screens/accounts_tiles.go:acctListWidget
 screens/accounts_widget.go:Accounts
 screens/activity.go:Activity

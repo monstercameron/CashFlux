@@ -24,17 +24,6 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// isInvestmentAccount reports whether an account type holds investment positions
-// (brokerage, retirement, or crypto). These are the accounts shown on /investments.
-func isInvestmentAccount(t domain.AccountType) bool {
-	switch t {
-	case domain.TypeInvestment, domain.TypeRetirement, domain.TypeCrypto:
-		return true
-	default:
-		return false
-	}
-}
-
 // investmentAccountTypeBadge returns a short badge label for the account type.
 func investmentAccountTypeBadge(t domain.AccountType) string {
 	switch t {

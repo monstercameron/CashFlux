@@ -5,10 +5,10 @@
 package screens
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/accountedit"
 	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/revalue"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -30,29 +31,23 @@ import (
 // tiles live in accounts_tiles.go; the rich per-account row is AccountRow in
 // accounts_row.go. These helpers are used across those files (and the add form).
 
-// labeledField wraps a form control in a <label> with persistent visible text, so
-// the field stays self-describing after a placeholder would have vanished (C49).
-// The wrapping <label> also associates the text with the control for a11y. Styled
-// inline (stacked text-over-control) to avoid a stylesheet dependency.
-func labeledField(label string, control ui.Node) ui.Node {
-	return Label(css.Class("labeled-field"),
-		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)))),
-		Span(css.Class("t-caption", tw.TextDim), label),
-		control,
-	)
+// condName returns name when ok is true and "" otherwise, so a conditional
+// modifier class can be passed as one more argument of a single css.Class call
+// (an element takes exactly one class option; a second one would replace the first).
+func condName(ok bool, name string) string {
+	if ok {
+		return name
+	}
+	return ""
 }
 
-// labeledFieldRequired is labeledField for a field the form will not commit
-// without (C666). The marker is doubled deliberately: an asterisk carries it to a
-// sighted user at a glance, and a screen-reader-only word carries it to everyone
-// else, because a bare "*" read aloud is a glyph, not a requirement. The input
-// itself still needs aria-required — this labels, it does not validate.
-func labeledFieldRequired(label string, control ui.Node) ui.Node {
-	return Label(css.Class("labeled-field"),
-		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)))),
-		Span(css.Class("t-caption", tw.TextDim), label,
-			Span(css.Class(tw.TextDanger), AriaHidden(true), " *"),
-			Span(css.Class("sr-only"), " "+uistate.T("budgets.fieldRequired"))),
+// labeledField wraps a form control in a <label> with persistent visible text, so
+// the field stays self-describing after a placeholder would have vanished.
+// The wrapping <label> also associates the text with the control for a11y. The
+// labeled-field-tight class stacks the text over the control.
+func labeledField(label string, control ui.Node) ui.Node {
+	return Label(css.Class("labeled-field", "labeled-field-tight"),
+		Span(css.Class("t-caption", tw.TextDim), label),
 		control,
 	)
 }
@@ -60,12 +55,11 @@ func labeledFieldRequired(label string, control ui.Node) ui.Node {
 // groupedField mirrors labeledField for a GROUP of controls (a checklist).
 // It must be a fieldset+legend, never a <label> wrapper: wrapping a group in
 // <label> makes the FIRST checkbox inside the label's implicit control, so its
-// accessible name becomes the entire group's text ("Linked accounts QA Asset
-// Account Priya's Business Checking …" — QA M6).
+// accessible name becomes the entire group's text ("Linked accounts Asset
+// Account Priya's Business Checking …").
 func groupedField(label string, control ui.Node) ui.Node {
-	return Fieldset(css.Class("labeled-field"),
-		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)), css.BorderStyle(css.LineNone), css.Margin(css.Length("0")), css.Padding(css.Length("0")), css.MinWidth(css.Length("0")))),
-		Legend(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Padding(css.Length("0")))), label),
+	return Fieldset(css.Class("labeled-field", "labeled-group"),
+		Legend(css.Class("t-caption", tw.TextDim), label),
 		control,
 	)
 }
@@ -82,8 +76,8 @@ func ariaBool(b bool) string {
 // currencyOptions builds the account-currency picker's SelectOptions: every known
 // registry currency, plus any code already in play (the base currency, the FX-table
 // currencies, and the current selection) so an in-use code is never dropped. Each
-// option reads "CODE — Name". A validated picker (vs the old free-text input) keeps
-// typos from silently breaking FX.
+// option reads "CODE — Name". Picking from a fixed list keeps typos from
+// silently breaking FX.
 func currencyOptions(app *appstate.App, selected string) []uiw.SelectOption {
 	seen := map[string]bool{}
 	var codes []string
@@ -117,32 +111,20 @@ func currencyOptions(app *appstate.App, selected string) []uiw.SelectOption {
 }
 
 // netWorthDeltaLine renders the month-to-date net-worth change as a small trend
-// subtitle under the hero figure: a colored ↑/↓ glyph + the signed amount + "this
-// month" (G3 §3). Unknown arithmetic gets an unavailable caption, distinct from
-// a known zero delta.
+// subtitle under the hero figure: a colored ↑/↓ glyph, the signed amount and "this
+// month". An unknown or unrepresentable change gets an unavailable caption, distinct
+// from a known zero change.
 func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
-	if !have {
+	abs, err := delta.AbsChecked()
+	if !have || err != nil {
 		return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-unavailable"), uistate.T("accounts.deltaUnavailable"))
 	}
 	if delta.Amount == 0 {
 		return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-zero"), uistate.T("accounts.noChangeMonth"))
 	}
-	up := delta.Amount > 0
-	tone, glyph := tw.TextUp, icon.TrendingUp
-	if !up {
-		tone, glyph = tw.TextDown, icon.TrendingDown
-	}
-	abs := delta
-	if !up {
-		var err error
-		abs, err = delta.AbsChecked()
-		if err != nil {
-			return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-unavailable"), uistate.T("accounts.deltaUnavailable"))
-		}
-	}
-	sign := "+"
-	if !up {
-		sign = "−"
+	tone, glyph, sign := tw.TextUp, icon.TrendingUp, "+"
+	if delta.Amount < 0 {
+		tone, glyph, sign = tw.TextDown, icon.TrendingDown, "−"
 	}
 	return Span(css.Class("stat-sub", tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tone),
 		uiw.Icon(glyph, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
@@ -151,7 +133,7 @@ func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
 
 // accountTypeIcon maps an account type to a small leading glyph so Checking /
 // Investment / Credit Card are distinguishable at a glance without reading the
-// meta-line (G3 §5). Unknown types fall back to the generic accounts glyph.
+// meta-line. Unknown types fall back to the generic accounts glyph.
 func accountTypeIcon(t domain.AccountType) icon.Name {
 	switch t {
 	case domain.TypeCreditCard, domain.TypeLineOfCredit:
@@ -167,9 +149,9 @@ func accountTypeIcon(t domain.AccountType) icon.Name {
 	case domain.TypeCrypto:
 		return icon.Scale
 	case domain.TypeProperty:
-		return icon.Box // closest available glyph for a real-estate/building asset (C224)
+		return icon.Box // closest available glyph for a real-estate/building asset
 	case domain.TypeVehicle:
-		return icon.Calculator // closest available glyph for a vehicle asset (C224)
+		return icon.Calculator // closest available glyph for a vehicle asset
 	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings:
 		return icon.Landmark
 	default:
@@ -178,23 +160,34 @@ func accountTypeIcon(t domain.AccountType) icon.Name {
 }
 
 // isRevaluableType reports whether an account type is periodically ESTIMATED rather
-// than reconciled (AC5): property, vehicle, crypto (internal/revalue's cadence-driven
+// than reconciled: property, vehicle, crypto (internal/revalue's cadence-driven
 // types) plus "Other", which a household may also be using for a manually-valued
 // asset. Gates the RevalueDays override field on the edit form's advanced section.
 func isRevaluableType(t domain.AccountType) bool {
 	return revalue.IsRevaluable(t) || t == domain.TypeOther
 }
 
-// accountMeta builds an account row's subtitle: type · currency, plus credit
-// utilization for liability accounts that have a credit limit.
+// accountMeta builds an account row's subtitle: type and currency, plus credit
+// utilization for liability accounts that have a credit limit. Utilization is read
+// from the balance as the row shows it, so an overpaid card, which holds money the
+// lender owes, uses none of its limit.
 func accountMeta(a domain.Account, bal money.Money) string {
-	meta := humanizeType(string(a.Type)) + " · " + a.Currency
+	typ := humanizeType(string(a.Type))
 	if a.Class == domain.ClassLiability {
-		if pct, ok := ledger.Utilization(bal.Amount, a.CreditLimit.Amount); ok {
-			meta += fmt.Sprintf(" · %d%% of limit used", pct)
+		owed := reconcile.OwedMinor(reconcile.DisplayBalance(a, bal, bal).Balance.Amount)
+		if pct, ok := ledger.Utilization(owed, a.CreditLimit.Amount); ok {
+			return uistate.T("accounts.metaLineLimit", typ, a.Currency, pct)
 		}
 	}
-	return meta
+	return uistate.T("accounts.metaLine", typ, a.Currency)
+}
+
+// accountBaseAndRates returns the household base currency, the default one when none is set,
+// together with the saved exchange rates anchored on it.
+func accountBaseAndRates(app *appstate.App) (string, currency.Rates) {
+	settings := app.Settings()
+	base := accountedit.BaseCurrencyOrDefault(settings.BaseCurrency)
+	return base, currency.Rates{Base: base, Rates: settings.FXRates}
 }
 
 // accountSnapshot shares the ledger index between account page tiles. Store and

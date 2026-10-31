@@ -113,3 +113,23 @@ func TestUniqueInstitutions(t *testing.T) {
 		})
 	}
 }
+
+func TestUniqueNamesTrimsDedupesAndSorts(t *testing.T) {
+	cases := []struct {
+		name  string
+		names []string
+		want  []string
+	}{
+		{"nil", nil, nil},
+		{"only blanks", []string{"", "   "}, nil},
+		{"trims and keeps first-seen casing", []string{" Chase", "chase ", "Ally"}, []string{"Ally", "Chase"}},
+		{"orders case-insensitively", []string{"zions", "Bmo", "ally"}, []string{"ally", "Bmo", "zions"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := domain.UniqueNames(tc.names); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("UniqueNames(%q) = %q, want %q", tc.names, got, tc.want)
+			}
+		})
+	}
+}

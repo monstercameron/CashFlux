@@ -18,6 +18,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -455,13 +456,19 @@ type appReadCaches struct {
 	recurring    revCache[domain.Recurring]
 }
 
+// Members returns every household member, or none when the local dataset is unavailable.
 func (a *App) Members() []domain.Member {
+	if a.ready() != nil {
+		return nil
+	}
 	return a.reads.members.get(a.store.Rev(), func() []domain.Member {
 		v, err := a.store.ListMembers()
 		a.logErr("members", err)
 		return v
 	})
 }
+
+// Accounts returns every account, archived ones included, or none when the dataset cannot be read.
 func (a *App) Accounts() []domain.Account {
 	rows, err := a.AccountsChecked()
 	if err != nil {
@@ -529,6 +536,8 @@ func (a *App) TransactionByID(id string) (domain.Transaction, bool) {
 	}
 	return snapshot.rows[index], true
 }
+
+// Budgets returns every persisted budget.
 func (a *App) Budgets() []domain.Budget {
 	return a.reads.budgets.get(a.store.Rev(), func() []domain.Budget {
 		v, err := a.store.ListBudgets()
@@ -544,6 +553,9 @@ func (a *App) Goals() []domain.Goal {
 	return rows
 }
 func (a *App) Tasks() []domain.Task {
+	if a.ready() != nil {
+		return nil
+	}
 	return a.reads.tasks.get(a.store.Rev(), func() []domain.Task {
 		v, err := a.store.ListTasks()
 		a.logErr("tasks", err)
@@ -747,6 +759,7 @@ func (a *App) logErr(entity string, err error) {
 
 // --- validated write-through accessors ---
 
+// PutMember validates and saves a household member. Only an Owner may manage members.
 func (a *App) PutMember(m domain.Member) error {
 	if err := a.memberRoleGuard(); err != nil {
 		return err
@@ -763,6 +776,8 @@ func (a *App) PutMember(m domain.Member) error {
 	a.log.Info("member saved", "id", m.ID)
 	return nil
 }
+
+// DeleteMember removes a household member. Only an Owner may manage members.
 func (a *App) DeleteMember(id string) error {
 	if err := a.memberRoleGuard(); err != nil {
 		return err
@@ -771,24 +786,40 @@ func (a *App) DeleteMember(id string) error {
 }
 
 // SetDefaultMember marks exactly one member as the default for new member-scoped
-// forms.
+// forms. The target is resolved before anything is written, so an unknown id leaves
+// the current default in place, and every changed member is written in one commit. Choosing the
+// default is an edit-rights action (roleGuard), not a member-management one (memberRoleGuard): it
+// only picks which existing member new forms attribute to and does not touch any member's details.
 func (a *App) SetDefaultMember(id string) error {
-	found := false
-	for _, m := range a.Members() {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	members := a.Members()
+	if !slices.ContainsFunc(members, func(m domain.Member) bool { return m.ID == id }) {
+		return fmt.Errorf("member %q not found", id)
+	}
+	var changes []store.RecordChange
+	for _, m := range members {
 		want := m.ID == id
-		if want {
-			found = true
-		}
 		if m.IsDefault == want {
 			continue
 		}
-		m.IsDefault = want
-		if err := a.store.PutMember(m); err != nil {
-			return err
+		before, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("set default member: encode member %q: %w", m.ID, err)
 		}
+		m.IsDefault = want
+		after, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("set default member: encode member %q: %w", m.ID, err)
+		}
+		changes = append(changes, store.RecordChange{Table: "members", ID: m.ID, Before: before, After: after})
 	}
-	if !found {
-		return fmt.Errorf("member %q not found", id)
+	if err := a.store.ReplayChanges(changes); err != nil {
+		return fmt.Errorf("set default member: %w", err)
 	}
 	a.log.Info("default member set", "id", id)
 	return nil
@@ -943,6 +974,108 @@ func (a *App) DeleteMemberAfterReassign(oldID, newID string) (int, error) {
 	return moved, nil
 }
 
+// ErrAccountCurrencyLocked is returned by PutAccount when an account that already has transactions,
+// balance snapshots, holdings, recurring entries or goal allocations is given a different currency,
+// which would leave those records in two currencies.
+var ErrAccountCurrencyLocked = errors.New("appstate: an account with transactions cannot change currency")
+
+// ErrAccountSignLocked is returned by PutAccount when an account that already has transactions
+// changes class (a credit card becoming an asset, say) or flips its liability sign convention,
+// either of which would reverse the meaning of every posted amount.
+var ErrAccountSignLocked = errors.New("appstate: an account with transactions cannot change class or liability sign")
+
+// accountSignChanged reports whether saving next over prior changes the account class or, for a
+// liability, the sign convention. An unset sign on next keeps the stored one, as the store does.
+func accountSignChanged(prior, next domain.Account) bool {
+	if prior.Class != next.Class {
+		return true
+	}
+	if !next.IsLiability() {
+		return false
+	}
+	nextSign := next.LiabilitySign
+	if nextSign == "" {
+		nextSign = prior.WithLiabilitySign().LiabilitySign
+	}
+	return nextSign != "" && nextSign != prior.WithLiabilitySign().LiabilitySign
+}
+
+// accountCurrencyBoundRecords reports whether records reference the account that carry money in its
+// currency and would be reinterpreted by a currency change: holdings, realized sales, recurring
+// entries (services included), goal allocations, earmarks that point at the account, debt-payment
+// links to it and sweep rules that use it as source or destination. These are the same lookups
+// DeleteAccount uses to find the account's records. The account's balance snapshots are not among them: they only
+// restate its own opening balance, so they are returned in snapshots for the caller to move to the
+// new currency together with the account.
+func (a *App) accountCurrencyBoundRecords(accountID string) (held bool, snapshots []domain.BalanceSnapshot, err error) {
+	snaps, err := a.store.ListBalanceSnapshots(accountID)
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read balance history for account %q: %w", accountID, err)
+	}
+	holdings, err := a.store.ListHoldings()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read holdings for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(holdings, func(h domain.Holding) bool { return h.AccountID == accountID }) {
+		return true, nil, nil
+	}
+	recurring, err := a.store.ListRecurring()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read recurring entries for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(recurring, func(r domain.Recurring) bool { return r.AccountID == accountID }) {
+		return true, nil, nil
+	}
+	goals, err := a.store.ListGoals()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read goals for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(goals, func(g domain.Goal) bool {
+		return slices.ContainsFunc(g.Allocations, func(al domain.GoalAllocation) bool { return al.AccountID == accountID })
+	}) {
+		return true, nil, nil
+	}
+	sales, err := a.store.ListRealizedSales()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read realized sales for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(sales, func(s domain.RealizedSale) bool { return s.AccountID == accountID }) {
+		return true, nil, nil
+	}
+	earmarks, err := a.store.ListEarmarks()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read earmarks for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(earmarks, func(e domain.Earmark) bool { return e.DestinationID == accountID }) {
+		return true, nil, nil
+	}
+	links, err := a.store.ListDebtPaymentLinks()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read debt-payment links for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(links, func(l domain.DebtPaymentLink) bool { return l.DebtAccountID == accountID }) {
+		return true, nil, nil
+	}
+	sweeps, err := a.store.ListSweepRules()
+	if err != nil {
+		return false, nil, fmt.Errorf("appstate: read sweep rules for account %q: %w", accountID, err)
+	}
+	if slices.ContainsFunc(sweeps, func(r domain.SweepRule) bool { return r.SourceAccountID == accountID || r.DestAccountID == accountID }) {
+		return true, nil, nil
+	}
+	return false, snaps, nil
+}
+
+// PutAccount validates and saves an account. A change to the opening balance records a
+// BalanceSnapshot in the same commit as the account, so the history never gains a point
+// for an account that failed to save. An account that already has transactions keeps its
+// currency (ErrAccountCurrencyLocked), its class and its liability sign (ErrAccountSignLocked); an
+// account that any holding, realized sale, recurring entry, goal allocation, earmark, debt-payment
+// link or sweep rule references keeps its currency too.
+// Balance snapshots do not lock the currency: when it changes, every snapshot of the account is
+// re-stamped to the new currency in the same commit as the account. Archiving deliberately keeps saved defaults: the
+// account resolver skips archived IDs without rewriting them, so restoring the account
+// restores the household's prior choice.
 func (a *App) PutAccount(ac domain.Account) error {
 	if err := a.roleGuard(); err != nil {
 		return err
@@ -953,39 +1086,87 @@ func (a *App) PutAccount(ac domain.Account) error {
 	if err := a.validateCustom("account", ac.Custom); err != nil {
 		return err
 	}
-	// Archiving deliberately keeps saved defaults. The account resolver skips
-	// archived IDs without rewriting them, so restoring this account restores the
-	// household's prior choice.
-	// Record a BalanceSnapshot when the balance changes — compare against the
-	// prior persisted value before writing. For new accounts with a nonzero
-	// opening balance, treat the prior balance as 0.
-	prior, exists, lookupErr := a.store.GetAccount(ac.ID)
-	if lookupErr == nil {
-		priorBalance := int64(0)
-		if exists {
-			priorBalance = prior.OpeningBalance.Amount
+	prior, exists, err := a.store.GetAccount(ac.ID)
+	if err != nil {
+		return fmt.Errorf("appstate: read account %q: %w", ac.ID, err)
+	}
+	currencyChanged := exists && prior.Currency != ac.Currency
+	signChanged := exists && accountSignChanged(prior, ac)
+	if currencyChanged || signChanged {
+		txns, err := a.store.ListTransactions()
+		if err != nil {
+			return fmt.Errorf("appstate: read ledger for account %q: %w", ac.ID, err)
 		}
-		newBalance := ac.OpeningBalance.Amount
-		if newBalance != priorBalance {
-			asOf := ac.BalanceAsOf
-			if asOf.IsZero() {
-				asOf = time.Now()
+		if slices.ContainsFunc(txns, func(t domain.Transaction) bool { return t.AccountID == ac.ID }) {
+			if currencyChanged {
+				return ErrAccountCurrencyLocked
 			}
-			snap := domain.BalanceSnapshot{
-				ID:           id.New(),
-				AccountID:    ac.ID,
-				BalanceMinor: newBalance,
-				Currency:     ac.Currency,
-				AsOf:         asOf,
-			}
-			if snapErr := a.store.PutBalanceSnapshot(snap); snapErr != nil {
-				a.log.Error("balance snapshot write failed", "accountId", ac.ID, "err", snapErr)
-				// Non-fatal: proceed with the account save.
-			}
+			return ErrAccountSignLocked
 		}
 	}
-	if err := a.store.PutAccount(ac); err != nil {
-		return err
+	var restamp []domain.BalanceSnapshot
+	if currencyChanged {
+		held, snaps, err := a.accountCurrencyBoundRecords(ac.ID)
+		if err != nil {
+			return err
+		}
+		if held {
+			return ErrAccountCurrencyLocked
+		}
+		restamp = snaps
+	}
+	priorBalance := int64(0)
+	if exists {
+		priorBalance = prior.OpeningBalance.Amount
+	}
+	if ac.OpeningBalance.Amount == priorBalance && len(restamp) == 0 {
+		if err := a.store.PutAccount(ac); err != nil {
+			return err
+		}
+		a.log.Info("account saved", "id", ac.ID)
+		return nil
+	}
+	// The balance moved, so the account and its history point commit together. The liability
+	// sign is settled here the way the store settles it for a plain account write.
+	stored := ac
+	if stored.IsLiability() && stored.LiabilitySign == "" && exists && prior.IsLiability() {
+		stored.LiabilitySign = prior.WithLiabilitySign().LiabilitySign
+	}
+	stored = stored.WithLiabilitySign()
+	switch stored.LiabilitySign {
+	case "", domain.LiabilityPositiveOwed, domain.LiabilityNegativeOwed:
+	default:
+		return fmt.Errorf("appstate: account %q: unknown liability sign %q", stored.ID, stored.LiabilitySign)
+	}
+	asOf := ac.BalanceAsOf
+	if asOf.IsZero() {
+		asOf = a.clock()
+	}
+	account, err := json.Marshal(stored)
+	if err != nil {
+		return fmt.Errorf("appstate: encode account %q: %w", ac.ID, err)
+	}
+	changes := []store.RecordChange{{Table: "accounts", ID: ac.ID, After: account}}
+	// Every existing point moves to the new currency with the account, so the valuation history
+	// never mixes currencies.
+	for _, old := range restamp {
+		old.Currency = ac.Currency
+		restamped, err := json.Marshal(old)
+		if err != nil {
+			return fmt.Errorf("appstate: encode balance snapshot: %w", err)
+		}
+		changes = append(changes, store.RecordChange{Table: "balance_snapshots", ID: old.ID, After: restamped})
+	}
+	if ac.OpeningBalance.Amount != priorBalance {
+		snap := domain.BalanceSnapshot{ID: id.New(), AccountID: ac.ID, BalanceMinor: ac.OpeningBalance.Amount, Currency: ac.Currency, AsOf: asOf}
+		history, err := json.Marshal(snap)
+		if err != nil {
+			return fmt.Errorf("appstate: encode balance snapshot: %w", err)
+		}
+		changes = append(changes, store.RecordChange{Table: "balance_snapshots", ID: snap.ID, After: history})
+	}
+	if err := a.store.ReplayChanges(changes); err != nil {
+		return fmt.Errorf("appstate: save account %q: %w", ac.ID, err)
 	}
 	a.log.Info("account saved", "id", ac.ID)
 	return nil
@@ -1046,62 +1227,6 @@ func (a *App) AccountHasTransactions(accountID string) bool {
 // ErrAccountHasTransactions is returned by DeleteAccount for an account that still has transactions,
 // including the far leg of a transfer. Deleting it would orphan them, so the account is archived instead.
 var ErrAccountHasTransactions = errors.New("appstate: account still has transactions")
-
-func (a *App) DeleteAccount(id string) error {
-	if err := a.roleGuard(); err != nil {
-		return err
-	}
-	ds, err := a.store.Snapshot()
-	if err != nil {
-		return fmt.Errorf("appstate: snapshot before deleting account %q: %w", id, err)
-	}
-	for _, t := range ds.Transactions {
-		if t.AccountID == id || t.TransferAccountID == id {
-			return ErrAccountHasTransactions
-		}
-	}
-	accounts := ds.Accounts[:0]
-	found := false
-	for _, account := range ds.Accounts {
-		if account.ID == id {
-			found = true
-			continue
-		}
-		accounts = append(accounts, account)
-	}
-	if found {
-		for i := range ds.Members {
-			if ds.Members[i].Prefs.DefaultAccountID == id {
-				ds.Members[i].Prefs.DefaultAccountID = ""
-			}
-		}
-		if ds.Settings.DefaultAccountID == id {
-			ds.Settings.DefaultAccountID = ""
-		}
-		ds.Accounts = accounts
-		links := ds.DebtPaymentLinks[:0]
-		for _, link := range ds.DebtPaymentLinks {
-			if link.DebtAccountID != id {
-				links = append(links, link)
-			}
-		}
-		ds.DebtPaymentLinks = links
-		rules := ds.DebtPayeeRules[:0]
-		for _, rule := range ds.DebtPayeeRules {
-			if rule.DebtAccountID != id && rule.SourceAccountID != id {
-				rules = append(rules, rule)
-			}
-		}
-		ds.DebtPayeeRules = rules
-		// Load replaces the account and its saved defaults inside one SQLite
-		// transaction, so references and debt-payment data disappear atomically.
-		if err := a.store.Load(ds); err != nil {
-			return fmt.Errorf("appstate: delete account %q: %w", id, err)
-		}
-	}
-	a.log.Info("entity deleted", "entity", "account", "id", id, "existed", found)
-	return nil
-}
 
 func (a *App) PutCategory(c domain.Category) error {
 	if err := a.roleGuard(); err != nil {
@@ -1517,7 +1642,7 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 	// the raw bill amount only did so for negative-stored debts.
 	for _, ac := range a.Accounts() {
 		if ac.ID == accountID && ac.Class == domain.ClassLiability {
-			amount.Amount = liabilityPaymentMinor(ac, a.Transactions(), amount.Amount)
+			amount.Amount = liabilityPaymentMinor(ac, amount.Amount)
 			break
 		}
 	}
@@ -3001,11 +3126,17 @@ func (a *App) applySinkingFundDrawdown(t domain.Transaction) {
 // WithoutTriggers runs fn with automatic transaction-added workflow firing paused
 // (so a bulk add doesn't fire per row), then, if any transactions may have been
 // added, fires the trigger once. Used by import paths.
+// The pause is lifted even if fn panics, and a nil fn does nothing.
 func (a *App) WithoutTriggers(fn func()) {
+	if fn == nil {
+		return
+	}
 	prev := a.triggersSuspended
-	a.triggersSuspended = true
-	fn()
-	a.triggersSuspended = prev
+	func() {
+		a.triggersSuspended = true
+		defer func() { a.triggersSuspended = prev }()
+		fn()
+	}()
 	if !a.triggersSuspended {
 		// Bulk add: fire aggregate workflows once (no single triggering txn).
 		a.RunTriggered(workflow.TriggerTxnAdded, nil)
@@ -3019,14 +3150,26 @@ func (a *App) WithoutTriggers(fn func()) {
 // fireTxnMutated, re-rendering the whole (thousands-of-rows) surface per row — O(N²)
 // work that froze/aborted the app on a large selection. With it, the surface re-renders
 // once. Nested calls stay safe (the inner fireTxnMutated no-ops while still suppressed).
+// The suppression is lifted even if fn panics; observers fire only when fn returns. A nil fn does
+// nothing.
 func (a *App) BulkMutate(fn func()) {
+	if fn == nil {
+		return
+	}
+	a.runSuppressed(fn)
+	a.fireTxnMutated() // once; no-ops if still suppressed (nested)
+}
+
+// runSuppressed runs fn with triggers and txn observers suppressed and restores them on return.
+func (a *App) runSuppressed(fn func()) {
 	prevT, prevO := a.triggersSuspended, a.suppressTxnObservers
 	a.triggersSuspended = true
 	a.suppressTxnObservers = true
+	defer func() {
+		a.triggersSuspended = prevT
+		a.suppressTxnObservers = prevO
+	}()
 	fn()
-	a.triggersSuspended = prevT
-	a.suppressTxnObservers = prevO
-	a.fireTxnMutated() // once; no-ops if still suppressed (nested)
 }
 
 // PutTransactionsAtomic validates the complete edit batch before writing any row.
@@ -3486,11 +3629,13 @@ func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
 }
 
 // afterTransactionsDeleted retains relationship restoration metadata and notifies
-// observers after the transaction rows and their related changes commit together.
+// observers after the transaction rows and their related changes commit together. Only the
+// transaction-link and debt-payment-link changes are restorable relations; other changes in the
+// same commit, such as a reconciliation's account update, are not undone by restoring a row.
 func (a *App) afterTransactionsDeleted(changes []store.RecordChange, deleted []string) {
 	var relations []store.RecordChange
 	for _, c := range changes {
-		if c.Table != "transactions" {
+		if c.Table == "txnlinks" || c.Table == "debt_payment_links" {
 			relations = append(relations, c)
 		}
 	}
@@ -3847,8 +3992,40 @@ func (a *App) DeleteCustomFieldDef(id string) error {
 	return a.del("customFieldDef", id, a.store.DeleteCustomFieldDef)
 }
 
-// PutSettings saves settings.
+// PutSettings saves settings. Settings are also written for per-person state (music resume point,
+// on-device AI key, model, base URL and reasoning effort), so a write that changes only that state is
+// open to every role. Any change to a household-wide field (default account, base currency, exchange
+// rates, freshness overrides, budgeting method, flex budget, payoff baseline, AI spend cap and spend
+// record; see householdSettingsChanged) needs
+// edit rights. A new default account must also name an existing, active account (a default
+// already stored is left alone, even if its account was archived since).
 func (a *App) PutSettings(s store.Settings) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	current, err := a.store.GetSettings()
+	if err != nil {
+		return fmt.Errorf("save settings: read current settings: %w", err)
+	}
+	if householdSettingsChanged(current, s) {
+		if err := a.roleGuard(); err != nil {
+			return err
+		}
+	}
+	if s.DefaultAccountID != current.DefaultAccountID {
+		if s.DefaultAccountID != "" {
+			account, found, err := a.store.GetAccount(s.DefaultAccountID)
+			if err != nil {
+				return fmt.Errorf("save settings: validate default account %q: %w", s.DefaultAccountID, err)
+			}
+			if !found {
+				return fmt.Errorf("save settings: default account %q not found", s.DefaultAccountID)
+			}
+			if account.Archived {
+				return fmt.Errorf("save settings: archived account %q cannot be the default", s.DefaultAccountID)
+			}
+		}
+	}
 	if err := a.store.PutSettings(s); err != nil {
 		return err
 	}
@@ -3976,6 +4153,9 @@ func (a *App) UndoLastAllocation() error {
 
 // Earmarks returns all persisted earmark records.
 func (a *App) Earmarks() []domain.Earmark {
+	if a.ready() != nil {
+		return nil
+	}
 	v, err := a.store.ListEarmarks()
 	a.logErr("earmarks", err)
 	return v

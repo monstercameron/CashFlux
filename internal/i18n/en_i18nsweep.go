@@ -57,7 +57,6 @@ var i18nSweepKeys = Catalog{
 	"accounts.statementBalance":    "Statement balance",
 	"accounts.statementBalancePh":  "Enter statement balance",
 	"accounts.clearedBalanceLabel": "Cleared balance: ",
-	"accounts.differenceLabel":     "Difference: ",
 	"accounts.reconciledCheck":     "Reconciled ✓",
 	"accounts.unclearedHeading":    "Uncleared transactions — mark cleared to reconcile:",
 	"accounts.noUncleared":         "No uncleared transactions. Adjust the statement balance to match the cleared balance above.",
