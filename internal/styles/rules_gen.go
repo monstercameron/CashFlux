@@ -2991,34 +2991,36 @@ func registerGenerated() {
 		alignItems("center"),
 		justifyContent("center"),
 	)
+	// The footer colours come from the theme tokens, so the light theme reads as well as the
+	// dark one. The old literals were dark-only: grey on white in light mode.
 	rule(".modal-foot .btn, .modal-sticky-foot .btn",
 		background("transparent"),
-		border("1px solid #34343a"),
-		color("#a6a6ac"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
 		fontWeight("500"),
 	)
 	rule(".modal-foot .btn:hover, .modal-sticky-foot .btn:hover",
-		color("#f4f4f5"),
-		borderColor("#44444c"),
+		color("var(--text)"),
+		borderColor("var(--control-border)"),
 	)
 	rule(".modal-foot .btn-primary, .modal-sticky-foot .btn-primary",
-		background("#1f2c24"),
-		border("1px solid #356b50"),
-		color("#7fd0a3"),
+		background("var(--accent-dim)"),
+		border("1px solid var(--accent)"),
+		color("var(--accent)"),
 		fontWeight("600"),
 	)
 	rule(".modal-foot .btn-primary:hover, .modal-sticky-foot .btn-primary:hover",
-		background("#26382d"),
+		background("color-mix(in srgb, var(--accent-dim) 80%, var(--accent) 20%)"),
 	)
 	rule(".modal-foot .btn-del, .modal-sticky-foot .btn-del",
 		background("transparent"),
-		border("1px solid #6b3535"),
-		color("#d08a8a"),
+		border("1px solid color-mix(in srgb, var(--danger) 45%, var(--border))"),
+		color("var(--danger)"),
 		fontWeight("500"),
 	)
 	rule(".modal-foot .btn-del:hover, .modal-sticky-foot .btn-del:hover",
-		background("#2c1f1f"),
-		color("#f4d0d0"),
+		background("color-mix(in srgb, var(--danger) 10%, transparent)"),
+		color("var(--danger)"),
 	)
 	rule(".field",
 		width("100%"),

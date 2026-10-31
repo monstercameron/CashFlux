@@ -109,7 +109,11 @@ func CatSuggestBody(_ struct{}) ui.Node {
 			return
 		}
 		if batch.Get() && others > 0 {
-			applyCatSuggestionToMerchant(a, cur, catID)
+			if err := applyCatSuggestionToMerchant(a, cur, catID); err != nil {
+				// Nothing was written, so the dialog stays open for another try.
+				uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+				return
+			}
 		} else {
 			applyCatSuggestion(a, cur, catID)
 		}
@@ -238,18 +242,23 @@ func catSuggestOptions(cats []domain.Category, kind domain.CategoryKind) []uiw.S
 	return out
 }
 
-// applyCatSuggestionToMerchant persists one undoable, merchant-scoped confirmation.
-func applyCatSuggestionToMerchant(app *appstate.App, txn domain.Transaction, categoryID string) {
+// applyCatSuggestionToMerchant persists one undoable, merchant-scoped confirmation. It returns the
+// read error when the merchant's transactions cannot be read, so the caller keeps its dialog open.
+func applyCatSuggestionToMerchant(app *appstate.App, txn domain.Transaction, categoryID string) error {
 	if app == nil || categoryID == "" {
-		return
+		return nil
 	}
 	if reviewqueue.MerchantKey(txn) == "" {
 		applyCatSuggestion(app, txn, categoryID)
-		return
+		return nil
 	}
-	writes, ids := smartcatview.MerchantWrites(txn, app.Transactions(), categoryID)
+	txs, err := app.TransactionsChecked()
+	if err != nil {
+		return err
+	}
+	writes, ids := smartcatview.MerchantWrites(txn, txs, categoryID)
 	if len(writes) == 0 {
-		return
+		return nil
 	}
 	name := catname.LabelByID(app.Categories(), categoryID)
 	label := smartcatview.FiledLabel(len(writes), name, uistate.T)
@@ -260,4 +269,5 @@ func applyCatSuggestionToMerchant(app *appstate.App, txn domain.Transaction, cat
 		rememberReviewChoice(txn, categoryID)
 		return nil
 	}, nil)
+	return nil
 }
