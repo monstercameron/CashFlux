@@ -130,12 +130,19 @@ func usePickerPlacement(open bool, id string, setPosition func(pickerPosition)) 
 // trigger but never narrower than a readable list, and scrolls inside the room it has.
 func multiSheetSurfaceStyle(place pickerPosition) map[string]string {
 	return map[string]string{
-		"position":   "fixed",
-		"top":        strconv.Itoa(place.Top) + "px",
-		"left":       strconv.Itoa(place.Left) + "px",
-		"width":      strconv.Itoa(max(place.Width, 200)) + "px",
-		"max-height": strconv.Itoa(place.MaxHeight) + "px",
-		"overflow-y": "auto",
+		"position":        "fixed",
+		"top":             strconv.Itoa(place.Top) + "px",
+		"left":            strconv.Itoa(place.Left) + "px",
+		"width":           strconv.Itoa(max(place.Width, 200)) + "px",
+		"max-height":      strconv.Itoa(place.MaxHeight) + "px",
+		"overflow-y":      "auto",
+		"background":      "var(--bg-elev)",
+		"border":          "1px solid var(--border)",
+		"border-radius":   "var(--radius-xl)",
+		"box-shadow":      "0 12px 32px rgba(0, 0, 0, 0.35)",
+		"padding":         "0.4rem",
+		"box-sizing":      "border-box",
+		"scrollbar-width": "thin",
 	}
 }
 

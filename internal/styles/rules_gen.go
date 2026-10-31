@@ -2906,14 +2906,13 @@ func registerGenerated() {
 	)
 	// The multi-select sheet opens as a centred panel: one row per choice, with a check mark
 	// on each chosen row. Only the sheets that hold a multi-picker are restyled here.
-	rule(".cf-multipicker-sheet",
+	rule("[id$=\"-surface\"] > .cf-multipicker-sheet",
 		width("100%"),
-		boxSizing("border-box"),
-		padding(".5rem"),
-		background("var(--bg-elev)"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-xl)"),
-		prop("box-shadow", "0 12px 32px rgba(0, 0, 0, 0.35)"),
+		padding("0"),
+		background("transparent"),
+		border("0"),
+		borderRadius("0"),
+		prop("box-shadow", "none"),
 	)
 	rule(".cf-multipicker-sheet > div:first-child",
 		padding(".4rem .6rem .5rem"),
@@ -2950,7 +2949,6 @@ func registerGenerated() {
 	rule(".cf-multipicker-option[aria-selected=\"true\"]",
 		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
 		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
-		fontWeight("600"),
 	)
 	rule(".cf-multipicker-option[aria-selected=\"true\"]::after",
 		prop("content", "\"\""),
