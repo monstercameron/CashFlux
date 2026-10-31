@@ -261,10 +261,48 @@ func TestAccountEditFormReconcileWaitsForAReadableStatementBalance(t *testing.T)
 	byTestID(f, "input", "reconcile-statement-input").Input("12x")
 	f.Stabilize()
 
-	if byTestID(f, "p", "reconcile-statement-invalid") == nil {
+	if byTestID(f, "div", "reconcile-statement-invalid") == nil {
 		t.Fatalf("an unreadable statement balance is not reported: %s", f.Text())
 	}
 	if byTestID(f, "div", "reconcile-resolve") != nil || byTestID(f, "button", "reconcile-done") != nil {
 		t.Fatal("the resolution actions or the finish button are offered from an unreadable balance")
+	}
+}
+
+// TestAccountEditFormReconcileShowsTheWorksheetAndAWarningForADifference checks that a statement
+// balance that disagrees with the cleared balance shows the worksheet's sum as a list of facts and
+// a warn callout holding the ways to resolve the gap.
+func TestAccountEditFormReconcileShowsTheWorksheetAndAWarningForADifference(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	checking := checkingFixture("checking", "Checking", 10000)
+	if err := app.PutAccount(checking); err != nil {
+		t.Fatal(err)
+	}
+	f := render.New(t, render.WithQueuedScheduler())
+	defer f.Cleanup()
+	f.Render(ui.CreateElement(AccountEditForm, AccountEditFormProps{AccountID: checking.ID, Mode: uistate.AcctEditModeReconcile}))
+	f.Stabilize()
+
+	byTestID(f, "input", "reconcile-statement-input").Input("125.50")
+	f.Stabilize()
+
+	resolve := byTestID(f, "div", "reconcile-resolve")
+	if resolve == nil || !strings.Contains(resolve.Attr("class"), "callout-warn") {
+		t.Fatalf("a non-zero difference is not a warn callout: %s", f.Text())
+	}
+	for _, id := range []string{"reconcile-adjust", "reconcile-investigate", "reconcile-force"} {
+		if byTestID(f, "button", id) == nil {
+			t.Fatalf("resolution action %s is missing: %s", id, f.Text())
+		}
+	}
+	if byTestID(f, "span", "reconcile-difference") == nil {
+		t.Fatal("the difference line is missing")
+	}
+	sheet := byTestID(f, "section", "reconcile-worksheet")
+	if sheet == nil {
+		t.Fatalf("the worksheet is not shown: %s", f.Text())
+	}
+	if len(f.AllByTag("dl")) == 0 {
+		t.Fatal("the worksheet is not a list of facts")
 	}
 }

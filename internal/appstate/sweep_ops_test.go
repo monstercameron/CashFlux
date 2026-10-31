@@ -626,7 +626,7 @@ func TestApproveSweepProposalReplayNeverMovesTheCadenceClock(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := app.ApproveSweepProposal(prop, "Surplus sweep", replay); err != nil {
-				t.Fatalf("repair replay = %v, want nil", err)
+				t.Fatalf("repair replay of the amount that moved = %v, want nil", err)
 			}
 			rule, _, _ = app.Store().GetSweepRule("r1")
 			if wantDay := base.Truncate(24 * time.Hour).Format(time.RFC3339); rule.LastProposed != wantDay {
@@ -637,6 +637,55 @@ func TestApproveSweepProposalReplayNeverMovesTheCadenceClock(t *testing.T) {
 			}
 			if n := len(app.Transactions()); n != 2 {
 				t.Fatalf("%d transactions, want the two legs of one transfer", n)
+			}
+		})
+		t.Run("repairing "+name+" with a different amount reports the stamp repaired", func(t *testing.T) {
+			app, prop := setup(t)
+			rule, _, _ := app.Store().GetSweepRule("r1")
+			rule.LastProposed = lost
+			if err := app.Store().PutSweepRule(rule); err != nil {
+				t.Fatal(err)
+			}
+			other := prop
+			other.AmountMinor = prop.AmountMinor - 100
+			if err := app.ApproveSweepProposal(other, "Surplus sweep", replay); !errors.Is(err, ErrSweepStampRepaired) {
+				t.Fatalf("repair replay of an amount that did not move = %v, want ErrSweepStampRepaired", err)
+			}
+			rule, _, _ = app.Store().GetSweepRule("r1")
+			if wantDay := base.Truncate(24 * time.Hour).Format(time.RFC3339); rule.LastProposed != wantDay {
+				t.Fatalf("LastProposed = %q after the repair, want the transfer date %q", rule.LastProposed, wantDay)
+			}
+			if n := len(app.Transactions()); n != 2 {
+				t.Fatalf("%d transactions, want the two legs of one transfer", n)
+			}
+		})
+	}
+}
+
+// TestSweepReplayAfterACadenceEditIsAlreadyPosted posts a monthly sweep, edits the rule to weekly, and
+// replays the proposal the next day. The weekly window of that day differs from the monthly window the
+// sweep posted under, yet the stamp's transfer is found, so the replay is ErrSweepAlreadyPosted and
+// moves nothing.
+func TestSweepReplayAfterACadenceEditIsAlreadyPosted(t *testing.T) {
+	for _, edited := range []domain.SweepCadence{domain.SweepWeekly, domain.SweepBiweekly, domain.SweepQuarterly} {
+		t.Run(string(edited), func(t *testing.T) {
+			post := time.Date(2026, 3, 10, 9, 0, 0, 0, time.UTC)
+			app, prop := sweepPostedFixture(t, post)
+			rule, _, _ := app.Store().GetSweepRule("r1")
+			rule.Cadence = edited
+			if _, err := app.PutSweepRule(rule); err != nil {
+				t.Fatal(err)
+			}
+			legs := len(app.Transactions())
+			replay := post.AddDate(0, 0, 1)
+			if sweepOperationID(rule, replay) == sweepOperationID(domain.SweepRule{ID: "r1", Cadence: domain.SweepMonthly}, post) {
+				t.Fatal("test setup: the edited cadence names the same window as the sweep")
+			}
+			if err := app.ApproveSweepProposal(prop, "Sweep", replay); !errors.Is(err, ErrSweepAlreadyPosted) {
+				t.Fatalf("replay after the cadence edit = %v, want ErrSweepAlreadyPosted", err)
+			}
+			if n := len(app.Transactions()); n != legs {
+				t.Fatalf("%d transactions after the replay, want %d", n, legs)
 			}
 		})
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/artifactref"
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/docexpiry"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -167,7 +168,7 @@ func looksLikeRaster(data []byte) bool {
 // type, the file name or the leading bytes mark the file as script-capable, when a declared image
 // is not a raster image type, or when a declared image does not start with raster image bytes.
 func classifyDocument(name, declared string, data []byte) (mediaType, kind string, err error) {
-	kind = "document"
+	kind = artifacts.KindDocument
 	if declared = strings.TrimSpace(declared); declared != "" {
 		parsed, _, perr := mime.ParseMediaType(declared)
 		if perr != nil {
@@ -185,7 +186,7 @@ func classifyDocument(name, declared string, data []byte) (mediaType, kind strin
 			if !looksLikeRaster(data) {
 				return "", "", fmt.Errorf("%w: the file is not a %s image", ErrUnsupportedDocType, mediaType)
 			}
-			kind = "image"
+			kind = artifacts.KindImage
 		}
 	}
 	trimmed := strings.TrimRight(strings.TrimSpace(name), ". ")
@@ -225,7 +226,9 @@ func classifyDocument(name, declared string, data []byte) (mediaType, kind strin
 // type is the declared one, lower-cased and without parameters, and an image type files the
 // artifact as an image. The account and the renewal date are checked before anything is
 // written, and the artifact and the reference land together or not at all, so a failed or
-// interrupted attach leaves no orphaned blob. The returned error wraps ErrAccountNotFound,
+// interrupted attach leaves no orphaned blob. When a blob store is wired in, the file bytes go
+// there (StoreBlobForArtifact) and the artifact row keeps only its metadata; without one the
+// bytes stay on the row. The returned error wraps ErrAccountNotFound,
 // ErrInvalidDocExpiry, ErrUnsupportedDocType, ErrDocumentEmpty or ErrDocumentTooLarge for
 // those causes.
 func (a *App) AttachAccountDocument(accountID string, in AccountDocumentInput) error {
@@ -242,7 +245,10 @@ func (a *App) AttachAccountDocument(accountID string, in AccountDocumentInput) e
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	ac, ok := a.findAccount(accountID)
+	ac, ok, err := a.findAccountChecked(accountID)
+	if err != nil {
+		return fmt.Errorf("attach account document: %w", err)
+	}
 	if !ok {
 		return fmt.Errorf("attach account document: %w: %q", ErrAccountNotFound, accountID)
 	}
@@ -258,12 +264,19 @@ func (a *App) AttachAccountDocument(accountID string, in AccountDocumentInput) e
 	ref := domain.AccountDocRef{ArtifactID: art.ID, Label: strings.TrimSpace(in.Label), AttachedAt: now, ExpiresAt: expiresAt}
 	updated := ac
 	updated.DocRefs = append(append([]domain.AccountDocRef(nil), ac.DocRefs...), ref)
-	artifact, err := json.Marshal(art)
+	stored, err := a.StoreBlobForArtifact(art)
 	if err != nil {
+		return fmt.Errorf("attach account document: %w", err)
+	}
+	blobStored := len(stored.Bytes) == 0
+	artifact, err := json.Marshal(stored)
+	if err != nil {
+		a.discardBlob(art.ID, blobStored)
 		return fmt.Errorf("attach account document: encode file: %w", err)
 	}
 	changes := []store.RecordChange{{Table: "artifacts", ID: art.ID, After: artifact}}
 	if err := a.commitAccountDocRefs(ac, updated, changes); err != nil {
+		a.discardBlob(art.ID, blobStored)
 		return fmt.Errorf("attach account document: %w", err)
 	}
 	a.log.Info("artifact saved", "id", art.ID, "kind", art.Kind, "size", art.Size)
@@ -280,7 +293,10 @@ func (a *App) RemoveAccountDocument(accountID, artifactID string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	ac, ok := a.findAccount(accountID)
+	ac, ok, err := a.findAccountChecked(accountID)
+	if err != nil {
+		return fmt.Errorf("remove account document: %w", err)
+	}
 	if !ok {
 		return fmt.Errorf("remove account document: %w: %q", ErrAccountNotFound, accountID)
 	}
@@ -296,7 +312,11 @@ func (a *App) RemoveAccountDocument(accountID, artifactID string) error {
 	updated := ac
 	updated.DocRefs = kept
 	var changes []store.RecordChange
-	if !a.artifactStillReferenced(artifactID, updated) {
+	referenced, err := a.artifactStillReferenced(artifactID, updated)
+	if err != nil {
+		return fmt.Errorf("remove account document: %w", err)
+	}
+	if !referenced {
 		changes = append(changes, store.RecordChange{Table: "artifacts", ID: artifactID})
 	}
 	if err := a.commitAccountDocRefs(ac, updated, changes); err != nil {
@@ -306,17 +326,61 @@ func (a *App) RemoveAccountDocument(accountID, artifactID string) error {
 	return nil
 }
 
+// findAccountChecked looks up an account by ID. A storage failure is returned as an error,
+// never reported as a missing account.
+func (a *App) findAccountChecked(accountID string) (domain.Account, bool, error) {
+	accounts, err := a.AccountsChecked()
+	if err != nil {
+		return domain.Account{}, false, err
+	}
+	for _, ac := range accounts {
+		if ac.ID == accountID {
+			return ac, true, nil
+		}
+	}
+	return domain.Account{}, false, nil
+}
+
 // artifactStillReferenced reports whether the artifact is still pointed at by anything, using
 // artifactref.Referenced (account documents, transaction attachments, custom-page widget bindings
-// and goal vision images) with updated standing in for its stored account copy.
-func (a *App) artifactStillReferenced(artifactID string, updated domain.Account) bool {
-	accounts := slices.Clone(a.Accounts())
+// and goal vision images) with updated standing in for its stored account copy. A failed read of
+// any of those sources is returned as an error: a partial read must not make a bound artifact
+// look unreferenced.
+func (a *App) artifactStillReferenced(artifactID string, updated domain.Account) (bool, error) {
+	accounts, err := a.AccountsChecked()
+	if err != nil {
+		return false, err
+	}
+	txns, err := a.TransactionsChecked()
+	if err != nil {
+		return false, err
+	}
+	goals, err := a.GoalsChecked()
+	if err != nil {
+		return false, err
+	}
+	pages, err := a.store.ListCustomPages()
+	if err != nil {
+		return false, fmt.Errorf("read custom pages: %w", err)
+	}
+	accounts = slices.Clone(accounts)
 	for i := range accounts {
 		if accounts[i].ID == updated.ID {
 			accounts[i] = updated
 		}
 	}
-	return artifactref.Referenced(a.Transactions(), a.CustomPages(), a.Goals(), accounts)[artifactID]
+	return artifactref.Referenced(txns, pages, goals, accounts)[artifactID], nil
+}
+
+// discardBlob removes the blob stored for an artifact whose row was never committed. A failure
+// is logged; the orphan is only wasted space.
+func (a *App) discardBlob(artifactID string, stored bool) {
+	if !stored || a.blobs == nil {
+		return
+	}
+	if err := a.blobs.Delete(artifactID); err != nil {
+		a.log.Warn("discard uncommitted document blob", "id", artifactID, "err", err)
+	}
 }
 
 // commitAccountDocRefs validates the account with its new document references and writes it

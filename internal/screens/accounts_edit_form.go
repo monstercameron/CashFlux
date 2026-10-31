@@ -939,7 +939,8 @@ func reconcileForm(p reconcileProps) ui.Node {
 func reconcileUnavailable(p reconcileProps) ui.Node {
 	return Div(css.Class("acct-edit-form"), Attr("data-testid", "reconcile-statement-mode"),
 		Div(css.Class("modal-scroll"),
-			P(css.Class("err"), Role("alert"), Attr("data-testid", "reconcile-unavailable"), uistate.T("calculation.unavailable"))),
+			uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "reconcile-unavailable",
+				Body: Fragment(uistate.T("calculation.unavailable"))})),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(p.Cancel), uistate.T("action.cancel"))),
 	)
@@ -996,11 +997,15 @@ func reconcileView(p reconcileProps) ui.Node {
 	var histRows []ui.Node
 	for i := len(a.Reconciliations) - 1; i >= 0 && len(histRows) < 6; i-- {
 		r := a.Reconciliations[i]
-		histRows = append(histRows, Div(css.Class("row", "acct-recon-hist-row"), Attr("data-testid", "reconcile-history-row"),
-			Span(uistate.CurrentPrefs().FormatDate(r.Through())),
-			If(r.Forced, Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-history-forced"),
-				uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, p.Decimals)))),
-			Span(fmtMoney(r.StatementBalance)),
+		// The wrapper carries the row's test id: EntityRow renders the row itself.
+		histRows = append(histRows, Div(css.Class("acct-s3-item"), Attr("data-testid", "reconcile-history-row"),
+			uiw.EntityRow(uiw.EntityRowProps{
+				Title: uistate.CurrentPrefs().FormatDate(r.Through()),
+				Value: Fragment(
+					If(r.Forced, Span(css.Class("t-caption", tw.TextDim, "acct-recon-forced"), Attr("data-testid", "reconcile-history-forced"),
+						uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, p.Decimals)))),
+					Span(fmtMoney(r.StatementBalance))),
+			}),
 		))
 	}
 
@@ -1042,16 +1047,23 @@ func reconcileView(p reconcileProps) ui.Node {
 					uistate.T("accounts.reconThrough", uistate.CurrentPrefs().FormatDate(through)))),
 				If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim, "acct-gap-below"), Attr("data-testid", "reconcile-draft-note"),
 					uistate.T("accounts.reconDraftNote"))),
-				labeledField(uistate.T("accounts.statementBalance"),
-					Input(append([]any{css.Class("field", condName(stmtInvalid, "field-invalid")), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
-						Attr("data-testid", "reconcile-statement-input"), Type("number"), Step(accountedit.MoneyStep(a.Currency)),
-						Placeholder(uistate.T("accounts.statementBalancePh")), OnInput(p.OnStmtBal)},
-						append(errAttrs(stmtErrID, stmtErrMsg), uiw.FieldValue(p.StmtBal.Get()))...)...)),
-				If(stmtInvalid, P(css.Class("err"), Role("alert"), Attr("id", stmtErrID), Attr("data-testid", "reconcile-statement-invalid"), stmtErrMsg)),
-				If(diffOverflow, P(css.Class("err"), Role("alert"), Attr("data-testid", "reconcile-difference-overflow"), uistate.T("calculation.unavailable"))),
-				labeledField(uistate.T("accounts.reconStmtDate"),
-					Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
-						AriaLabel(uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(p.OnStmtDate), uiw.FieldValue(p.StmtDate.Get()))),
+				uiw.Field(uiw.FieldProps{ID: "acct-reconcile-stmt-" + a.ID, Label: uistate.T("accounts.statementBalance"),
+					Control: func(f uiw.FieldA11y) ui.Node {
+						return Input(append([]any{css.Class("field", condName(stmtInvalid, "field-invalid")), Attr("id", f.ID), Attr("autofocus", ""),
+							Attr("data-testid", "reconcile-statement-input"), Type("number"), Step(accountedit.MoneyStep(a.Currency)),
+							Placeholder(uistate.T("accounts.statementBalancePh")), OnInput(p.OnStmtBal)},
+							append(errAttrs(stmtErrID, stmtErrMsg), uiw.FieldValue(p.StmtBal.Get()))...)...)
+					}}),
+				// The input's aria-describedby points at the message span inside the callout.
+				If(stmtInvalid, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "reconcile-statement-invalid",
+					Body: Span(Attr("id", stmtErrID), stmtErrMsg)})),
+				If(diffOverflow, uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "reconcile-difference-overflow",
+					Body: Fragment(uistate.T("calculation.unavailable"))})),
+				uiw.Field(uiw.FieldProps{ID: "acct-reconcile-date-" + a.ID, Label: uistate.T("accounts.reconStmtDate"),
+					Control: func(f uiw.FieldA11y) ui.Node {
+						return Input(css.Class("field"), Attr("id", f.ID), Type("date"), Attr("data-testid", "reconcile-statement-date"),
+							AriaLabel(uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(p.OnStmtDate), uiw.FieldValue(p.StmtDate.Get()))
+					}}),
 				P(css.Class("t-caption", tw.TextDim, "acct-gap-below"), Attr("data-testid", "reconcile-sign-hint"),
 					uistate.T(reconSignHintKey(a))),
 				Div(css.Class("reconcile-summary"),
@@ -1085,15 +1097,14 @@ func reconcileView(p reconcileProps) ui.Node {
 			// The way out of a stuck difference: adjustment /
 			// investigate / force-complete, offered once a balance is typed.
 			If(stmtOK && !reconciled, Div(css.Class("acct-block-above"),
-				Attr("data-testid", "reconcile-resolve"),
-				P(css.Class("t-caption", tw.TextDim), uistate.T("accounts.reconResolveHint")),
-				Div(css.Class("acct-recon-actions"),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-adjust"),
-						OnClick(acts.Adjust), uistate.T("accounts.reconAdjustAction")),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-investigate"),
-						OnClick(acts.Investigate), uistate.T("accounts.reconInvestigate")),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-force"),
-						OnClick(acts.Force), uistate.T("accounts.reconForceAction"))))),
+				uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, TestID: "reconcile-resolve",
+					Body: Fragment(
+						P(uistate.T("accounts.reconResolveHint")),
+						Div(css.Class("acct-recon-actions"),
+							uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.reconAdjustAction"), TestID: "reconcile-adjust"}, OnClick(acts.Adjust)),
+							uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.reconInvestigate"), TestID: "reconcile-investigate"}, OnClick(acts.Investigate)),
+							uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.reconForceAction"), TestID: "reconcile-force"}, OnClick(acts.Force)))),
+				}))),
 			If(len(histRows) > 0, Div(css.Class("acct-block-above"),
 				Attr("data-testid", "reconcile-history"),
 				Div(css.Class("acct-recon-hist-head"),

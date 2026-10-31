@@ -104,8 +104,8 @@ func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	})
 
 	return Div(css.Class("inv-pool-modal"),
-		P(css.Class("t-caption", tw.TextDim, "acct-hint-roomy"), uistate.T("accounts.institutionsHint")),
-		If(len(insts) == 0, P(css.Class("empty"), uistate.T("accounts.institutionsEmpty"))),
+		Div(css.Class("acct-callout-gap"), uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("accounts.institutionsHint"))})),
+		If(len(insts) == 0, uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("accounts.institutionsEmpty"))})),
 		Div(css.Class("rows"), rows),
 		Div(css.Class(tw.Mt3, tw.Flex, tw.Gap2),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "institution-add"), OnClick(startNew), uistate.T("accounts.addInstitution")),
@@ -125,17 +125,24 @@ type institutionListRowProps struct {
 func institutionListRow(props institutionListRowProps) ui.Node {
 	in := props.Inst
 	edit := ui.UseEvent(Prevent(func() { props.OnEdit(in.ID) }))
-	return Div(css.Class("row"), Attr("data-testid", "institution-row-"+in.ID),
-		Span(css.Class("inst-dot inst-dot-lg"), Attr("style", "--inst-color: "+institution.SwatchColor(in))),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), in.DisplayName(uistate.T("accounts.institutionUntitled"))),
-			If(props.AccountCount > 0, Span(css.Class("row-meta"), uistate.TN("accounts.institutionLinkedOne", "accounts.institutionLinkedMany", props.AccountCount))),
-			If(strings.TrimSpace(in.SupportPhone) != "", Span(css.Class("row-meta"), in.SupportPhone)),
-		),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "institution-edit-"+in.ID),
-			AriaLabel(uistate.T("accounts.editInstitutionAria", in.DisplayName(uistate.T("accounts.institutionUntitled")))),
-			Title(uistate.T("accounts.editInstitution")), OnClick(edit),
-			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+	var meta []string
+	if props.AccountCount > 0 {
+		meta = append(meta, uistate.TN("accounts.institutionLinkedOne", "accounts.institutionLinkedMany", props.AccountCount))
+	}
+	if phone := strings.TrimSpace(in.SupportPhone); phone != "" {
+		meta = append(meta, in.SupportPhone)
+	}
+	return Div(css.Class("acct-entity"), Attr("data-testid", "institution-row-"+in.ID),
+		uiw.EntityRow(uiw.EntityRowProps{
+			Leading: Span(css.Class("inst-dot inst-dot-lg"), Attr("style", "--inst-color: "+institution.SwatchColor(in))),
+			Title:   in.DisplayName(uistate.T("accounts.institutionUntitled")),
+			Meta:    meta,
+			Actions: []ui.Node{uiw.ToolButton(uiw.ToolButtonProps{
+				Icon: icon.Pencil, Title: uistate.T("accounts.editInstitution"),
+				AriaLabel: uistate.T("accounts.editInstitutionAria", in.DisplayName(uistate.T("accounts.institutionUntitled"))),
+				TestID:    "institution-edit-" + in.ID,
+			}, OnClick(edit))},
+		}),
 	)
 }
 
@@ -175,7 +182,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 	noteS := ui.UseState(existing.Note)
 	errS := ui.UseState("")
 
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onName := func(v string) { nameS.Set(v) }
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	onPhone := ui.UseEvent(func(v string) { phoneS.Set(v) })
 	onURL := ui.UseEvent(func(v string) { urlS.Set(v) })
@@ -265,23 +272,25 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "institution-edit-form"), OnSubmit(save),
 		Div(css.Class("modal-scroll"),
 			H4(css.Class("set-label"), title),
-			labeledField(uistate.T("accounts.institutionNameLabel"),
-				Input(css.Class("field"), Attr("id", "inst-name"), Attr("autofocus", ""), Attr("data-testid", "institution-name"),
-					Type("text"), Placeholder(uistate.T("accounts.institutionNamePh")), OnInput(onName), uiw.FieldValue(nameS.Get()))),
-			labeledField(uistate.T("accounts.institutionColorLabel"),
+			uiw.FormField(uistate.T("accounts.institutionNameLabel"),
+				uiw.TextInput(uiw.TextFieldProps{
+					Value: nameS.Get(), Placeholder: uistate.T("accounts.institutionNamePh"), OnInput: onName,
+					Extra: []any{Attr("id", "inst-name"), Attr("autofocus", ""), Attr("data-testid", "institution-name")},
+				})),
+			uiw.FormField(uistate.T("accounts.institutionColorLabel"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Input(css.Class("color-input"), Type("color"), Attr("data-testid", "institution-color"),
 						AriaLabel(uistate.T("accounts.institutionColorLabel")), OnInput(onColor), uiw.FieldValue(swatch)))),
-			labeledField(uistate.T("accounts.institutionPhoneLabel"),
+			uiw.FormField(uistate.T("accounts.institutionPhoneLabel"),
 				Input(css.Class("field"), Type("tel"), Attr("data-testid", "institution-phone"),
 					Placeholder(uistate.T("accounts.institutionPhonePh")), OnInput(onPhone), uiw.FieldValue(phoneS.Get()))),
-			labeledField(uistate.T("accounts.institutionURLLabel"),
+			uiw.FormField(uistate.T("accounts.institutionURLLabel"),
 				Input(css.Class("field"), Type("url"), Attr("data-testid", "institution-url"),
 					Placeholder(uistate.T("accounts.institutionURLPh")), OnInput(onURL), uiw.FieldValue(urlS.Get()))),
-			labeledField(uistate.T("accounts.institutionNoteLabel"),
+			uiw.FormField(uistate.T("accounts.institutionNoteLabel"),
 				uiw.TextAreaInput(uiw.TextFieldProps{Value: noteS.Get(), Placeholder: uistate.T("accounts.institutionNotePh"),
 					AriaLabel: uistate.T("accounts.institutionNoteLabel"), OnInput: onNote})),
-			If(errS.Get() != "", P(css.Class("err"), Role("alert"), errS.Get())),
+			If(errS.Get() != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(errS.Get())})),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/sweep"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
@@ -90,9 +91,10 @@ func accountsSweepCard(props accountsSweepCardProps) ui.Node {
 			uistate.RequestPersist()
 			postAcctWriteError("approve sweep", err)
 			hidden.Set(true)
-		case errors.Is(err, appstate.ErrSweepAlreadyPosted):
-			// The rule's earlier sweep in this window stands and nothing new moved, so say that
-			// instead of reporting this proposal's amount; the rebuilt list drops the card.
+		case errors.Is(err, appstate.ErrSweepAlreadyPosted), errors.Is(err, appstate.ErrSweepStampRepaired):
+			// The rule's earlier sweep in this window stands and nothing new moved (a repaired stamp
+			// moved nothing either), so say that instead of reporting this proposal's amount; the
+			// rebuilt list drops the card.
 			uistate.BumpDataRevision()
 			uistate.RequestPersist()
 			uistate.PostNotice(uistate.T("acctSweep.alreadyPosted"), false)
@@ -117,37 +119,32 @@ func accountsSweepCard(props accountsSweepCardProps) ui.Node {
 	if hidden.Get() {
 		return Fragment()
 	}
+	breakdown := P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-sweep-breakdown-"+p.RuleID),
+		uistate.T("acctSweep.breakdown",
+			fmtMoney(money.New(p.BalanceMinor, p.Currency)),
+			fmtMoney(money.New(p.KeepMinor, p.Currency)),
+			fmtMoney(money.New(p.EarmarkedMinor, p.Currency))))
+	// The callout is the live region and holds only the text. The approve and dismiss buttons sit
+	// beside it, inside the group, so a screen reader does not announce them as part of the
+	// suggestion.
 	return Div(
-		css.Class("catchup-card"),
+		css.Class("acct-sweep-card"),
 		Role("group"),
 		Attr("data-testid", "acct-sweep-card-"+p.RuleID),
 		AriaLabel(uistate.T("acctSweep.aria", props.FromName)),
-		Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol),
-			// The live region holds only the text. The approve and dismiss buttons sit outside it so a
-			// screen reader does not announce them as part of the suggestion.
-			Div(Role("status"),
-				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-					Span(css.Class("catchup-card-icon"), AriaHidden(true), "🧹"),
-					Div(css.Class("catchup-card-text"),
-						Strong(uistate.T("acctSweep.title")),
-						P(uistate.T("acctSweep.body", amtStr, props.FromName, props.ToName)),
-					),
-				),
-				// Explainable breakdown: balance − keep − earmarked = the excess to move.
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-sweep-breakdown-"+p.RuleID),
-					uistate.T("acctSweep.breakdown",
-						fmtMoney(money.New(p.BalanceMinor, p.Currency)),
-						fmtMoney(money.New(p.KeepMinor, p.Currency)),
-						fmtMoney(money.New(p.EarmarkedMinor, p.Currency)))),
-			),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
-				Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-					Attr("data-testid", "acct-sweep-approve-"+p.RuleID), OnClick(onApprove),
-					uistate.T("acctSweep.approve", amtStr)),
-				Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
-					Attr("data-testid", "acct-sweep-dismiss-"+p.RuleID), OnClick(onDismiss),
-					uistate.T("acctSweep.dismiss")),
-			),
+		uiw.Callout(uiw.CalloutProps{
+			Tone:   uiw.CalloutInfo,
+			Title:  uistate.T("acctSweep.title"),
+			Live:   uiw.CalloutLiveStatus,
+			TestID: "acct-sweep-callout-" + p.RuleID,
+			// The breakdown is the explainable arithmetic: balance minus keep minus earmarked is the excess to move.
+			Body: Fragment(P(uistate.T("acctSweep.body", amtStr, props.FromName, props.ToName)), breakdown),
+		}),
+		Div(css.Class("acct-sweep-actions"),
+			uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("acctSweep.approve", amtStr), Variant: "primary",
+				TestID: "acct-sweep-approve-" + p.RuleID}, OnClick(onApprove)),
+			uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("acctSweep.dismiss"),
+				TestID: "acct-sweep-dismiss-" + p.RuleID}, OnClick(onDismiss)),
 		),
 	)
 }

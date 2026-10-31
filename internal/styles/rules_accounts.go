@@ -190,43 +190,6 @@ func registerAccountsSurface() {
 		justifyContent("flex-start"),
 		gap("0"),
 	)
-	// PRIMARY line: type glyph, identity column (grows), the balance figure, the actions.
-	rule(".acct-row-head",
-		display("flex"),
-		alignItems("center"),
-		gap("var(--acct-head-gap, 0.75rem)"),
-		width("100%"),
-	)
-	// Identity column: the name line and the quiet sub line share one row, so the meta sits
-	// beside the name and only wraps underneath when the pane is too narrow for both. min-width:0
-	// lets long names truncate instead of shoving the figure off the row.
-	rule(".acct-row-id",
-		display("flex"),
-		flexDirection("row"),
-		flexWrap("wrap"),
-		alignItems("center"),
-		prop("column-gap", "0.75rem"),
-		rowGap("0.15rem"),
-		minWidth("0"),
-		flex("1"),
-	)
-	// Name line: the account name with its status badges and institution chip. Items wrap
-	// when the row is narrow.
-	rule(".acct-row-name",
-		display("flex"),
-		alignItems("center"),
-		flexWrap("wrap"),
-		gap("0.5rem"),
-		minWidth("0"),
-	)
-	// Quiet secondary line: the type · currency meta and the Details disclosure only.
-	rule(".acct-row-sub",
-		display("flex"),
-		alignItems("center"),
-		flexWrap("wrap"),
-		gap("0.6rem"),
-		minWidth("0"),
-	)
 	// Every row reserves the recurring-charges line, so rows with and without charges match in height.
 	rule(".acct-recur",
 		minHeight("calc(var(--type-14) * 1.6)"),
@@ -237,22 +200,11 @@ func registerAccountsSurface() {
 	rule(".acct-row .row-desc",
 		fontSize("var(--type-16)"),
 	)
-	rule(".acct-row .row-meta, .acct-row .acct-details-toggle, .acct-row .budget-drivers-toggle",
+	rule(".acct-row .row-meta, .acct-row .budget-drivers-toggle",
 		fontSize("var(--type-14)"),
 	)
 	rule(".acct-row .badge",
 		fontSize("var(--type-13)"),
-	)
-	rule(".acct-details-chev",
-		transition("transform 150ms ease"),
-	)
-	// The chevron turns to point up while the details are open.
-	rule(".acct-details-toggle[aria-expanded=\"true\"] .acct-details-chev",
-		transform("rotate(180deg)"),
-	)
-	// The Details toggle stays on one line. Its font size comes from the .acct-row rule above.
-	rule(".acct-details-toggle",
-		whiteSpace("nowrap"),
 	)
 	// The balance figure: tabular, right-aligned, the row's second anchor after the name.
 	rule(".acct-row-figure",
@@ -260,25 +212,6 @@ func registerAccountsSurface() {
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
 		fontSize("var(--type-16)"),
-	)
-	// Actions cluster: compact, never shrinking, so the buttons stay on one tidy line.
-	rule(".acct-row-actions",
-		display("inline-flex"),
-		alignItems("center"),
-		gap("0.4rem"),
-		flexShrink("0"),
-	)
-	// Compact panes: the head row wraps instead of letting the never-shrinking
-	// actions cluster spill past the pane edge — the cluster drops to its own
-	// right-aligned line under the figure (its margin-left:auto is a no-op
-	// while everything still fits on one line, since the identity column
-	// already absorbs the slack).
-	ruleContentMax(contentGrid4, ".acct-row-head",
-		flexWrap("wrap"),
-		rowGap("0.35rem"),
-	)
-	ruleContentMax(contentGrid4, ".acct-row-actions",
-		marginLeft("auto"),
 	)
 
 	// --- sweep-rules add form: one field per line ---

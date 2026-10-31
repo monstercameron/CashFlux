@@ -16,14 +16,14 @@ import (
 
 // AccountTransferHost is mounted at the shell root (beside AccountEditHost). It reads
 // the page-level transfer-open atom and renders the "Transfer money" form inside a
-// FlipPanel modal. When the atom is false no overlay is shown.
+// modal sheet. When the atom is false no overlay is shown.
 //
 // Mounting at the shell root — rather than as an inline tile on the accounts surface —
-// keeps the modal's position:fixed backdrop centered on the viewport instead of
-// resolving against a transformed bento tile, matching the account row editors.
+// keeps the sheet's fixed backdrop on the viewport instead of resolving against a
+// transformed bento tile, matching the account row editors.
 //
-// NoFooter: the form supplies its own Cancel/Transfer action row, so the modal isn't
-// double-chromed. The header ✕, Escape, and backdrop-click all dismiss via OnClose.
+// The sheet has no footer: the form supplies its own Cancel/Transfer action row. The
+// header close button, Escape, and a click on the backdrop all dismiss via OnClose.
 func AccountTransferHost() uic.Node {
 	open := uistate.UseAcctTransferOpen()
 	if !open.Get() {
@@ -39,13 +39,10 @@ func AccountTransferHost() uic.Node {
 	} else {
 		form = P(css.Class("empty"), uistate.T("common.notReady"))
 	}
-	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:     uistate.T("accounts.transferTitle"),
-		Width:     uiw.FlipMediumW,
-		Height:    uiw.FlipMediumH,
-		NoFooter:  true,
-		FlushBody: true, // the form splits into a scrolling field region + a pinned .modal-foot
-		OnClose:   closeModal,
-		Back:      form,
+	return uiw.Sheet(uiw.OverlayProps{
+		Open:    true,
+		Title:   uistate.T("accounts.transferTitle"),
+		OnClose: closeModal,
+		Body:    form,
 	})
 }

@@ -15,7 +15,6 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
@@ -40,7 +39,7 @@ import (
 func Accounts() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+		return uiw.Card(uiw.CardProps{Body: uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Live: uiw.CalloutLiveStatus, TestID: "acct-not-ready", Body: Span(uistate.T("common.notReady"))})})
 	}
 
 	// Re-render the surface on any data mutation or shared-state change: a row

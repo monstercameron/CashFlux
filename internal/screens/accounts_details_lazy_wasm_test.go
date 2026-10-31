@@ -354,12 +354,12 @@ func TestAccountsHostRejectsHistoryAndProjectionForInvalidLedgerBalance(t *testi
 	f.Stabilize()
 
 	t.Run("history says it is unavailable and draws no chart", func(t *testing.T) {
-		if byTestID(f, "p", "acct-history-unavailable-invalid") == nil || byTestID(f, "svg", "acct-spark-invalid") != nil {
+		if byTestID(f, "div", "acct-history-unavailable-invalid") == nil || byTestID(f, "svg", "acct-spark-invalid") != nil {
 			t.Fatalf("invalid exact balance became a valid chart: %s", f.Text())
 		}
 	})
 	t.Run("projections say they are unavailable", func(t *testing.T) {
-		if byTestID(f, "p", "acct-proj-unavailable-invalid") == nil || byTestID(f, "p", "acct-fwd-unavailable-invalid") == nil {
+		if byTestID(f, "div", "acct-proj-unavailable-invalid") == nil || byTestID(f, "p", "acct-fwd-unavailable-invalid") == nil {
 			t.Fatalf("invalid exact balance became a plausible zero projection: %s", f.Text())
 		}
 	})
@@ -387,7 +387,7 @@ func TestAccountsHostShowsUnavailableForProjectionOverflowAcrossConsumers(t *tes
 		accounts.Stabilize()
 		byTestID(accounts, "button", "acct-details-toggle-overflow").Click()
 		accounts.Stabilize()
-		if byTestID(accounts, "p", "acct-proj-unavailable-overflow") == nil || byTestID(accounts, "p", "acct-fwd-unavailable-overflow") == nil {
+		if byTestID(accounts, "div", "acct-proj-unavailable-overflow") == nil || byTestID(accounts, "p", "acct-fwd-unavailable-overflow") == nil {
 			t.Fatalf("projection overflow appeared as a healthy or plausible amount: %s", accounts.Text())
 		}
 	})

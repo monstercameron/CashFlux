@@ -63,7 +63,7 @@ func TestAccountsServicesViewStaysOnWhenThereAreNoServices(t *testing.T) {
 	f.Render(ui.CreateElement(Accounts))
 	f.Stabilize()
 
-	if byTestID(f, "p", "acct-services-none") == nil {
+	if byTestID(f, "div", "acct-services-none") == nil {
 		t.Fatalf("Services view with no services should show its empty state: %s", f.Text())
 	}
 	if byTestID(f, "div", "acct-row-checking") != nil {

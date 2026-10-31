@@ -336,11 +336,15 @@ func acctTransferFXNote(app *appstate.App, fromID, toID, amountStr string) ui.No
 	note := accountselect.TransferFXNote(app.Accounts(), rates, fromID, toID, amountStr)
 	switch note.Kind {
 	case accountselect.FXNoRate:
-		return P(css.Class("err"), Role("alert"), Attr("data-testid", "xfer-fx-norate"),
-			uistate.T("accounts.fxNoteNoRate", note.From, note.To))
+		return uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, TestID: "xfer-fx-norate",
+			Body: Span(uistate.T("accounts.fxNoteNoRate", note.From, note.To)),
+		})
 	case accountselect.FXConverted:
-		return P(css.Class("budget-sub", "acct-fx-note"), Attr("data-testid", "xfer-fx-note"),
-			uistate.T("accounts.fxNoteAmountIn", note.From, note.To, fmtMoney(note.Landed)))
+		return uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutInfo, TestID: "xfer-fx-note",
+			Body: Span(uistate.T("accounts.fxNoteAmountIn", note.From, note.To, fmtMoney(note.Landed))),
+		})
 	default:
 		return Fragment()
 	}
@@ -372,15 +376,18 @@ func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr, rece
 	if pending.ToLiability {
 		semanticsKey = "accounts.xferSemanticsLiability"
 	}
-	return Div(css.Class("budget-sub", "acct-xfer-preview"), Attr("data-testid", "xfer-balance-preview"),
-		Span(uistate.T("accounts.xferPreviewTitle")),
-		Span(Attr("data-testid", "xfer-preview-from"),
-			uistate.T("accounts.xferPreviewLine", pending.FromName, fmtMoney(preview.FromBefore), fmtMoney(preview.FromAfter))),
-		Span(Attr("data-testid", "xfer-preview-to"),
-			uistate.T("accounts.xferPreviewLine", pending.ToName, fmtMoney(preview.ToBefore), fmtMoney(preview.ToAfter))),
-		Span(css.Class(tw.TextDim), Attr("data-testid", "xfer-semantics"),
-			uistate.T(semanticsKey, pending.FromName, amtStr, pending.ToName)),
-	)
+	return uiw.Callout(uiw.CalloutProps{
+		Tone: uiw.CalloutInfo, TestID: "xfer-balance-preview",
+		Body: Div(css.Class("acct-xfer-preview"),
+			Span(uistate.T("accounts.xferPreviewTitle")),
+			Span(Attr("data-testid", "xfer-preview-from"),
+				uistate.T("accounts.xferPreviewLine", pending.FromName, fmtMoney(preview.FromBefore), fmtMoney(preview.FromAfter))),
+			Span(Attr("data-testid", "xfer-preview-to"),
+				uistate.T("accounts.xferPreviewLine", pending.ToName, fmtMoney(preview.ToBefore), fmtMoney(preview.ToAfter))),
+			Span(css.Class(tw.TextDim), Attr("data-testid", "xfer-semantics"),
+				uistate.T(semanticsKey, pending.FromName, amtStr, pending.ToName)),
+		),
+	})
 }
 
 // amountStep is the step of a money input in the currency: one minor unit, so the field accepts
@@ -529,7 +536,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 		Pending: nw.Complete() && !settled, PendingLabel: uistate.T("accounts.trendLoading"),
 	})
 
-	body := Div(
+	body := Div(css.Class("acct-summary-body"),
 		Div(css.Class("acct-summary-frame"),
 			// One Add control for both things the page can add. Each item names what it creates. It sits
 			// pinned to the summary's top-right corner (see rules_pageheadline.go) as the green main action.
@@ -552,10 +559,15 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 				Visual: trendVisual, Footer: acctLiquidityLine(app, props.Base, props.Rates),
 			}),
 		),
-		If(!nw.Complete(), P(css.Class("err"), Role("status"), Attr("data-testid", "acct-networth-note"), netWorthAvailabilityNote(nw))),
+		If(!nw.Complete(), uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutWarn, Live: uiw.CalloutLiveStatus, TestID: "acct-networth-note",
+			Body: Span(netWorthAvailabilityNote(nw)),
+		})),
 		// Disclose accounts the household has left out of net worth.
-		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Role("status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
-			uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice)))),
+		If(len(nw.ExcludedByChoice) > 0, uiw.Callout(uiw.CalloutProps{
+			Tone: uiw.CalloutInfo, Live: uiw.CalloutLiveStatus, TestID: "acct-nw-excludes-by-choice",
+			Body: Span(uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice))),
+		})),
 		// A quiet idle-cash line: liquid cash beyond this month's bills and goal set-asides,
 		// priced at the user's own benchmark rate (never a live feed). It renders nothing
 		// until a benchmark is set in Settings and there is enough idle cash to be worth naming.
@@ -875,11 +887,6 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	feeS := ui.UseState("")
 	dateS := ui.UseState(time.Now().Format(dateutil.Layout))
 	descS := ui.UseState("")
-	onAmt := ui.UseEvent(func(v string) { amtS.Set(v) })
-	onRecv := ui.UseEvent(func(v string) { recvS.Set(v) })
-	onFee := ui.UseEvent(func(v string) { feeS.Set(v) })
-	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
-	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	cancel := ui.UseEvent(Prevent(func() { done() }))
 	// The received amount only applies to a cross-currency pair. For any other pair the field is
 	// hidden, so whatever it still holds is left out and cannot block the post.
@@ -917,47 +924,82 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	// The button stays disabled until the form would actually post.
 	submitDisabled := !accountselect.CanPostTransfer(accounts, formInput())
 
-	return Form(css.Class("acct-edit-form"), Attr("data-testid", "page-transfer-form"),
+	return Form(css.Class("acct-edit-form", "acct-xfer-form"), Attr("data-testid", "page-transfer-form"),
 		AriaLabel(uistate.T("accounts.transferFormLabel")), OnSubmit(submit),
 		Div(css.Class("modal-scroll"),
-			labeledField(uistate.T("accounts.transferFromLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: pfrom, OnChange: func(v string) { fromS.Set(v) },
-					AriaLabel: uistate.T("accounts.transferFromLabel"), TestID: "page-xfer-from-select"})),
-			labeledField(uistate.T("accounts.transferToLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: toOpts, Selected: pto, OnChange: func(v string) { toS.Set(v) },
-					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})),
-			If(sameAcct, P(css.Class("err"), Role("alert"), uistate.T("accounts.transferSameAccountErr"))),
-			labeledField(uistate.T("accounts.transferAmount"),
-				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
-					Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
-					Step(amountStep(fromCcy)), Attr("min", amountStep(fromCcy)), OnInput(onAmt), uiw.FieldValue(amtS.Get()))),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferFromLabel"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: pfrom, ID: a.ID, OnChange: func(v string) { fromS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferFromLabel"), TestID: "page-xfer-from-select"})
+				},
+			}),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferToLabel"),
+				Error: ifStr(sameAcct, uistate.T("accounts.transferSameAccountErr"), ""),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.SelectInput(uiw.SelectInputProps{Options: toOpts, Selected: pto, ID: a.ID, OnChange: func(v string) { toS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})
+				},
+			}),
+			uiw.Field(uiw.FieldProps{
+				ID: "page-xfer-amt", Label: uistate.T("accounts.transferAmount"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.MoneyInput(uiw.MoneyInputProps{
+						Value: amtS.Get(), Currency: fromCcy, ID: a.ID, TestID: "page-xfer-amt",
+						Placeholder: uistate.T("accounts.transferAmount"), AriaLabel: uistate.T("accounts.transferAmount"),
+						OnInput: func(v string) { amtS.Set(v) },
+						Extra:   append(acctXferDescribeAttrs(a), Attr("inputmode", "decimal"), Attr("autofocus", ""), Attr("min", amountStep(fromCcy))),
+					})
+				},
+			}),
 			// Cross-currency: say what the amount means, with a live converted
 			// preview at the saved rate, or a no-rate warning before anything posts.
 			acctTransferFXNote(app, pfrom, pto, amtS.Get()),
 			// Cross-currency only: the actual landed amount, overriding the saved
 			// rate; hidden for same-currency pairs where it can't apply.
-			If(crossCcy, Fragment(
-				labeledField(uistate.T("accounts.transferReceivedLabel", toCcy),
-					Input(css.Class("field"), Attr("data-testid", "page-xfer-received"),
-						Type("number"), Step(amountStep(toCcy)), Attr("min", amountStep(toCcy)),
-						Title(uistate.T("accounts.transferReceivedHint")), OnInput(onRecv), uiw.FieldValue(recvS.Get()))),
-				If(!recvOK, P(css.Class("err"), Role("alert"), uistate.T("accounts.transferInvalidExtra"))),
-			)),
-			If(fromCcy != "", Fragment(
-				labeledField(uistate.T("accounts.transferFeeLabel", fromCcy),
-					Input(css.Class("field"), Attr("data-testid", "page-xfer-fee"),
-						Type("number"), Step(amountStep(fromCcy)), Attr("min", "0"),
-						Title(uistate.T("accounts.transferFeeHint")), OnInput(onFee), uiw.FieldValue(feeS.Get()))),
-				If(!feeOK, P(css.Class("err"), Role("alert"), uistate.T("accounts.transferInvalidExtra"))),
-			)),
+			If(crossCcy, uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferReceivedLabel", toCcy),
+				Error: ifStr(!recvOK, uistate.T("accounts.transferInvalidExtra"), ""),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.NumberInput(uiw.TextFieldProps{
+						Value: recvS.Get(), OnInput: func(v string) { recvS.Set(v) },
+						Extra: append(acctXferControlAttrs(a), Attr("data-testid", "page-xfer-received"),
+							Step(amountStep(toCcy)), Attr("min", amountStep(toCcy)), Title(uistate.T("accounts.transferReceivedHint"))),
+					})
+				},
+			})),
+			If(fromCcy != "", uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferFeeLabel", fromCcy),
+				Error: ifStr(!feeOK, uistate.T("accounts.transferInvalidExtra"), ""),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.NumberInput(uiw.TextFieldProps{
+						Value: feeS.Get(), OnInput: func(v string) { feeS.Set(v) },
+						Extra: append(acctXferControlAttrs(a), Attr("data-testid", "page-xfer-fee"),
+							Step(amountStep(fromCcy)), Attr("min", "0"), Title(uistate.T("accounts.transferFeeHint"))),
+					})
+				},
+			})),
 			// Before/after balances for both sides, straight from the same leg
 			// math the post will use (PreviewTransferPair) — including the typed
 			// received override and fee.
 			acctTransferBalancePreview(app, pfrom, pto, amtS.Get(), recvS.Get(), feeS.Get()),
-			labeledField(uistate.T("accounts.transferDateLabel"),
-				Input(css.Class("field"), Type("date"), AriaLabel(uistate.T("accounts.transferDateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get()))),
-			labeledField(uistate.T("accounts.transferDescLabel"),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferDateLabel"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return Input(append(acctXferControlAttrs(a), css.Class("field"), Type("date"),
+						AriaLabel(uistate.T("accounts.transferDateLabel")), OnInput(func(v string) { dateS.Set(v) }), uiw.FieldValue(dateS.Get()))...)
+				},
+			}),
+			uiw.Field(uiw.FieldProps{
+				Label: uistate.T("accounts.transferDescLabel"),
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.TextInput(uiw.TextFieldProps{
+						Value: descS.Get(), Placeholder: uistate.T("accounts.transferDefaultDesc"), OnInput: func(v string) { descS.Set(v) },
+						Extra: acctXferControlAttrs(a),
+					})
+				},
+			}),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
@@ -966,6 +1008,24 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit"))),
 		),
 	)
+}
+
+// acctXferControlAttrs are the id and accessibility attributes Field hands to a transfer control.
+func acctXferControlAttrs(a uiw.FieldA11y) []any {
+	return append([]any{ID(a.ID)}, acctXferDescribeAttrs(a)...)
+}
+
+// acctXferDescribeAttrs are the description and validity attributes Field hands to a transfer
+// control, for a control that sets its own id.
+func acctXferDescribeAttrs(a uiw.FieldA11y) []any {
+	var attrs []any
+	if a.DescribedBy != "" {
+		attrs = append(attrs, Attr("aria-describedby", a.DescribedBy))
+	}
+	if a.Invalid {
+		attrs = append(attrs, Attr("aria-invalid", "true"))
+	}
+	return attrs
 }
 
 // --- account row feed -----------------------------------------------------------
@@ -1136,13 +1196,13 @@ func acctListWidget(props acctListProps) ui.Node {
 			return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
 		}).
 		When(len(shown) == 0 && f.HasNarrowing(), func() ui.Node {
-			return P(css.Class("empty"), uistate.T("accounts.noMatch"))
+			return acctEmptyCallout("acct-list-nomatch", uistate.T("accounts.noMatch"))
 		}).
 		When(len(shown) == 0 && classView == string(domain.ClassLiability), func() ui.Node {
-			return P(css.Class("empty"), uistate.T("accounts.noLiabilities"))
+			return acctEmptyCallout("acct-list-noliabilities", uistate.T("accounts.noLiabilities"))
 		}).
 		When(len(shown) == 0, func() ui.Node {
-			return P(css.Class("empty"), uistate.T("accounts.noAssets"))
+			return acctEmptyCallout("acct-list-noassets", uistate.T("accounts.noAssets"))
 		}).
 		When(len(groups) > 0, groupedBody).
 		Default(func() ui.Node {
@@ -1153,11 +1213,14 @@ func acctListWidget(props acctListProps) ui.Node {
 	// toolbar action. Prepended so it sits above the (grouped or flat) rows.
 	if stale.Collapsed {
 		bodyContent = Fragment(
-			Div(css.Class("acct-stale-summary"), Attr("data-testid", "acct-stale-summary"), Role("status"),
-				Span(uistate.T("accounts.staleSummary")),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-stale-summary-markall"),
-					Title(uistate.T("acctxn.markAllMeaning")), OnClick(markAllStale), uistate.T("accounts.markAll")),
-			),
+			uiw.Callout(uiw.CalloutProps{
+				Tone: uiw.CalloutInfo, Live: uiw.CalloutLiveStatus, TestID: "acct-stale-summary",
+				Body: Span(uistate.T("accounts.staleSummary")),
+				Action: uiw.ToolButton(uiw.ToolButtonProps{
+					Label: uistate.T("accounts.markAll"), Title: uistate.T("acctxn.markAllMeaning"),
+					Variant: "stale", TestID: "acct-stale-summary-markall",
+				}, OnClick(markAllStale)),
+			}),
 			bodyContent,
 		)
 	}
@@ -1236,6 +1299,11 @@ func acctListWidget(props acctListProps) ui.Node {
 	})
 }
 
+// acctEmptyCallout is the notice a list tile shows in place of its rows when none are left to show.
+func acctEmptyCallout(testID, text string) ui.Node {
+	return uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutInfo, TestID: testID, Body: Span(text)})
+}
+
 // accountDefaultMemberTarget picks the member a row's "default account for member"
 // action applies to: the member in the active scope when there is one, otherwise the
 // account's owner. It returns empty strings when neither is found.
@@ -1284,7 +1352,7 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 		return ui.CreateElement(AccountRow, row)
 	}
 	bodyContent := ui.If(len(shown) == 0, func() ui.Node {
-		return P(css.Class("empty"), uistate.T("accounts.noMatch"))
+		return acctEmptyCallout("acct-archived-nomatch", uistate.T("accounts.noMatch"))
 	}, func() ui.Node {
 		return Div(css.Class("rows"), MapKeyed(shown, accountRowKey, renderRow))
 	})

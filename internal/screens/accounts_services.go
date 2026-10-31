@@ -57,7 +57,7 @@ func servicesUnavailableText(err error, subject string) string {
 // Accounts list while the Services filter is on.
 func servicesBody(app *appstate.App, list []domain.Recurring, base string, rates currency.Rates) ui.Node {
 	if len(list) == 0 {
-		return P(css.Class("empty"), Attr("data-testid", "acct-services-none"), uistate.T("accounts.servicesNone"))
+		return uiw.Callout(uiw.CalloutProps{TestID: "acct-services-none", Body: Span(uistate.T("accounts.servicesNone"))})
 	}
 	var totalText string
 	if total, err := services.MonthlyTotal(list, base, rates); err != nil {
@@ -105,13 +105,17 @@ func serviceRow(props serviceRowProps) ui.Node {
 	} else {
 		costText = uistate.T("services.perMonth", fmtMoney(money.New(monthly, props.Base)))
 	}
-	return Div(css.Class("row acct-service-row"), Attr("data-testid", "acct-service-"+svc.ID),
-		Div(css.Class("acct-row-id"),
-			Span(css.Class("row-desc"), svc.Label),
-			If(svc.Provider != "", Span(css.Class("row-meta"), svc.Provider)),
-		),
-		Span(css.Class("acct-service-cost", tw.TextDim), Attr("data-testid", "acct-service-cost-"+svc.ID), costText),
-		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("services.remove"), AriaLabel: uistate.T("services.removeNamed", svc.Label), Icon: icon.Trash, TestID: "acct-service-remove-" + svc.ID},
-			OnClick(remove)),
+	var meta []string
+	if svc.Provider != "" {
+		meta = append(meta, svc.Provider)
+	}
+	return Div(css.Class("acct-entity"), Attr("data-testid", "acct-service-"+svc.ID),
+		uiw.EntityRow(uiw.EntityRowProps{
+			Title: svc.Label,
+			Meta:  meta,
+			Value: Span(css.Class(tw.TextDim), Attr("data-testid", "acct-service-cost-"+svc.ID), costText),
+			Actions: []ui.Node{uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("services.remove"), AriaLabel: uistate.T("services.removeNamed", svc.Label), Icon: icon.Trash, TestID: "acct-service-remove-" + svc.ID},
+				OnClick(remove))},
+		}),
 	)
 }

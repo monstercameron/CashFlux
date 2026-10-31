@@ -186,6 +186,11 @@ func Register() {
 	registerTV8F()
 	registerTxnControls()
 	registerDashboardReadability()
+	registerUIComponents()
+	registerAccountsS1()
+	registerAccountsS2()
+	registerAccountsS3()
+	registerAccountsS4()
 	inject(Build())
 }
 

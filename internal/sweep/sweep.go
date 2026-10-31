@@ -52,6 +52,10 @@ type Inputs struct {
 // IsDue reports whether a rule's cadence has elapsed as of now. A disabled rule is
 // never due. A rule that has never proposed (empty LastProposed) is due
 // immediately. LastProposed is an RFC3339 or date-only ("2006-01-02") string.
+//
+// The cadence counts calendar days: now and the stamp are each reduced to the calendar date they
+// show in their own location, so a rule falls due on the same local day whatever the time zone and
+// time of day, and agrees with the day arithmetic used to name a sweep's cadence window.
 func IsDue(r domain.SweepRule, now time.Time) bool {
 	if !r.Enabled {
 		return false
@@ -60,7 +64,13 @@ func IsDue(r domain.SweepRule, now time.Time) bool {
 	if !ok {
 		return true // never proposed
 	}
-	return !now.Before(last.AddDate(0, 0, r.Cadence.CadenceDays()))
+	return !calendarDay(now).Before(calendarDay(last).AddDate(0, 0, r.Cadence.CadenceDays()))
+}
+
+// calendarDay returns the calendar date t shows in its own location as midnight UTC.
+func calendarDay(t time.Time) time.Time {
+	year, month, day := t.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
 // ExcessMinor returns the sweepable amount for a rule given its inputs, respecting

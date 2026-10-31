@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/worksheet"
@@ -63,20 +64,20 @@ func reconcileWorksheet(app *appstate.App, a domain.Account, statementDate strin
 	dec := currency.Decimals(a.Currency)
 	amt := func(v int64) string { return money.FormatMinor(v, dec) }
 
-	rows := []ui.Node{
-		worksheetRow(uistate.T("worksheet.opening"), amt(l.Opening), false),
-		worksheetRow(uistate.T("worksheet.moneyIn"), amt(l.In), false),
-		worksheetRow(uistate.T("worksheet.moneyOut"), amt(-l.Out), false),
+	facts := []uiw.KeyValueFact{
+		{Label: uistate.T("worksheet.opening"), Value: Fragment(amt(l.Opening))},
+		{Label: uistate.T("worksheet.moneyIn"), Value: Fragment(amt(l.In))},
+		{Label: uistate.T("worksheet.moneyOut"), Value: Fragment(amt(-l.Out))},
 	}
 	// Terms that are zero are left out. A worksheet listing every term the app
 	// knows about, most of them empty, buries the two that matter.
 	if l.Transfers != 0 {
-		rows = append(rows, worksheetRow(uistate.T("worksheet.transfers"), amt(l.Transfers), false))
+		facts = append(facts, uiw.KeyValueFact{Label: uistate.T("worksheet.transfers"), Value: Fragment(amt(l.Transfers))})
 	}
 	if l.Checkpoints != 0 {
-		rows = append(rows, worksheetRow(uistate.T("worksheet.checkpoints"), amt(l.Checkpoints), false))
+		facts = append(facts, uiw.KeyValueFact{Label: uistate.T("worksheet.checkpoints"), Value: Fragment(amt(l.Checkpoints))})
 	}
-	rows = append(rows, worksheetRow(uistate.T("worksheet.computed"), amt(l.Computed), true))
+	facts = append(facts, uiw.KeyValueFact{Label: uistate.T("worksheet.computed"), Value: Fragment(amt(l.Computed)), Tone: "acct-ws-total"})
 
 	// The gap, said in a direction rather than as a signed number. Which way it
 	// runs is the first thing a person needs in order to start looking, and it is
@@ -92,23 +93,12 @@ func reconcileWorksheet(app *appstate.App, a domain.Account, statementDate strin
 			uistate.T(key, amt(gap)))
 	}
 
-	return Div(css.Class("card", tw.P3, tw.FlexCol, tw.Gap1), Attr("data-testid", "reconcile-worksheet"),
-		P(css.Class("t-caption"), uistate.T("worksheet.heading")),
-		Div(css.Class(tw.FlexCol, tw.Gap05), rows),
-		residual,
-	)
-}
-
-// worksheetRow is one term: its name on the left, its amount on the right.
-func worksheetRow(label, amount string, total bool) ui.Node {
-	cls := "t-caption"
-	if total {
-		cls = "t-body"
-	}
-	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Span(css.Class(cls, tw.Flex1), label),
-		Span(ClassStr(cls+" fig"), amount),
-	)
+	return uiw.Card(uiw.CardProps{
+		TestID:     "reconcile-worksheet",
+		ClassParts: []any{tw.P3, tw.FlexCol, tw.Gap1},
+		Header:     P(css.Class("t-caption"), uistate.T("worksheet.heading")),
+		Body:       Fragment(uiw.KeyValue(uiw.KeyValueProps{Facts: facts}), residual),
+	})
 }
 
 // parseWorksheetDate turns the dialog's statement-date field into the period's

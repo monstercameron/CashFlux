@@ -184,55 +184,71 @@ type accountDocsDrawerProps struct {
 	Account domain.Account
 }
 
-// accountDocsDrawer renders the documents disclosure for one account row: a
-// toggle naming how many documents are filed, and, expanded, the dated list (open /
-// remove each) plus an "Attach a document" mini-form with an optional label and an
-// optional expiry date. It is its own component with its own hooks, so it slots into
-// AccountRow at a stable position without disturbing the row's other toggles.
+// accountDocsDrawer renders the documents disclosure for one account row: a toggle naming how many
+// documents are filed and, expanded, the dated list (open / remove each) plus an "Attach a
+// document" mini-form with an optional label and an optional expiry date. It is its own component,
+// so it slots into AccountRow at a stable position without disturbing the row's other toggles. It
+// holds the attach form's inputs, so a half-typed label survives a collapse; the body component
+// renders only while the disclosure is open, which keeps the artifact lookup off closed rows.
 func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 	a := props.Account
-	expanded := ui.UseState(false)
-	// The list stays mounted for its fade-out, so closing animates as well as opening.
-	bodyMounted := uiw.UsePanelFade(expanded.Get())
-	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 	labelS := ui.UseState("")
 	expiryS := ui.UseState("")
-	onLabel := ui.UseEvent(func(v string) { labelS.Set(v) })
-	onExpiry := ui.UseEvent(func(v string) { expiryS.Set(v) })
-	attach := ui.UseEvent(Prevent(func() {
-		attachAccountDoc(a.ID, labelS.Get(), expiryS.Get(), func() {
-			labelS.Set("")
-			expiryS.Set("")
-		})
-	}))
-
-	docs := domain.SortDocRefsByDate(a.DocRefs)
-	n := len(docs)
 
 	toggleLabel := uistate.T("accounts.documentsSection")
-	if n > 0 {
+	if n := len(a.DocRefs); n > 0 {
 		toggleLabel = uistate.T("accounts.documentsToggleShow", n)
 	}
-	if expanded.Get() {
-		toggleLabel = uistate.T("accounts.documentsToggleHide")
-	}
+	summary := Span(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+		uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(toggleLabel),
+	)
+	body := ui.CreateElement(accountDocsBody, accountDocsBodyProps{
+		Account:   a,
+		Label:     labelS.Get(),
+		Expiry:    expiryS.Get(),
+		SetLabel:  func(v string) { labelS.Set(v) },
+		SetExpiry: func(v string) { expiryS.Set(v) },
+		Attach: func() {
+			attachAccountDoc(a.ID, labelS.Get(), expiryS.Get(), func() {
+				labelS.Set("")
+				expiryS.Set("")
+			})
+		},
+	})
+	return uiw.Disclosure(uiw.DisclosureProps{
+		ID: "acct-docs-body-" + a.ID, Summary: summary, Body: body,
+		TestID: "acct-docs-toggle-" + a.ID, Class: "acct-docs",
+	})
+}
 
-	toggleBtn := uiw.ToolButton(uiw.ToolButtonProps{Label: toggleLabel, Icon: icon.Paperclip, Open: expanded.Get(), TestID: "acct-docs-toggle-" + a.ID},
-		AriaExpanded(expanded.Get()), OnClick(toggle))
+// accountDocsBodyProps carries the account and the attach form's state for the open drawer.
+type accountDocsBodyProps struct {
+	Account   domain.Account
+	Label     string
+	Expiry    string
+	SetLabel  func(string)
+	SetExpiry func(string)
+	Attach    func()
+}
 
-	if !expanded.Get() && !bodyMounted {
-		return Div(css.Class("acct-docs"), toggleBtn)
-	}
+// accountDocsBody is the open drawer: the filed documents as rows, or an empty-state callout, and
+// the attach form. It is its own component, so the artifact lookup and the form's hooks run only
+// while the drawer is open.
+func accountDocsBody(props accountDocsBodyProps) ui.Node {
+	a := props.Account
+	onExpiry := ui.UseEvent(func(v string) { props.SetExpiry(v) })
+	attach := ui.UseEvent(Prevent(props.Attach))
 
-	app := appstate.Default
+	docs := domain.SortDocRefsByDate(a.DocRefs)
 	artByID := map[string]domain.Artifact{}
-	if app != nil {
+	if app := appstate.Default; app != nil {
 		for _, art := range app.Artifacts() {
 			artByID[art.ID] = art
 		}
 	}
 
-	rows := make([]ui.Node, 0, n)
+	rows := make([]ui.Node, 0, len(docs))
 	for _, d := range docs {
 		art := artByID[d.ArtifactID]
 		label := d.DisplayLabel(art.Name)
@@ -245,22 +261,21 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 		}), d.ArtifactID))
 	}
 
-	return Div(css.Class("acct-docs"), Attr("data-testid", "acct-docs-drawer-"+a.ID),
-		toggleBtn,
-		Div(css.Class(uiw.FadeClass("acct-docs-body", expanded.Get())),
-			If(n == 0, P(css.Class("t-caption", tw.TextDim, "acct-docs-empty"), uistate.T("accounts.documentsEmpty"))),
-			If(n > 0, Div(css.Class("rows", tw.Mt1), rows)),
-			Div(css.Class(tw.Mt2), Attr("data-testid", "acct-docs-attach-"+a.ID),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-					Input(css.Class("field", "acct-doc-label"), Type("text"), Attr("data-testid", "acct-doc-label-"+a.ID),
-						Placeholder(uistate.T("accounts.documentLabelPh")), AriaLabel(uistate.T("accounts.documentLabelField")), OnInput(onLabel), uiw.FieldValue(labelS.Get())),
-					Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-doc-expiry-"+a.ID),
-						AriaLabel(uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(expiryS.Get())),
-					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-doc-attach-btn-"+a.ID),
-						OnClick(attach), uistate.T("accounts.attachDocument")),
-				),
-				P(css.Class("t-caption", tw.TextDim, "acct-docs-hint"), uistate.T("accounts.documentExpiryHint")),
+	return Div(Attr("data-testid", "acct-docs-drawer-"+a.ID),
+		If(len(docs) == 0, uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("accounts.documentsEmpty"))})),
+		If(len(docs) > 0, Div(css.Class("rows", tw.Mt1), rows)),
+		Div(css.Class(tw.Mt2), Attr("data-testid", "acct-docs-attach-"+a.ID),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+				uiw.TextInput(uiw.TextFieldProps{
+					Value: props.Label, Placeholder: uistate.T("accounts.documentLabelPh"),
+					AriaLabel: uistate.T("accounts.documentLabelField"), OnInput: props.SetLabel, Class: "acct-doc-label",
+					Extra: []any{Attr("data-testid", "acct-doc-label-"+a.ID)},
+				}),
+				Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-doc-expiry-"+a.ID),
+					AriaLabel(uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(props.Expiry)),
+				uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.attachDocument"), TestID: "acct-doc-attach-btn-" + a.ID}, OnClick(attach)),
 			),
+			P(css.Class("t-caption", tw.TextDim, "acct-docs-hint"), uistate.T("accounts.documentExpiryHint")),
 		),
 	)
 }
@@ -274,10 +289,9 @@ type accountDocRowProps struct {
 	CanOpen    bool // false when the referenced artifact's bytes are missing
 }
 
-// accountDocRow is one document line in the drawer: its label/date meta, an Open
-// link (when the bytes resolved), and Remove. Its own component so the Remove click
-// hook stays stable across the variable-length document list (never an On* handler
-// inside a loop).
+// accountDocRow is one document line in the drawer: its label and date meta, an Open action (when
+// the bytes resolved), and Remove. It is its own component so the click hooks stay stable across
+// the variable-length document list (never an On* handler inside a loop).
 func accountDocRow(props accountDocRowProps) ui.Node {
 	remove := ui.UseEvent(Prevent(func() {
 		uistate.ConfirmModal(uistate.T("accounts.documentRemoveConfirm"), true, func(ok bool) {
@@ -287,15 +301,19 @@ func accountDocRow(props accountDocRowProps) ui.Node {
 		})
 	}))
 	open := ui.UseEvent(Prevent(func() { openAccountDocument(props.ArtifactID) }))
-	openLink := If(props.CanOpen, Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-doc-open-"+props.ArtifactID),
-		AriaLabel(uistate.T("accounts.documentOpenAria", props.Label)), OnClick(open), uistate.T("accounts.documentOpen")))
-	return Div(css.Class("row"), Attr("data-testid", "acct-doc-row-"+props.ArtifactID),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), props.Label),
-			Span(css.Class("row-meta"), props.Meta),
-		),
-		openLink,
-		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-doc-remove-"+props.ArtifactID),
-			AriaLabel(uistate.T("accounts.documentRemoveAria", props.Label)), OnClick(remove), uistate.T("accounts.documentRemove")),
+	openBtn := uiw.ToolButton(uiw.ToolButtonProps{
+		Label: uistate.T("accounts.documentOpen"), AriaLabel: uistate.T("accounts.documentOpenAria", props.Label),
+		TestID: "acct-doc-open-" + props.ArtifactID,
+	}, OnClick(open))
+	removeBtn := uiw.ToolButton(uiw.ToolButtonProps{
+		Label: uistate.T("accounts.documentRemove"), AriaLabel: uistate.T("accounts.documentRemoveAria", props.Label),
+		TestID: "acct-doc-remove-" + props.ArtifactID,
+	}, OnClick(remove))
+	actions := []ui.Node{removeBtn}
+	if props.CanOpen {
+		actions = []ui.Node{openBtn, removeBtn}
+	}
+	return Div(css.Class("acct-entity"), Attr("data-testid", "acct-doc-row-"+props.ArtifactID),
+		uiw.EntityRow(uiw.EntityRowProps{Title: props.Label, Meta: []string{props.Meta}, Actions: actions}),
 	)
 }

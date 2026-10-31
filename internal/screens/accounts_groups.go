@@ -95,11 +95,10 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	openEdit := ui.UseEvent(Prevent(func() { edit.Set(g.ID) }))
 	toggle := ui.UseEvent(Prevent(func() { toggleAcctGroupCollapsed(g.ID) }))
 
-	editBtn := If(isReal, Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
-		Attr("data-testid", "acct-group-edit-"+g.ID),
-		AriaLabel(uistate.T("accounts.editGroupAria", name)),
-		Title(uistate.T("accounts.editGroupTitle")), OnClick(openEdit),
-		uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))))
+	editBtn := If(isReal, uiw.ToolButton(uiw.ToolButtonProps{
+		Icon: icon.Pencil, Title: uistate.T("accounts.editGroupTitle"),
+		AriaLabel: uistate.T("accounts.editGroupAria", name), TestID: "acct-group-edit-" + g.ID,
+	}, OnClick(openEdit)))
 
 	chevron := icon.ChevronDown
 	toggleTitle := uistate.T("accountsGroup.collapse")
@@ -326,7 +325,7 @@ func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 	}
 	selS := ui.UseState(initSel)
 	errS := ui.UseState("")
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onName := func(v string) { nameS.Set(v) }
 
 	toggle := func(aid string) {
 		cur := selS.Get()
@@ -413,13 +412,15 @@ func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 
 	return Div(css.Class("inv-pool-modal"),
 		Form(css.Class("inv-pool-modal-form"), Attr("id", "account-group-form"), OnSubmit(save),
-			labeledField(uistate.T("accounts.groupNameLabel"),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "group-name"), Attr("autofocus", "true"),
-					Placeholder(uistate.T("accounts.groupNamePh")), OnInput(onName), uiw.FieldValue(nameS.Get()))),
+			uiw.FormField(uistate.T("accounts.groupNameLabel"),
+				uiw.TextInput(uiw.TextFieldProps{
+					Value: nameS.Get(), Placeholder: uistate.T("accounts.groupNamePh"), OnInput: onName,
+					Extra: []any{Attr("data-testid", "group-name"), Attr("autofocus", "true")},
+				})),
 			Div(css.Class("pool-acct-list-label", tw.TextDim), uistate.T("accounts.groupPickAccounts")),
-			If(len(accounts) == 0, P(css.Class("empty"), uistate.T("accounts.groupNoAccounts"))),
+			If(len(accounts) == 0, uiw.Callout(uiw.CalloutProps{Body: Span(uistate.T("accounts.groupNoAccounts"))})),
 			Div(css.Class("pool-acct-list"), toggles),
-			If(errS.Get() != "", P(css.Class("err"), Role("alert"), errS.Get())),
+			If(errS.Get() != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert, Body: Span(errS.Get())})),
 			deleteRow,
 		),
 	)

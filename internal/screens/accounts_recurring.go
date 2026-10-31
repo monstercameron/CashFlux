@@ -20,12 +20,10 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
@@ -53,13 +51,10 @@ func recurSlot() ui.Node {
 }
 
 // accountRecurringPanel renders the collapsed "N charges here repeat" disclosure. It is its
-// own component: it owns the disclosure state. The discovery result is read on every render so the
-// count in the header is current, and it is memoised per frame.
+// own component: it subscribes to the data revision. The discovery result is read on every render
+// so the count in the header is current, and it is memoised per frame.
 func accountRecurringPanel(props accountRecurProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	expanded := ui.UseState(false)
-	listMounted := uiw.UsePanelFade(expanded.Get())
-	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 
 	app := appstate.Default
 	settings := uistate.LoadSmartSettings()
@@ -79,31 +74,29 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 		return recurSlot()
 	}
 
-	open := expanded.Get()
-	listID := "acct-recur-list-" + props.Account.ID
-	head := Button(css.Class("budget-drivers-toggle"), Type("button"),
-		Attr("data-testid", "acct-recur-toggle-"+props.Account.ID),
-		AriaExpanded(open), Attr("aria-controls", listID), OnClick(toggle),
-		Span(uistate.TN("sm6.hintOne", "sm6.hintMany", len(cands))),
-		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
-
-	body := ui.If(open || listMounted, func() ui.Node {
-		listed := cands[:min(len(cands), acctRecurCap)]
-		rows := make([]ui.Node, 0, len(listed)+1)
-		for _, c := range listed {
-			rows = append(rows, WithKey(ui.CreateElement(accountRecurRow, accountRecurRowProps{
-				App:       app,
-				Candidate: c,
-				Base:      base,
-			}), c.Signature))
-		}
-		if len(cands) > len(listed) {
-			rows = append(rows, P(css.Class("acct-recur-meta"), Attr("data-testid", "acct-recur-capnote-"+props.Account.ID),
-				uistate.T("sm6.capNote", len(listed))))
-		}
-		return Div(css.Class(uiw.FadeClass("acct-recur-list", open)), Attr("id", listID), rows)
-	})
-	return Div(css.Class("acct-recur"), Attr("data-testid", "acct-recur-"+props.Account.ID), head, body)
+	listed := cands[:min(len(cands), acctRecurCap)]
+	rows := make([]ui.Node, 0, len(listed))
+	for _, c := range listed {
+		rows = append(rows, WithKey(ui.CreateElement(accountRecurRow, accountRecurRowProps{
+			App:       app,
+			Candidate: c,
+			Base:      base,
+		}), c.Signature))
+	}
+	body := Fragment(
+		Div(css.Class("rows", "acct-recur-list"), rows),
+		If(len(cands) > len(listed), uiw.Callout(uiw.CalloutProps{
+			TestID: "acct-recur-capnote-" + props.Account.ID,
+			Body:   Span(uistate.T("sm6.capNote", len(listed))),
+		})),
+	)
+	return Div(css.Class("acct-recur"), Attr("data-testid", "acct-recur-"+props.Account.ID),
+		uiw.Disclosure(uiw.DisclosureProps{
+			ID:      "acct-recur-list-" + props.Account.ID,
+			Summary: Span(uistate.TN("sm6.hintOne", "sm6.hintMany", len(cands))),
+			Body:    body,
+			TestID:  "acct-recur-toggle-" + props.Account.ID,
+		}))
 }
 
 // accountRecurCandidates returns all of the account's UNTRACKED repeats, plus
@@ -138,12 +131,12 @@ func accountRecurRow(props accountRecurRowProps) ui.Node {
 
 	amt := money.New(c.Evidence.Amount.Typical, props.Base)
 	cad := recurdiscover.DomainCadence(c.Evidence.Cadence)
-	return Div(css.Class("acct-recur-row"),
-		Div(css.Class("acct-recur-main"),
-			Span(css.Class("acct-recur-name"), c.Payee),
-			Span(css.Class("acct-recur-meta"),
-				uistate.T("sm6.rowMeta", cadenceLabel(cad), fmtMoney(amt))),
-		),
-		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("sm6.makeRecur"), AriaLabel: uistate.T("sm6.makeRecurAria", c.Payee), Class: "acct-recur-track", TestID: "acct-recur-track-" + c.Signature}, OnClick(track)),
-	)
+	return uiw.EntityRow(uiw.EntityRowProps{
+		Title: c.Payee,
+		Meta:  []string{uistate.T("sm6.rowMeta", cadenceLabel(cad), fmtMoney(amt))},
+		Actions: []ui.Node{uiw.ToolButton(uiw.ToolButtonProps{
+			Label: uistate.T("sm6.makeRecur"), AriaLabel: uistate.T("sm6.makeRecurAria", c.Payee),
+			Class: "acct-recur-track", TestID: "acct-recur-track-" + c.Signature,
+		}, OnClick(track))},
+	})
 }

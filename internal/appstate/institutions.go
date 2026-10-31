@@ -108,15 +108,19 @@ func (a *App) DeleteInstitution(instID string) error {
 // from today's exact ledger balance and its recurring cash flows. Recurring amounts are cash flows
 // (negative leaves the account), so the projection runs in the stated convention: a liability's
 // stored balance is normalised with its own liability sign first, and the result reads
-// negative-means-owed. Ledger, currency, and arithmetic errors are returned; a missing account
-// remains a valid empty projection at zero.
+// negative-means-owed. Storage, ledger, currency, and arithmetic errors are returned; an account that is
+// verifiably absent remains a valid empty projection at zero.
 func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) (acctproject.Projection, error) {
 	if err := a.ready(); err != nil {
 		return acctproject.Projection{}, err
 	}
+	accounts, err := a.AccountsChecked()
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s: %w", accountID, err)
+	}
 	var acc domain.Account
 	var found bool
-	for _, x := range a.Accounts() {
+	for _, x := range accounts {
 		if x.ID == accountID {
 			acc, found = x, true
 			break
@@ -125,7 +129,11 @@ func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) 
 	if !found {
 		return acctproject.Project(0, asOf, nil, horizonDays)
 	}
-	bal, err := ledger.Balance(acc, a.Transactions())
+	txns, err := a.TransactionsChecked()
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s: %w", accountID, err)
+	}
+	bal, err := ledger.Balance(acc, txns)
 	if err != nil {
 		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s balance: %w", accountID, err)
 	}

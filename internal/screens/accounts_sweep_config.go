@@ -44,8 +44,6 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 	cadence := ui.UseState(string(domain.SweepMonthly))
 	errMsg := ui.UseState("")
 
-	onKeep := ui.UseEvent(func(v string) { keep.Set(v) })
-
 	accounts := app.Accounts()
 	names := map[string]string{}
 	curOf := map[string]string{}
@@ -133,26 +131,36 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 		Attr("data-testid", "sweep-rules-form"), OnSubmit(add),
 		Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
 			P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.intro")),
-			If(len(ruleNodes) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2), ruleNodes)),
+			If(len(ruleNodes) > 0, Div(css.Class("rows"), ruleNodes)),
 			If(len(ruleNodes) == 0, P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.empty"))),
 			// The add form: one field per line (label over control) so the picks read in the
 			// order the sentence does: keep money in X, hold $Y, sweep the rest to Z, this often.
 			Div(css.Class("sweep-add"),
-				labeledField(uistate.T("accountsRedesign.sweepKeepIn"),
-					uiw.SelectInput(uiw.SelectInputProps{Options: sweepFromOpts, Selected: src.Get(),
-						OnChange: func(v string) { src.Set(v) }, AriaLabel: uistate.T("acctSweepCfg.source"), TestID: "sweep-cfg-source"})),
-				labeledField(uistate.T("acctSweepCfg.keepAmount"),
-					Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
-						AriaLabel(uistate.T("acctSweepCfg.keepAmount")), Placeholder(sweepKeepExample(keepCurrency(src.Get()))),
-						Attr("data-testid", "sweep-cfg-keep"), OnInput(onKeep), uiw.FieldValue(keep.Get()))),
-				labeledField(uistate.T("accountsRedesign.sweepMoveTo"),
-					uiw.SelectInput(uiw.SelectInputProps{Options: sweepToOpts, Selected: dst.Get(),
-						OnChange: func(v string) { dst.Set(v) }, AriaLabel: uistate.T("acctSweepCfg.dest"), TestID: "sweep-cfg-dest"})),
-				labeledField(uistate.T("acctSweepCfg.cadence"),
-					uiw.SelectInput(uiw.SelectInputProps{Options: cadenceOpts, Selected: cadence.Get(),
-						OnChange: func(v string) { cadence.Set(v) }, AriaLabel: uistate.T("acctSweepCfg.cadence"), TestID: "sweep-cfg-cadence"})),
+				uiw.Field(uiw.FieldProps{Label: uistate.T("accountsRedesign.sweepKeepIn"),
+					Control: func(a uiw.FieldA11y) ui.Node {
+						return uiw.SelectInput(uiw.SelectInputProps{Options: sweepFromOpts, Selected: src.Get(), ID: a.ID,
+							OnChange: func(v string) { src.Set(v) }, AriaLabel: uistate.T("acctSweepCfg.source"), TestID: "sweep-cfg-source"})
+					}}),
+				uiw.Field(uiw.FieldProps{ID: "sweep-cfg-keep-input", Label: uistate.T("acctSweepCfg.keepAmount"),
+					Control: func(a uiw.FieldA11y) ui.Node {
+						return uiw.MoneyInput(uiw.MoneyInputProps{Value: keep.Get(), OnInput: func(v string) { keep.Set(v) },
+							Currency: keepCurrency(src.Get()), ID: a.ID, TestID: "sweep-cfg-keep",
+							AriaLabel: uistate.T("acctSweepCfg.keepAmount"), Placeholder: sweepKeepExample(keepCurrency(src.Get())),
+							Extra: []any{Attr("inputmode", "decimal")}})
+					}}),
+				uiw.Field(uiw.FieldProps{Label: uistate.T("accountsRedesign.sweepMoveTo"),
+					Control: func(a uiw.FieldA11y) ui.Node {
+						return uiw.SelectInput(uiw.SelectInputProps{Options: sweepToOpts, Selected: dst.Get(), ID: a.ID,
+							OnChange: func(v string) { dst.Set(v) }, AriaLabel: uistate.T("acctSweepCfg.dest"), TestID: "sweep-cfg-dest"})
+					}}),
+				uiw.Field(uiw.FieldProps{Label: uistate.T("acctSweepCfg.cadence"),
+					Control: func(a uiw.FieldA11y) ui.Node {
+						return uiw.SelectInput(uiw.SelectInputProps{Options: cadenceOpts, Selected: cadence.Get(), ID: a.ID,
+							OnChange: func(v string) { cadence.Set(v) }, AriaLabel: uistate.T("acctSweepCfg.cadence"), TestID: "sweep-cfg-cadence"})
+					}}),
 			),
-			If(errMsg.Get() != "", P(css.Class("t-caption", tw.TextDown), Role("alert"), errMsg.Get())),
+			If(errMsg.Get() != "", uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutDanger, Live: uiw.CalloutLiveAlert,
+				Body: Fragment(errMsg.Get()), TestID: "sweep-cfg-error"})),
 		),
 		Div(css.Class("modal-foot", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			If(props.OnDone != nil, Button(css.Class("btn"), Type("button"),
@@ -266,12 +274,13 @@ func sweepRuleRow(props sweepRuleRowProps) ui.Node {
 			uistate.BumpDataRevision()
 		})
 	}))
-	return Div(css.Class("row", tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Attr("data-testid", "sweep-rule-row-"+props.Rule.ID),
-		Span(css.Class("t-body", tw.Flex1), ruleText),
-		Button(css.Class("btn btn-ghost btn-sm btn-del"), Type("button"),
-			Attr("data-testid", "sweep-rule-del-"+props.Rule.ID), OnClick(del),
-			AriaLabel(uistate.T("acctSweepCfg.removeAria", ruleText)),
-			uistate.T("acctSweepCfg.remove")),
+	// The wrapper carries the row's test id: EntityRow renders the row itself.
+	return Div(css.Class("acct-s3-item"), Attr("data-testid", "sweep-rule-row-"+props.Rule.ID),
+		uiw.EntityRow(uiw.EntityRowProps{
+			Title: ruleText,
+			Actions: []ui.Node{uiw.ToolButton(uiw.ToolButtonProps{
+				Label: uistate.T("acctSweepCfg.remove"), AriaLabel: uistate.T("acctSweepCfg.removeAria", ruleText),
+				TestID: "sweep-rule-del-" + props.Rule.ID}, OnClick(del))},
+		}),
 	)
 }

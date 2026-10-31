@@ -27,9 +27,14 @@ import (
 var ErrSweepPostedUnmarked = errors.New("appstate: sweep transfer posted but the proposal was not marked handled")
 
 // ErrSweepAlreadyPosted is returned by ApproveSweepProposal when the rule already swept in this
-// cadence window and the proposal asks for a different amount than the one that posted. Nothing new
-// was moved; the rule's stamp is repaired to the earlier sweep.
+// cadence window, or swept within its cadence before a replay that landed in the next window. Nothing
+// new was moved and the rule's stamp already names that sweep.
 var ErrSweepAlreadyPosted = errors.New("appstate: the sweep rule already swept in this cadence window")
+
+// ErrSweepStampRepaired is returned by ApproveSweepProposal when the sweep for this window posted
+// earlier and only the rule's cadence stamp was restored. Nothing moved now, and the replayed
+// proposal's amount is not the amount that moved earlier.
+var ErrSweepStampRepaired = errors.New("appstate: the sweep posted earlier and only the cadence stamp was restored")
 
 // ErrSweepProposalStale is returned by ApproveSweepProposal when the proposal no longer matches the
 // rule or the balances it was built from, so nothing was posted.
@@ -172,11 +177,46 @@ func sweepStampTime(r domain.SweepRule) (time.Time, bool) {
 
 // sweepOperationID names the one sweep a rule may post within its current cadence window. The
 // amount is not part of the id, so approving the same rule twice in a window, even for different
-// amounts, resolves to the same transfer and posts at most once.
+// amounts, resolves to the same transfer and posts at most once. The window is counted in the same
+// calendar days the stamp and the transfer date use (normalizeTransactionDate, the local day as
+// midnight UTC) and that sweep.IsDue compares, so a rule that is due always lands in a window after
+// the one that posted, in any time zone.
 func sweepOperationID(r domain.SweepRule, now time.Time) string {
-	window := now.UTC().Unix() / 86400 / int64(r.Cadence.CadenceDays())
-	sum := sha256.Sum256([]byte(fmt.Sprintf("sweep|%s|%d", r.ID, window)))
+	return sweepOperationIDForCadence(r.ID, r.Cadence, now)
+}
+
+// sweepOperationIDForCadence is sweepOperationID for an explicit cadence, so the window a sweep
+// posted under can be rebuilt after the rule's cadence changed.
+func sweepOperationIDForCadence(ruleID string, cadence domain.SweepCadence, now time.Time) string {
+	window := normalizeTransactionDate(now).Unix() / 86400 / int64(cadence.CadenceDays())
+	sum := sha256.Sum256([]byte(fmt.Sprintf("sweep|%s|%d", ruleID, window)))
 	return "sweep-" + hex.EncodeToString(sum[:16])
+}
+
+// sweepCadences lists every cadence a sweep can have posted under.
+var sweepCadences = []domain.SweepCadence{domain.SweepWeekly, domain.SweepBiweekly, domain.SweepMonthly, domain.SweepQuarterly}
+
+// sweepPostedForStamp reports whether the sweep a rule's LastProposed stamp names has its outgoing
+// transfer leg in the ledger. The stamp's calendar day picks the window that sweep posted in, so a
+// stamp written by a sweep always finds its transfer and a stamp set any other way finds none. The
+// rule's cadence may have been edited since the sweep posted, so the window is rebuilt under each
+// cadence, the rule's current one first.
+func (a *App) sweepPostedForStamp(rule domain.SweepRule) (bool, error) {
+	stamp, ok := sweepStampTime(rule)
+	if !ok {
+		return false, nil
+	}
+	cadences := append([]domain.SweepCadence{rule.Cadence}, sweepCadences...)
+	for _, cadence := range cadences {
+		_, found, err := a.store.GetTransaction(transferID(sweepOperationIDForCadence(rule.ID, cadence, stamp), "out"))
+		if err != nil {
+			return false, fmt.Errorf("sweep transfer: check earlier approval: %w", err)
+		}
+		if found {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // sweepInputs reads the source account's booked balance and the money reserved against it: goal
@@ -205,12 +245,16 @@ func (a *App) sweepInputs(src domain.Account, txns []domain.Transaction, gs []do
 // rule, both accounts, goals, earmarks and the source balance, and refuses a proposal that no longer
 // matches them (ErrSweepProposalStale), whose rule is disabled, or whose amount is no longer
 // sweepable surplus. A rule that is not due again (sweep.IsDue) or an amount under the rule's
-// MinSweepMinor is refused the same way. The transfer is dated now and carries an operation id
+// MinSweepMinor is refused the same way, except that a rule not due again whose last stamp names a
+// sweep that posted returns ErrSweepAlreadyPosted, since that money already moved. The transfer is dated now and carries an operation id
 // derived from the rule and its cadence window only, so approving the rule again in that window
 // posts nothing. A replay when the rule's LastProposed already marks the posted transfer returns
 // ErrSweepAlreadyPosted whatever the amount, because nothing new moved. Only a replay that finds
-// the stamp missing or older than the posted transfer repairs it, to the transfer's own date rather
-// than the replay's time, and returns nil; if that repair fails the error wraps ErrSweepPostedUnmarked.
+// the stamp missing or on an earlier calendar day than the posted transfer repairs it, to the transfer's own date rather
+// than the replay's time. It returns nil when the replay's amount is the amount that moved, and
+// ErrSweepStampRepaired when it is not, since nothing moved now; if the repair fails the error wraps
+// ErrSweepPostedUnmarked. When the rule's cadence was edited after the sweep posted, the window is
+// rebuilt under each cadence to find the posted transfer (sweepPostedForStamp).
 func (a *App) ApproveSweepProposal(p sweep.Proposal, desc string, now time.Time) error {
 	if err := a.roleGuard(); err != nil {
 		return err
@@ -249,18 +293,35 @@ func (a *App) ApproveSweepProposal(p sweep.Proposal, desc string, now time.Time)
 	}
 	if done {
 		// The sweep for this window already posted, so no money moves. When the rule already carries a
-		// stamp at or after the posted transfer there is nothing to repair and nothing new happened.
-		if last, stamped := sweepStampTime(rule); stamped && !last.Before(posted.Date) {
+		// stamp on or after the posted transfer's calendar day there is nothing to repair and nothing
+		// new happened. Both are reduced to the calendar day they show in their own location, the way
+		// sweep.IsDue reads the stamp, so a stamp written in a zone ahead of UTC is not mistaken for an
+		// earlier day than its transfer's UTC-midnight date.
+		if last, stamped := sweepStampTime(rule); stamped && !normalizeTransactionDate(last).Before(normalizeTransactionDate(posted.Date)) {
 			return fmt.Errorf("sweep transfer: %w", ErrSweepAlreadyPosted)
 		}
-		// The stamp is missing or older than the transfer: restore it to the transfer's own date, never
+		// The stamp is missing or on an earlier day than the transfer: restore it to the transfer's own date, never
 		// to the replay's time, so a replay cannot push the next due date later.
 		if err := a.MarkSweepProposed(p.RuleID, posted.Date); err != nil {
 			return fmt.Errorf("%w: %v", ErrSweepPostedUnmarked, err)
 		}
+		// Only a replay of the amount that moved reports success; any other amount did not move now.
+		if moved := posted.Amount.Amount; p.AmountMinor != moved && p.AmountMinor != -moved {
+			return fmt.Errorf("sweep transfer: %w", ErrSweepStampRepaired)
+		}
 		return nil
 	}
 	if !sweep.IsDue(rule, now) {
+		// A replay can land in the window after the one that posted, for example just past midnight
+		// when the sweep posted late the evening before. If the rule's last stamp is a sweep that really
+		// posted, the money already moved and the caller must not be told the proposal is out of date.
+		stampPosted, err := a.sweepPostedForStamp(rule)
+		if err != nil {
+			return err
+		}
+		if stampPosted {
+			return fmt.Errorf("sweep transfer: %w", ErrSweepAlreadyPosted)
+		}
 		return fmt.Errorf("sweep transfer: %w: the rule is not due again yet", ErrSweepProposalStale)
 	}
 	minSweep := rule.MinSweepMinor

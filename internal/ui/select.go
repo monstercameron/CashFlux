@@ -36,6 +36,9 @@ type SelectInputProps struct {
 	Class string
 	// TestID is an optional data-testid attribute for e2e selectors.
 	TestID string
+	// ID is the element id of the select, so a Field label can name it in its for attribute.
+	// Empty adds none.
+	ID string
 }
 
 // SelectInput renders a native <select> element from a typed option list. It
@@ -60,6 +63,9 @@ func selectInputWidget(props SelectInputProps) uic.Node {
 	args := []any{sh.ClassStr(cls)}
 	if props.AriaLabel != "" {
 		args = append(args, sh.Attr("aria-label", props.AriaLabel))
+	}
+	if props.ID != "" {
+		args = append(args, sh.Attr("id", props.ID))
 	}
 	if props.TestID != "" {
 		args = append(args, sh.Attr("data-testid", props.TestID))

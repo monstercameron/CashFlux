@@ -16,7 +16,7 @@ func registerAcctDetails() {
 		customProp("--acct-head-gap", "0.75rem"),
 		customProp("--acct-indent", "calc(var(--acct-head-icon) + var(--acct-head-gap))"),
 	)
-	rule(".acct-row > :not(.acct-row-head)",
+	rule(".acct-row > *",
 		marginLeft("var(--acct-indent)"),
 		minWidth("0"),
 	)
@@ -90,9 +90,6 @@ func registerAcctDetails() {
 		gap("0.75rem 1.5rem"),
 		minWidth("0"),
 	)
-	rule(".acct-panel-footer > .acct-docs:has(> .acct-docs-body)",
-		flexBasis("100%"),
-	)
 	rule(".acct-panel-footer .acct-set-institution",
 		marginLeft("auto"),
 	)
@@ -157,15 +154,6 @@ func registerAcctDetails() {
 		margin("0"),
 		fontVariantNumeric("tabular-nums"),
 	)
-	rule(".acct-service-row",
-		alignItems("center"),
-		gap("0.75rem"),
-	)
-	rule(".acct-service-cost",
-		marginLeft("auto"),
-		whiteSpace("nowrap"),
-		fontVariantNumeric("tabular-nums"),
-	)
 
 	// The institution swatch beside a name: a round dot drawn in the institution's colour,
 	// which the element supplies as --inst-color (the colour is user data).
@@ -211,15 +199,6 @@ func registerAcctDetails() {
 		margin("0.75rem 0 0 0"),
 	)
 
-	// The transfer form's currency note and balance preview.
-	rule(".budget-sub.acct-fx-note",
-		margin("0"),
-	)
-	rule(".budget-sub.acct-xfer-preview",
-		display("grid"),
-		gap("0.15rem"),
-		margin("0"),
-	)
 	// The liquidity line: buckets in a wrapping row.
 	rule(".t-caption.acct-liquidity",
 		display("flex"),

@@ -162,36 +162,6 @@ func registerSmartRowHint() {
 		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
 	)
-	rule(".acct-recur-row",
-		display("flex"),
-		alignItems("center"),
-		justifyContent("space-between"),
-		gap("0.9rem"),
-		padding("0.7rem 0.9rem"),
-		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
-	)
-	rule(".acct-recur-list .acct-recur-row:first-child",
-		borderTop("0"),
-	)
-	rule(".acct-recur-main",
-		display("flex"),
-		flexDirection("column"),
-		minWidth("0"),
-	)
-	rule(".acct-recur-name",
-		overflow("hidden"),
-		textOverflow("ellipsis"),
-		whiteSpace("nowrap"),
-		color("var(--text)"),
-		fontWeight("600"),
-		fontSize("var(--type-14)"),
-	)
-	// The meta line reads at the caption step in the dim text colour, with figures aligned.
-	rule(".acct-recur-meta",
-		fontSize("var(--type-12)"),
-		color("var(--text-dim)"),
-		fontVariantNumeric("tabular-nums"),
-	)
 	rule(".acct-recur-track",
 		flexShrink("0"),
 		whiteSpace("nowrap"),

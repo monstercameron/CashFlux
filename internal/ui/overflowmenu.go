@@ -31,6 +31,8 @@ type OverflowMenuItem struct {
 	OnSelect func()
 	// TestID is the data-testid of the entry, for tests. Empty adds none.
 	TestID string
+	// Title is the hover tooltip of the entry, rendered as its title attribute. Empty adds none.
+	Title string
 	// Hidden leaves the entry out of the menu. Prefer it to building the slice conditionally, so
 	// the slice keeps one fixed order.
 	Hidden bool
@@ -340,6 +342,9 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	}
 	if item.TestID != "" {
 		btnArgs = append(btnArgs, Attr("data-testid", item.TestID))
+	}
+	if item.Title != "" {
+		btnArgs = append(btnArgs, Attr("title", item.Title))
 	}
 	if item.Icon != "" {
 		btnArgs = append(btnArgs, Icon(item.Icon, css.Class(tw.W4, tw.H4)))
