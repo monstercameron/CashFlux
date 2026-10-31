@@ -157,6 +157,7 @@ func Register() {
 	registerUXT1()
 	registerBR3Head()
 	registerPageHeadline()
+	registerRadioGroup()
 	registerV5Type()
 	registerV5Row()
 	registerV5Form()

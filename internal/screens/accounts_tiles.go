@@ -1305,15 +1305,15 @@ func acctListWidget(props acctListProps) ui.Node {
 
 	var classSeg ui.Node = Fragment()
 	if hasLiab {
-		classSeg = uiw.Segmented(uiw.SegmentedProps{
-			Label:    uistate.T("accounts.classFilterLabel"),
-			Selected: classView,
-			Options: []uiw.SegOption{
+		classSeg = uiw.RadioGroup(uiw.RadioGroupProps{
+			Label: uistate.T("accounts.classFilterLabel"),
+			Value: classView,
+			Options: []uiw.RadioOption{
 				{Value: "", Label: uistate.T("accounts.classAll"), TestID: "acct-class-all"},
 				{Value: string(domain.ClassAsset), Label: uistate.T("accounts.classAssets"), TestID: "acct-class-assets"},
 				{Value: string(domain.ClassLiability), Label: uistate.T("accounts.classLiabilities"), TestID: "acct-class-liabilities"},
 			},
-			OnSelect: func(v string) {
+			OnChange: func(v string) {
 				nf := filterAtom.Get()
 				nf.Class = v
 				filterAtom.Set(nf.Normalize())
