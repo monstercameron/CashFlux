@@ -645,7 +645,8 @@ func AccountRow(props accountRowProps) ui.Node {
 					// an account shared while a person administers it (OwnerID set).
 					If(a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0,
 						Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-shared-badge-"+a.ID),
-							Title(uistate.T("accounts.sharedBadgeTitle")), uistate.T("accounts.sharedBadge"))),
+							Title(uistate.T("accounts.sharedBadgeTitle")), AriaLabel(uistate.T("accounts.sharedBadge")),
+							uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 					// #66 follow-up: individually-owned rows name their owner (a Member) with a
 					// quiet chip of the same weight as SHARED, so ownership is visible for both.
 					acctOwnerChip(props),
@@ -664,7 +665,8 @@ func AccountRow(props accountRowProps) ui.Node {
 						Attr("data-testid", "acct-details-toggle-"+a.ID),
 						AriaExpanded(detailsOpen.Get()),
 						AriaLabel(uistate.T("accountsRedesign.detailsAria", a.Name)),
-						OnClick(toggleDetails), detailsLabel),
+						Title(detailsLabel), OnClick(toggleDetails),
+						uiw.Icon(icon.ChevronDown, css.Class("acct-details-chev", tw.ShrinkO, tw.W4, tw.H4))),
 					// C365: investment accounts deep-link to their holdings + growth on
 					// /investments — a quiet link (not an everyday-action button), so the
 					// row still leads with exactly one inline action.

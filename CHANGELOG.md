@@ -47,6 +47,7 @@ and every commit updates this file under `Unreleased`.
 - Institution colours are checked to be a plain #rgb or #rrggbb value before they reach the stylesheet. Anything else falls back to the default colour, so a stored colour cannot inject CSS.
 - Accounts page uses the framework helpers instead of hand-built attributes: AriaLabel, AriaExpanded, AriaHidden, Role and Title, ui.If for lazy branches, and ClassNames with When for conditional classes. The local IfLazy helper is removed.
 - Switching the Accounts All / Assets / Liabilities view is about 2 to 4 times faster. The view is stored as a viewer preference rather than household data, so it no longer invalidates the page's cached totals, and the Smart insight pass for the list is cached per data revision.
+- Account rows are shorter: the name and its type and currency line sit side by side and wrap only when the pane is narrow. The shared badge and the details disclosure are glyphs, with their words kept as tooltips and accessible names.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.

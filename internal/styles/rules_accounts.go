@@ -138,12 +138,16 @@ func registerAccountsSurface() {
 		prop("gap", "0.75rem"),
 		prop("width", "100%"),
 	)
-	// Identity column: name line over the quiet sub line. min-width:0 lets long names
-	// truncate instead of shoving the figure off the row.
+	// Identity column: the name line and the quiet sub line share one row, so the meta sits
+	// beside the name and only wraps underneath when the pane is too narrow for both. min-width:0
+	// lets long names truncate instead of shoving the figure off the row.
 	rule(".acct-row-id",
 		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("gap", "0.1rem"),
+		prop("flex-direction", "row"),
+		prop("flex-wrap", "wrap"),
+		prop("align-items", "center"),
+		prop("column-gap", "0.75rem"),
+		prop("row-gap", "0.15rem"),
 		prop("min-width", "0"),
 		prop("flex", "1"),
 	)
@@ -165,6 +169,13 @@ func registerAccountsSurface() {
 		prop("min-width", "0"),
 	)
 	// The Details toggle is a quiet link — small, dim, never louder than the meta.
+	rule(".acct-details-chev",
+		prop("transition", "transform 150ms ease"),
+	)
+	// The chevron turns to point up while the details are open.
+	rule(".acct-details-toggle[aria-expanded=\"true\"] .acct-details-chev",
+		prop("transform", "rotate(180deg)"),
+	)
 	rule(".acct-details-toggle",
 		prop("font-size", "var(--type-13)"),
 		prop("white-space", "nowrap"),
