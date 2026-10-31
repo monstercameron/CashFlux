@@ -117,17 +117,21 @@ func registerPageHeadline() {
 		at("from", prop("clip-path", "inset(0 100% 0 0)"), opacity("0"), transform("translateY(6px)")),
 		at("to", prop("clip-path", "inset(0 0 0 0)"), opacity("1"), transform("translateY(0)")),
 	)
+	keyframes("pageHeadlineFade",
+		at("from", opacity("0")),
+		at("to", opacity("1")),
+	)
 	keyframes("pageHeadlineSpin",
 		at("from", transform("rotate(0deg)")),
 		at("to", transform("rotate(360deg)")),
 	)
 	rule(".page-headline-trend-enter",
-		prop("animation", "pageHeadlineDraw 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
+		prop("animation", "pageHeadlineDraw 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
 	)
 	rule(".page-headline-spinner",
 		display("block"), width("18px"), height("18px"), marginTop("0.4rem"),
 		borderRadius("50%"), border("2px solid var(--border)"), borderTopColor("var(--accent)"),
-		prop("animation", "pageHeadlineSpin 900ms linear infinite"),
+		prop("animation", "pageHeadlineFade 400ms ease-out both, pageHeadlineSpin 900ms linear infinite"),
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".page-headline-trend-enter",
 		prop("animation", "none"),

@@ -594,7 +594,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	now := time.Now()
 	// The trend is deferred one settle, as the Dashboard hero defers its own, so the
 	// header never adds work to the first paint.
-	settled := useAfterSettle("acct-headline")
+	settled := useAfterDelay("acct-headline", 700*time.Millisecond)
 	spark := ui.UseMemo(func() []float64 {
 		if !settled || !nw.Complete() {
 			return nil

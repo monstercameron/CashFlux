@@ -44,6 +44,12 @@ func newViewCache[T any](capacity ...int) *viewcache.Cache[string, T] {
 // scans, chart builds, long lists) off the mount critical path. `key` just names the
 // deferral for the effect's dependency; hooks stay unconditional either way.
 func useAfterSettle(key string) bool {
+	return useAfterDelay(key, 300*time.Millisecond)
+}
+
+// useAfterDelay is useAfterSettle with a chosen delay. A caller that wants a loading
+// state held long enough to read uses a longer one.
+func useAfterDelay(key string, delay time.Duration) bool {
 	_ = key // descriptive only; the effect re-arms via the ready state below
 	ready := ui.UseState(false)
 	// Depend on ready itself so the effect fires on mount (ready=false → schedule the
@@ -52,7 +58,7 @@ func useAfterSettle(key string) bool {
 	// leave deferred content missing on a return visit.
 	ui.UseEffect(func() func() {
 		if !ready.Get() {
-			return afterSettleTimer(300*time.Millisecond, func() { ready.Set(true) })
+			return afterSettleTimer(delay, func() { ready.Set(true) })
 		}
 		return nil
 	}, ready.Get())
