@@ -490,14 +490,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	// Bill-payment line: the account's most recent linked bill payment, with a drill to
 	// the payments. Shown for ANY account the user has linked a bill payment to (the
 	// Debt page shows liabilities; this makes the link visible on every account).
-	var billNode ui.Node = Fragment()
-	if props.BillPayment.HasAny {
-		billNode = Span(css.Class("row-meta"), Attr("data-testid", "acct-bill-"+a.ID),
-			uistate.T("accounts.billMeta", fmtMoney(props.BillPayment.Latest)),
-			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-bill-link-"+a.ID),
-				Title(uistate.T("accounts.billLinkTitle")), OnClick(viewBills),
-				uistate.T("accounts.billCount", plural(props.BillPayment.Count, "payment"))))
-	}
+	billNode := If(props.BillPayment.HasAny, Span(css.Class("row-meta"), Attr("data-testid", "acct-bill-"+a.ID),
+		uistate.T("accounts.billMeta", fmtMoney(props.BillPayment.Latest)),
+		Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-bill-link-"+a.ID),
+			Title(uistate.T("accounts.billLinkTitle")), OnClick(viewBills),
+			uistate.T("accounts.billCount", plural(props.BillPayment.Count, "payment")))))
 
 	// Readable notes line: the note text itself, clamped to a couple of lines and
 	// expandable on click, so an attached note is legible in the row instead of being
@@ -845,12 +842,12 @@ func OwnerShareRow(props ownerShareRowProps) ui.Node {
 		shareStr = strconv.Itoa(props.Share)
 	}
 	return Div(css.Class("form-grid"),
-		Style(map[string]string{"grid-template-columns": "1fr auto", "align-items": "center", "gap": "0.5rem"}),
+		css.Class(css.New(css.GridCols(css.Fr(1), css.TrackLen(css.Length("auto"))), css.Items.Center, css.Gap(css.Rem(0.5)))),
 		Span(css.Class(tw.TextDim), props.Member.Name),
 		Label(css.Class("labeled-field"),
-			Style(map[string]string{"display": "flex", "flex-direction": "row", "align-items": "center", "gap": "0.25rem"}),
+			css.Class(css.New(css.Display.Flex, css.FlexDir.Row, css.Items.Center, css.Gap(css.Rem(0.25)))),
 			Input(css.Class("field"),
-				Style(map[string]string{"width": "5rem"}),
+				css.Class(css.New(css.W(css.Length("5rem")))),
 				Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"),
 				Attr("aria-label", props.Member.Name+" "+uistate.T("account.sharePercent")), OnInput(onChange), uiw.FieldValue(shareStr)),
 			Span(css.Class(tw.TextDim), "%"),

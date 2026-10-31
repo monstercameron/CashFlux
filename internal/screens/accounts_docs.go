@@ -189,19 +189,19 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 
 	return Div(css.Class("acct-docs"), Attr("data-testid", "acct-docs-drawer-"+a.ID),
 		toggleBtn,
-		If(n == 0, P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.35rem 0"}), uistate.T("accounts.documentsEmpty"))),
+		If(n == 0, P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.35rem 0")))), uistate.T("accounts.documentsEmpty"))),
 		If(n > 0, Div(css.Class("rows", tw.Mt1), rows)),
 		Div(css.Class(tw.Mt2), Attr("data-testid", "acct-docs-attach-"+a.ID),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "acct-doc-label-"+a.ID),
-					Style(map[string]string{"flex": "1 1 12rem"}),
+					css.Class(css.New(css.Flex(css.Num(1), css.Num(1), css.Length("12rem")))),
 					Placeholder(uistate.T("accounts.documentLabelPh")), Attr("aria-label", uistate.T("accounts.documentLabelField")), OnInput(onLabel), uiw.FieldValue(labelS.Get())),
 				Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-doc-expiry-"+a.ID),
 					Attr("aria-label", uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(expiryS.Get())),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-doc-attach-btn-"+a.ID),
 					OnClick(attach), uistate.T("accounts.attachDocument")),
 			),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.25rem 0 0"}), uistate.T("accounts.documentExpiryHint")),
+			P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.25rem 0 0")))), uistate.T("accounts.documentExpiryHint")),
 		),
 	)
 }
@@ -227,12 +227,9 @@ func accountDocRow(props accountDocRowProps) ui.Node {
 			}
 		})
 	}))
-	var openLink ui.Node = Fragment()
-	if props.DataURL != "" {
-		openLink = A(css.Class("btn-link"), Attr("data-testid", "acct-doc-open-"+props.ArtifactID),
-			Href(props.DataURL), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
-			uistate.T("accounts.documentOpen"))
-	}
+	openLink := If(props.DataURL != "", A(css.Class("btn-link"), Attr("data-testid", "acct-doc-open-"+props.ArtifactID),
+		Href(props.DataURL), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
+		uistate.T("accounts.documentOpen")))
 	return Div(css.Class("row"), Attr("data-testid", "acct-doc-row-"+props.ArtifactID),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), props.Label),

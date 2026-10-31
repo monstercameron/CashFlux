@@ -36,7 +36,7 @@ import (
 // inline (stacked text-over-control) to avoid a stylesheet dependency.
 func labeledField(label string, control ui.Node) ui.Node {
 	return Label(css.Class("labeled-field"),
-		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)))),
 		Span(css.Class("t-caption", tw.TextDim), label),
 		control,
 	)
@@ -49,7 +49,7 @@ func labeledField(label string, control ui.Node) ui.Node {
 // itself still needs aria-required — this labels, it does not validate.
 func labeledFieldRequired(label string, control ui.Node) ui.Node {
 	return Label(css.Class("labeled-field"),
-		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)))),
 		Span(css.Class("t-caption", tw.TextDim), label,
 			Span(css.Class(tw.TextDanger), Attr("aria-hidden", "true"), " *"),
 			Span(css.Class("sr-only"), " "+uistate.T("budgets.fieldRequired"))),
@@ -64,11 +64,8 @@ func labeledFieldRequired(label string, control ui.Node) ui.Node {
 // Account Priya's Business Checking …" — QA M6).
 func groupedField(label string, control ui.Node) ui.Node {
 	return Fieldset(css.Class("labeled-field"),
-		Style(map[string]string{
-			"display": "flex", "flex-direction": "column", "gap": "0.25rem",
-			"border": "0", "margin": "0", "padding": "0", "min-width": "0",
-		}),
-		Legend(css.Class("t-caption", tw.TextDim), Style(map[string]string{"padding": "0"}), label),
+		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)), css.BorderStyle(css.LineNone), css.Margin(css.Length("0")), css.Padding(css.Length("0")), css.MinWidth(css.Length("0")))),
+		Legend(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Padding(css.Length("0")))), label),
 		control,
 	)
 }

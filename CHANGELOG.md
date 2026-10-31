@@ -42,6 +42,7 @@ and every commit updates this file under `Unreleased`.
 - Typed search waits 250ms after the last keystroke before it applies, in every filter toolbar. The note and the stale rows still answer each keystroke at once, and Clear or Escape applies immediately. Transactions no longer adds its own second delay on top.
 - Every button on the Accounts page is one shared tool button, the same component as the Filters button: the same height, radius, border and states. Row Transactions, the row ⋯ menus, Manage debts and Add account all use it.
 - The top-bar ⋯ menu, the row ⋯ menus and the toolbar More menu all open and close with the same fade and grow, and their icon buttons are the same tool button.
+- Accounts page styling is typed: inline style maps are typed css rules (display, flex, gap, margin, width), and single-value conditional markup uses If() instead of a Fragment assigned in an if.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.

@@ -618,19 +618,17 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			}
 		}
 		stat := func(key, val, testid string) ui.Node {
-			return Div(Style(map[string]string{"display": "grid", "gap": "0.1rem"}),
+			return Div(css.Class(css.New(css.Display.Grid, css.Gap(css.Rem(0.1)))),
 				Span(css.Class("t-caption", tw.TextDim), uistate.T(key)),
 				Span(Attr("data-testid", testid), val))
 		}
 		balancesNode = Div(css.Class("acct-bal-strip"), Attr("data-testid", "acct-bal-4way"),
-			Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.4rem 1.25rem",
-				"padding": "0.5rem 0.65rem", "border": "1px solid var(--border)", "border-radius": "8px",
-				"margin-bottom": "0.6rem"}),
+			css.Class(css.New(css.Display.Flex, tw.FlexWrap, css.Gap(css.Length("0.4rem 1.25rem")), css.Padding(css.Length("0.5rem 0.65rem")), css.Border(css.Px(1), css.Color("var(--border)")), css.Rounded(css.Px(8)), css.Margin(css.Length("0 0 0.6rem")))),
 			stat("accounts.balCurrent", fmtMoney(curBalStated), "acct-bal-current"),
 			stat("accounts.balCleared", fmtMoney(curCleared), "acct-bal-cleared"),
 			stat("accounts.balStatement", stmtStr, "acct-bal-statement"),
 			stat("accounts.balProjected", projStr, "acct-bal-projected"),
-			Div(Style(map[string]string{"flex": "1 1 100%"}),
+			Div(css.Class(css.New(css.Flex(css.Num(1), css.Num(1), css.Length("100%")))),
 				Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-bal-provenance"), provText)),
 		)
 	}
@@ -702,11 +700,8 @@ func setBalanceNote(a domain.Account, curStated, targetStated int64) ui.Node {
 		line = P(css.Class("t-caption acct-value-delta"), Attr("data-testid", "setbal-delta-preview"),
 			uistate.T("accounts.setBalanceDeltaPreview", signed))
 	}
-	var warning ui.Node = Fragment()
-	if isDebt && reconcile.LooksLikeUnsignedDebt(curStated, targetStated) {
-		warning = P(css.Class("t-caption"), Attr("data-testid", "setbal-unsigned-warning"),
-			uistate.T("accounts.setBalanceUnsignedDebt", fmtMoney(money.New(-targetStated, a.Currency))))
-	}
+	warning := If(isDebt && reconcile.LooksLikeUnsignedDebt(curStated, targetStated), P(css.Class("t-caption"), Attr("data-testid", "setbal-unsigned-warning"),
+		uistate.T("accounts.setBalanceUnsignedDebt", fmtMoney(money.New(-targetStated, a.Currency)))))
 	return Div(line, warning)
 }
 
@@ -813,7 +808,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 	for i := len(a.Reconciliations) - 1; i >= 0 && len(histRows) < 6; i-- {
 		r := a.Reconciliations[i]
 		histRows = append(histRows, Div(css.Class("row"), Attr("data-testid", "reconcile-history-row"),
-			Style(map[string]string{"display": "flex", "justify-content": "space-between", "gap": "1rem"}),
+			css.Class(css.New(css.Display.Flex, css.Justify.Between, css.Gap(css.Rem(1)))),
 			Span(r.Through().Format("Jan 2, 2006")),
 			If(r.Forced, Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-history-forced"),
 				uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, dec)))),
@@ -852,10 +847,10 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 			// list scrolls, so the reconciliation math is always in view.
 			Div(css.Class("reconcile-header"), Attr("data-testid", "reconcile-header"),
 				If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
-					Style(map[string]string{"margin": "0 0 0.5rem"}),
+					css.Class(css.New(css.Margin(css.Length("0 0 0.5rem")))),
 					uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
 				If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-draft-note"),
-					Style(map[string]string{"margin": "0 0 0.5rem"}),
+					css.Class(css.New(css.Margin(css.Length("0 0 0.5rem")))),
 					uistate.T("accounts.reconDraftNote"))),
 				labeledField(uistate.T("accounts.statementBalance"),
 					Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
@@ -865,7 +860,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 					Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
 						Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(onStmtDate), uiw.FieldValue(stmtDateS.Get()))),
 				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-sign-hint"),
-					Style(map[string]string{"margin": "0 0 0.5rem"}),
+					css.Class(css.New(css.Margin(css.Length("0 0 0.5rem")))),
 					uistate.T(reconSignHintKey(a))),
 				Div(css.Class("reconcile-summary"),
 					Span(css.Class(tw.TextDim), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
@@ -894,26 +889,26 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 					Title(uistate.T("accounts.reconMarkAllTitle")), OnClick(acts.MarkAll), uistate.T("accounts.reconMarkAll")),
 				If(stmtTyped, Span(css.Class("reconcile-markall-preview"), Attr("data-testid", "reconcile-markall-preview"),
 					bulkPreview)))),
-			If(len(unclearedTxns) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+			If(len(unclearedTxns) > 0, Div(css.Class(css.New(css.Margin(css.Length("0.75rem 0 0 0")))),
 				P(css.Class("t-caption"), uistate.T("accounts.unclearedHeading")),
 				Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)))),
 			If(len(unclearedTxns) == 0 && !result.Reconciled,
 				P(css.Class("muted"), uistate.T("accounts.noUncleared"))),
 			// The way out of a stuck difference (QA R3 CF-02): adjustment /
 			// investigate / force-complete, offered once a balance is typed.
-			If(stmtTyped && !result.Reconciled, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+			If(stmtTyped && !result.Reconciled, Div(css.Class(css.New(css.Margin(css.Length("0.75rem 0 0 0")))),
 				Attr("data-testid", "reconcile-resolve"),
 				P(css.Class("t-caption", tw.TextDim), uistate.T("accounts.reconResolveHint")),
-				Div(Style(map[string]string{"display": "flex", "gap": "0.5rem", "flex-wrap": "wrap"}),
+				Div(css.Class(css.New(css.Display.Flex, css.Gap(css.Rem(0.5)), tw.FlexWrap)),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-adjust"),
 						OnClick(acts.Adjust), uistate.T("accounts.reconAdjustAction")),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-investigate"),
 						OnClick(acts.Investigate), uistate.T("accounts.reconInvestigate")),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-force"),
 						OnClick(acts.Force), uistate.T("accounts.reconForceAction"))))),
-			If(len(histRows) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+			If(len(histRows) > 0, Div(css.Class(css.New(css.Margin(css.Length("0.75rem 0 0 0")))),
 				Attr("data-testid", "reconcile-history"),
-				Div(Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "baseline", "gap": "1rem"}),
+				Div(css.Class(css.New(css.Display.Flex, css.Justify.Between, css.Items.Baseline, css.Gap(css.Rem(1)))),
 					P(css.Class("t-caption"), uistate.T("accounts.reconHistoryHeading")),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-reopen"),
 						OnClick(acts.Reopen), uistate.T("accounts.reconReopenAction"))),
@@ -1060,7 +1055,7 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 					})),
 				// "Other" is the catch-all type with no natural asset/liability class, so let the
 				// user say whether it's a debt — that's what the net-worth and debt formulas read.
-				If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+				If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), css.Class(css.New(tw.CursorPointer)),
 					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiabS.Get())...)...),
 					Div(css.Class("row-main"),
 						Span(uistate.T("accounts.countAsLiability")),
@@ -1151,15 +1146,15 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 					labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
 						uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
 							AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
-					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
+					P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("-0.35rem 0 0")))), uistate.T("accounts.beneficiaryNoteHint")),
 					// AC11: keep this account visible in its class views but out of net worth.
-					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), css.Class(css.New(tw.CursorPointer)),
 						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
 						Div(css.Class("row-main"),
 							Span(uistate.T("accountsstmt.excludeNetWorth")),
 							Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
 					// Stale-balance reminders: opt out for good, or snooze until a date.
-					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), css.Class(css.New(tw.CursorPointer)),
 						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), OnChange(x.onToggleFreshExempt)}, checkedAttr(x.freshExemptS.Get())...)...),
 						Div(css.Class("row-main"),
 							Span(uistate.T("accounts.freshExempt")),
@@ -1188,9 +1183,9 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), labeledField(uistate.T("accounts.revalueDaysLabel"),
 					Input(css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
 						Placeholder(uistate.T("accounts.revalueDaysPh")), OnInput(x.onRevalueDays), uiw.FieldValue(x.revalueDaysS.Get())))),
-				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
+				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("-0.35rem 0 0")))), uistate.T("accounts.revalueDaysHint"))),
 				If(len(accDefs) > 0, Fragment(
-					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
+					P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0.5rem 0 0")))), uistate.T("accounts.customFieldsLabel")),
 					If(customErrS.Get() != "", P(css.Class("err"), Attr("role", "alert"), customErrS.Get())),
 					MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))

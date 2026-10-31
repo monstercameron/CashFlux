@@ -92,14 +92,11 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	openEdit := ui.UseEvent(Prevent(func() { edit.Set(g.ID) }))
 	toggle := ui.UseEvent(Prevent(func() { toggleAcctGroupCollapsed(g.ID) }))
 
-	var editBtn ui.Node = Fragment()
-	if isReal {
-		editBtn = Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
-			Attr("data-testid", "acct-group-edit-"+g.ID),
-			Attr("aria-label", uistate.T("accounts.editGroupTitle")),
-			Title(uistate.T("accounts.editGroupTitle")), OnClick(openEdit),
-			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
-	}
+	editBtn := If(isReal, Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+		Attr("data-testid", "acct-group-edit-"+g.ID),
+		Attr("aria-label", uistate.T("accounts.editGroupTitle")),
+		Title(uistate.T("accounts.editGroupTitle")), OnClick(openEdit),
+		uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))))
 
 	chevron := icon.ChevronDown
 	toggleTitle := uistate.T("accountsGroup.collapse")
@@ -127,10 +124,7 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 		// Styled inline as bare text-with-a-chevron (no stylesheet dependency) so it
 		// reads as a section header rather than a default UA button.
 		Button(css.Class("acct-group-toggle", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Style(map[string]string{
-				"background": "none", "border": "0", "padding": "0", "margin": "0",
-				"cursor": "pointer", "color": "var(--text)", "font": "inherit", "text-align": "left",
-			}),
+			css.Class(css.New(css.Bg(css.Color("transparent")), css.BorderStyle(css.LineNone), css.Padding(css.Length("0")), css.Margin(css.Length("0")), tw.CursorPointer, css.TextColor(css.Color("var(--text)")), tw.TextLeft)),
 			Attr("data-testid", toggleTestID), Title(toggleTitle),
 			Attr("aria-expanded", ariaBool(!props.Collapsed)),
 			Attr("aria-label", uistate.T("accountsGroup.toggleAria", name)),
@@ -281,10 +275,7 @@ func groupAccountToggle(props groupAccountToggleProps) ui.Node {
 	if props.Checked {
 		cls += " is-checked"
 	}
-	var checkMark ui.Node = Fragment()
-	if props.Checked {
-		checkMark = uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4))
-	}
+	checkMark := If(props.Checked, uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
 	return Button(ClassStr(cls), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", ariaBool(props.Checked)),
 		Attr("data-testid", "group-acct-"+a.ID), OnClick(toggle),
 		Span(css.Class("pool-acct-check"), Attr("aria-hidden", "true"), checkMark),
@@ -397,12 +388,9 @@ func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 		return ui.CreateElement(groupAccountToggle, groupAccountToggleProps{Account: a, Checked: selS.Get()[a.ID], OnToggle: toggle})
 	})
 
-	var deleteRow ui.Node = Fragment()
-	if !isNew {
-		deleteRow = Div(css.Class(tw.Mt3),
-			Button(css.Class("btn btn-sm danger"), Type("button"), Attr("data-testid", "group-delete"),
-				OnClick(del), uistate.T("accounts.deleteGroup")))
-	}
+	deleteRow := If(!isNew, Div(css.Class(tw.Mt3),
+		Button(css.Class("btn btn-sm danger"), Type("button"), Attr("data-testid", "group-delete"),
+			OnClick(del), uistate.T("accounts.deleteGroup"))))
 
 	return Div(css.Class("inv-pool-modal"),
 		Form(css.Class("inv-pool-modal-form"), Attr("id", "account-group-form"), OnSubmit(save),

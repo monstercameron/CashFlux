@@ -59,10 +59,7 @@ func institutionChip(instByID map[string]domain.Institution, instID string) ui.N
 	return Span(css.Class("inst-chip", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 		Attr("data-testid", "inst-chip-"+instID),
 		Attr("aria-label", uistate.T("accounts.institutionChipAria", in.TrimmedName())),
-		Span(Style(map[string]string{
-			"width": "8px", "height": "8px", "border-radius": "50%",
-			"background": institutionSwatchColor(in), "display": "inline-block", "flex-shrink": "0",
-		})),
+		Span(css.Class(css.New(css.W(css.Px(8)), css.H(css.Px(8)), css.Rounded(css.Length("50%")), css.Bg(css.Color(institutionSwatchColor(in))), css.Display.InlineBlock, tw.ShrinkO))),
 		Span(css.Class(tw.TextDim), in.TrimmedName()),
 	)
 }
@@ -117,7 +114,7 @@ func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	})
 
 	return Div(css.Class("inv-pool-modal"),
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.75rem"}), uistate.T("accounts.institutionsHint")),
+		P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0 0 0.75rem")))), uistate.T("accounts.institutionsHint")),
 		If(len(insts) == 0, P(css.Class("empty"), uistate.T("accounts.institutionsEmpty"))),
 		Div(css.Class("rows"), rows),
 		Div(css.Class(tw.Mt3),
@@ -139,10 +136,7 @@ func institutionListRow(props institutionListRowProps) ui.Node {
 	in := props.Inst
 	edit := ui.UseEvent(Prevent(func() { props.OnEdit(in.ID) }))
 	return Div(css.Class("row"), Attr("data-testid", "institution-row-"+in.ID),
-		Span(Style(map[string]string{
-			"width": "10px", "height": "10px", "border-radius": "50%",
-			"background": institutionSwatchColor(in), "flex-shrink": "0",
-		})),
+		Span(css.Class(css.New(css.W(css.Px(10)), css.H(css.Px(10)), css.Rounded(css.Length("50%")), css.Bg(css.Color(institutionSwatchColor(in))), tw.ShrinkO))),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), in.TrimmedName()),
 			If(props.AccountCount > 0, Span(css.Class("row-meta"), uistate.T("accounts.institutionAccountCount", plural(props.AccountCount, "account")))),
@@ -249,11 +243,8 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 		title = uistate.T("accounts.editInstitution")
 	}
 
-	var deleteBtn ui.Node = Fragment()
-	if !isNew {
-		deleteBtn = Button(css.Class("btn btn-sm danger"), Type("button"), Attr("data-testid", "institution-delete"),
-			OnClick(del), uistate.T("accounts.deleteInstitution"))
-	}
+	deleteBtn := If(!isNew, Button(css.Class("btn btn-sm danger"), Type("button"), Attr("data-testid", "institution-delete"),
+		OnClick(del), uistate.T("accounts.deleteInstitution")))
 
 	swatch := colorS.Get()
 	if swatch == "" {

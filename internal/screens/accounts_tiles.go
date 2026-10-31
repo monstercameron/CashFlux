@@ -386,7 +386,7 @@ func acctTransferFXNote(app *appstate.App, fromID, toID, amountStr string) ui.No
 			uistate.T("accounts.fxNoteNoRate", fromAc.Currency, toAc.Currency))
 	}
 	return P(css.Class("budget-sub"), Attr("data-testid", "xfer-fx-note"),
-		Style(map[string]string{"margin": "0"}),
+		css.Class(css.New(css.Margin(css.Length("0")))),
 		uistate.T("accounts.fxNoteAmountIn", fromAc.Currency, toAc.Currency, fmtMoney(conv)))
 }
 
@@ -437,7 +437,7 @@ func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr, rece
 		}
 	}
 	return Div(css.Class("budget-sub"), Attr("data-testid", "xfer-balance-preview"),
-		Style(map[string]string{"margin": "0", "display": "grid", "gap": "0.15rem"}),
+		css.Class(css.New(css.Margin(css.Length("0")), css.Display.Grid, css.Gap(css.Rem(0.15)))),
 		Span(uistate.T("accounts.xferPreviewTitle")),
 		Span(Attr("data-testid", "xfer-preview-from"),
 			uistate.T("accounts.xferPreviewLine", fromName, fmtMoney(pv.FromBefore), fmtMoney(pv.FromAfter))),
@@ -711,7 +711,7 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 		return Fragment()
 	}
 	kids := []any{css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-liquidity-line"),
-		Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.25rem 1rem"}),
+		css.Class(css.New(css.Display.Flex, tw.FlexWrap, css.Gap(css.Length("0.25rem 1rem")))),
 		Title(uistate.T("accounts.liqTitle"))}
 	for _, it := range items {
 		if totals[it.cls] == 0 {
@@ -1475,7 +1475,7 @@ func acctWelcomeWidget(props acctWelcomeProps) ui.Node {
 // numeric custom field on your accounts, then compute over it here.
 func acctFormulaWidget(props acctFormulaProps) ui.Node {
 	body := Div(
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("accounts.formulaHint")),
+		P(css.Class("t-caption", tw.TextDim), css.Class(css.New(css.Margin(css.Length("0 0 0.5rem")))), uistate.T("accounts.formulaHint")),
 		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("accounts.formulaTitle"), ShowSaved: true}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
