@@ -41,11 +41,29 @@ func sortedInstitutions(app *appstate.App) []domain.Institution {
 
 // institutionSwatchColor returns the color to render for an institution chip/stripe,
 // falling back to a calm neutral accent when the institution has none set.
+// institutionSwatchColor is the colour an institution is drawn in. The colour is stored
+// data, and it reaches a generated stylesheet class, so only a plain #rgb or #rrggbb value is
+// used; anything else falls back to the default colour rather than reaching the CSS.
 func institutionSwatchColor(in domain.Institution) string {
-	if c := strings.TrimSpace(in.Color); c != "" {
+	if c := strings.TrimSpace(in.Color); isSwatchHex(c) {
 		return c
 	}
 	return "#7c83ff"
+}
+
+// isSwatchHex reports whether s is a #rgb or #rrggbb colour.
+func isSwatchHex(s string) bool {
+	if len(s) != 4 && len(s) != 7 || s[0] != '#' {
+		return false
+	}
+	for _, r := range s[1:] {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'f', r >= 'A' && r <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // institutionChip renders a small colored tag with the institution's name — used on
