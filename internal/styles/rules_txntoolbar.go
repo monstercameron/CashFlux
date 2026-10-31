@@ -312,38 +312,6 @@ func registerTxnToolbar() {
 		gap("0.75rem"),
 		alignItems("flex-end"),
 	)
-	rule(".txn-review-callout",
-		display("inline-flex"),
-		alignItems("center"),
-		gap("0.45rem"),
-		padding("0.45rem 0.7rem"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-lg)"),
-		background("transparent"),
-		color("var(--text)"),
-		fontSize("var(--fs-body)"),
-		fontWeight("600"),
-		cursor("pointer"),
-	)
-	rule(".txn-review-callout-attention",
-		color("var(--text)"),
-	)
-	rule(".txn-review-callout-attention::before",
-		content(`""`),
-		display("inline-block"),
-		width("8px"),
-		height("8px"),
-		borderRadius("50%"),
-		background("var(--warn)"),
-		flex("0 0 8px"),
-	)
-	rule(".txn-review-callout:hover",
-		borderColor("var(--border-strong)"),
-	)
-	rule(".txn-review-callout:focus-visible",
-		outline("2px solid var(--accent)"),
-		outlineOffset("2px"),
-	)
 	rule(".txn-count-range",
 		marginLeft("auto"),
 		whiteSpace("nowrap"),

@@ -37,6 +37,7 @@ and every commit updates this file under `Unreleased`.
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed
+- The Transactions Review, Filters and More buttons are the shared ToolButton, with the same size, radius, border and tints as the Accounts buttons. Search, Filters and More sit on one row, as Accounts lays them out. The Review button keeps its attention tint.
 - The Transactions summary and toolbar bubbles are 10px apart, the same gap the page grid uses between widgets, and their padding and gaps use the Accounts 0.7rem tokens. The toolbar wrapper was a plain block, so its gap never applied.
 - The Transactions Add action is one primary button labelled "Add". Its menu holds the Expense, Income, Transfer and Import options, so the separate caret button and its split styling are gone. Review sits to the left of Add.
 - The Transactions summary bar runs the full width of the card. The top-right actions had pushed the whole footer in by 16rem; that padding now sits on the figure column only. The count labels and category legend use the Accounts fact tokens: body size, regular dimmed labels, semibold text-coloured values.

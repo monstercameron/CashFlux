@@ -679,9 +679,9 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 			uistate.PersistTxFilter(cleared)
 		},
 		ClearAllLabel: clearAllLabel(len(props.Own.PageFilters())), RemoveLabel: uistate.T("transactions.removeFilter"),
+		PrimaryActions: []ui.Node{ui.CreateElement(txnToolbarMore, props)},
 		Actions: []ui.Node{
 			Div(css.Class("txn-toolbar-context"), ui.CreateElement(txnDateScope, struct{}{}), ui.CreateElement(txnViewToggle, struct{}{})),
-			Div(css.Class("txn-toolbar-commands"), ui.CreateElement(txnToolbarMore, props)),
 		},
 	})
 }
@@ -712,13 +712,15 @@ func txnToolbarAdd(_ txnToolbarRenderProps) ui.Node {
 	)
 }
 
+// txnToolbarReview is the Review action with its count of rows waiting for a look. It is the
+// shared ToolButton in the attention tint, the same component the page's other actions use.
 func txnToolbarReview(props txnToolbarRenderProps) ui.Node {
 	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	summary := props.Summary
-	return If(summary.review > 0, Button(css.Class("txn-review-callout txn-review-callout-attention"), Type("button"),
-		Attr("data-testid", "txn-review-btn"), Attr("aria-label", uistate.T("r1c.reviewCallout", summary.review)),
-		OnClick(openReview), Span(uistate.T("uxt4.review")),
-		Span(css.Class("txn-review-count"), Attr("aria-hidden", "true"), strconv.Itoa(summary.review))))
+	return If(summary.review > 0, uiw.ToolButton(uiw.ToolButtonProps{
+		Label: uistate.T("uxt4.review"), Badge: strconv.Itoa(summary.review), Variant: "stale",
+		AriaLabel: uistate.T("r1c.reviewCallout", summary.review), TestID: "txn-review-btn",
+	}, OnClick(openReview)))
 }
 
 func txnToolbarMore(props txnToolbarRenderProps) ui.Node {
@@ -751,7 +753,6 @@ func txnToolbarMore(props txnToolbarRenderProps) ui.Node {
 	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
 		TriggerText:   uistate.T("transactions.moreActions"),
 		TriggerTestID: "txn-more-btn",
-		TriggerClass:  "btn btn-tool",
 		ExtraContent: ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{
 			App: app, Filter: fOwn, Rates: props.Rates, Base: props.Base, Embedded: true,
 		}),

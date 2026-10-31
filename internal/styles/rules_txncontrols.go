@@ -49,7 +49,7 @@ func registerTxnControls() {
 		gap(".7rem"),
 		minWidth("0"),
 	)
-	rule(".txn-toolbar-context, .txn-toolbar-commands",
+	rule(".txn-toolbar-context",
 		display("flex"),
 		alignItems("center"),
 		gap(".7rem"),
@@ -57,10 +57,6 @@ func registerTxnControls() {
 	)
 	rule(".txn-toolbar-context",
 		flexWrap("wrap"),
-	)
-	rule(".txn-toolbar-commands",
-		marginLeft("auto"),
-		gap(".5rem"),
 	)
 	// The period stepper is one object: the select supplies the label, and the
 	// adjacent arrows are its controls rather than three separate floating boxes.
@@ -257,50 +253,6 @@ func registerTxnControls() {
 		outline("2px solid var(--accent)"),
 		outlineOffset("-2px"),
 	)
-	rule(".txn-responsive-toolbar .txn-review-callout",
-		boxSizing("border-box"),
-		minHeight("44px"),
-		gap(".55rem"),
-		padding("0 .7rem"),
-		fontSize("var(--fs-body)"),
-		fontWeight("600"),
-	)
-	rule(".txn-responsive-toolbar .txn-review-callout-attention::before",
-		display("none"),
-	)
-	rule(".txn-responsive-toolbar .txn-review-count",
-		minWidth("1.6rem"),
-		padding(".15rem .35rem"),
-		borderRadius("var(--radius-md)"),
-		background("color-mix(in srgb, var(--warn) 17%, var(--bg-elev))"),
-		color("var(--warn)"),
-		fontSize("var(--fs-meta)"),
-		lineHeight("1.2"),
-		fontVariantNumeric("tabular-nums"),
-		textAlign("center"),
-	)
-	rule(".txn-responsive-toolbar .txn-toolbar-commands [data-testid=txn-more-btn]",
-		minHeight("44px"),
-		padding("0 .8rem"),
-	)
-	// Secondary actions share one footprint and one hover response. The primary
-	// Add action keeps its accent fill; segmented controls keep their group shell.
-	rule(".txn-responsive-toolbar .filters-trigger, .txn-responsive-toolbar .txn-review-callout, .txn-responsive-toolbar .txn-toolbar-commands [data-testid=txn-more-btn]",
-		boxSizing("border-box"),
-		minHeight("44px"),
-		borderRadius("var(--radius-md)"),
-		border("1px solid var(--border)"),
-		background("var(--bg-card)"),
-		color("var(--text)"),
-		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard)"),
-	)
-	rule(".txn-responsive-toolbar .filters-trigger:hover, .txn-responsive-toolbar .filters-trigger.is-open, .txn-responsive-toolbar .txn-review-callout:hover, .txn-responsive-toolbar .txn-toolbar-commands [data-testid=txn-more-btn]:hover",
-		borderColor("color-mix(in srgb, var(--border) 72%, var(--text))"),
-		background("color-mix(in srgb, var(--bg-card) 94%, var(--text))"),
-	)
-	ruleMedia("(max-width: 900px)", ".txn-responsive-toolbar .txn-toolbar-commands",
-		marginLeft("0"),
-	)
 	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .filter-toolbar-primary",
 		flexDirection("column"),
 		alignItems("stretch"),
@@ -309,12 +261,8 @@ func registerTxnControls() {
 		width("100%"),
 		flex("0 0 auto"),
 	)
-	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-context, .txn-responsive-toolbar .txn-toolbar-commands",
+	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-context",
 		width("100%"),
-	)
-	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-commands",
-		display("grid"),
-		gridTemplateColumns("minmax(0, 1fr) auto"),
 	)
 	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-period-custom",
 		width("min(18rem, calc(100vw - 3rem))"),
@@ -322,8 +270,5 @@ func registerTxnControls() {
 	)
 	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-toolbar-add",
 		gridColumn("1 / -1"),
-	)
-	ruleMedia("(max-width: 520px)", ".txn-responsive-toolbar .txn-review-callout",
-		justifyContent("space-between"),
 	)
 }
