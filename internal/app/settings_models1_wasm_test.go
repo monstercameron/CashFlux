@@ -18,20 +18,54 @@ import (
 func TestAISettingsDescribeServerRouteWithoutRequiringDeviceKey(t *testing.T) {
 	pr := prefs.Default()
 	pr.ServerURL, pr.ServerToken, pr.BackendDisabled = "https://ai-settings.test", "test-session", false
+	var routeChanged, choseServer bool
 	fixture := render.New(t)
 	defer fixture.Cleanup()
 	fixture.Render(Body(uic.CreateElement(func() uic.Node {
-		return settingsAIPane(settingsRightProps{Pr: pr, CurModel: "gpt-5.4-mini", Models: []string{"gpt-5.4-mini"}, ModelsLoaded: true})
+		return settingsAIPane(settingsRightProps{Pr: pr, AiKey: "device-only-key", CurModel: "gpt-5.4-mini", Models: []string{"gpt-5.4-mini"}, ModelsLoaded: true,
+			OnServerAIRoute: func(on bool) { routeChanged, choseServer = true, on }})
 	})))
 	fixture.Stabilize()
 	text := fixture.Text()
-	for _, want := range []string{uistate.T("settings.aiServerTitle"), uistate.T("settings.aiServerModelLive", 1)} {
+	for _, want := range []string{uistate.T("settings.aiServerTitle"), uistate.T("settings.aiServerDestination", "ai-settings.test"), uistate.T("settings.aiServerModelLive", 1)} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("server AI settings omitted %q: %q", want, text)
 		}
 	}
 	if strings.Contains(text, uistate.T("settings.aiNoKey")) || strings.Contains(text, uistate.T("settings.aiModelLive", 1)) {
 		t.Fatalf("server AI settings described direct-only requirements: %q", text)
+	}
+	if findAppTestID(fixture, "input", "settings-ai-server-key") == nil || findAppTestID(fixture, "button", "settings-ai-server-save") == nil {
+		t.Fatal("server AI key controls are missing from AI settings")
+	}
+	if findAppTestID(fixture, "input", "settings-ai-device-key") != nil || findAppTestID(fixture, "input", "settings-ai-base-url") != nil {
+		t.Fatal("server mode exposed direct-only key or endpoint controls")
+	}
+	for _, control := range fixture.AllByTag("div") {
+		if control.Attr("role") == "switch" && control.Attr("aria-label") == uistate.T("settings.aiUseServer") {
+			control.Click()
+			if !routeChanged || choseServer {
+				t.Fatal("turning off server AI did not request the direct route")
+			}
+			return
+		}
+	}
+	t.Fatal("AI route switch is missing")
+}
+
+func TestAISettingsDirectRouteHidesServerKey(t *testing.T) {
+	pr := prefs.Default()
+	fixture := render.New(t)
+	defer fixture.Cleanup()
+	fixture.Render(Body(uic.CreateElement(func() uic.Node {
+		return settingsAIPane(settingsRightProps{Pr: pr})
+	})))
+	fixture.Stabilize()
+	if findAppTestID(fixture, "input", "settings-ai-device-key") == nil || findAppTestID(fixture, "input", "settings-ai-base-url") == nil {
+		t.Fatal("direct AI controls are missing")
+	}
+	if findAppTestID(fixture, "input", "settings-ai-server-key") != nil || findAppTestID(fixture, "button", "settings-ai-server-save") != nil {
+		t.Fatal("direct mode exposed server key controls")
 	}
 }
 

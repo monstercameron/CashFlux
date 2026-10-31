@@ -115,8 +115,7 @@ func init() {
 		"cloud1.useServer":               "Use server copy",
 		"cloud1.useServerHint":           "Load the server copy on this device. The current sync service then removes the saved device copy after it loads successfully.",
 		"cloud1.useServerConfirm":        "Use the server copy and remove the saved device copy after it loads? Choose Keep both for now if you still need to preserve that copy.",
-		"cloud1.aiTitle":                 "AI through your server",
-		"cloud1.aiHint":                  "Optional: send your OpenAI key to your server to make AI requests on your behalf. The server can read that key and those AI requests. Household sync encryption does not cover AI requests.",
+		"cloud1.aiHint":                  "Your key is sent to this server only when you save it. The server can read the key and AI requests. Household sync encryption does not cover AI requests. Estimated AI costs appear in the server console.",
 	} {
 		english[key] = value
 	}
