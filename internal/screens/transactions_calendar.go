@@ -132,14 +132,8 @@ func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 	nav := Div(css.Class("txn-cal-nav", "row"),
 		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), props.Month.Caption),
 		Span(css.Class("txn-cal-scroll-hint"), uistate.T("transactions.calScrollHint")))
-	if props.Month.Err != nil {
-		return uiw.Widget(uiw.WidgetProps{
-			ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-			Body: Div(css.Class("txn-cal"), nav,
-				Div(css.Class("text-dim"), Attr("role", "status"), Attr("data-testid", "txn-cal-fx-error"),
-					uistate.T("transactions.calFxMissingRate"))),
-		})
-	}
+	// Every hook runs before the FX-error branch, so the hook order holds whether or not a
+	// rate is missing this render.
 	preview := ui.UseState(txnCalPreview{})
 	// One timer: pointing at a day waits txnCalPreviewDelayMs, then opens its popover. The loader
 	// and the rows are both in the popover from that moment, and the loader fades itself out.
@@ -161,6 +155,14 @@ func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 	hover := txnCalHover{
 		Enter: func(dateKey string) { preview.Set(txnCalPreview{Key: dateKey, Phase: txnCalPreviewWaiting}) },
 		Leave: func() { preview.Set(txnCalPreview{}) },
+	}
+	if props.Month.Err != nil {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+			Body: Div(css.Class("txn-cal"), nav,
+				Div(css.Class("text-dim"), Attr("role", "status"), Attr("data-testid", "txn-cal-fx-error"),
+					uistate.T("transactions.calFxMissingRate"))),
+		})
 	}
 	rows := MapKeyed(props.Month.Weeks, func(week txncalendarview.Week) any { return week.Total.SummaryID },
 		func(week txncalendarview.Week) ui.Node {
