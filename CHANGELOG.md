@@ -133,6 +133,7 @@ and every commit updates this file under `Unreleased`.
 - Modal footer buttons take their colours from the theme tokens, so Cancel and Save read in light mode as well as dark.
 - The Transactions row info popover keeps its handlers ahead of every branch, so the hook-order check passes again.
 - The category suggestion dialog stays open with a notice when its merchant-wide apply cannot read the ledger, rather than closing as if it had applied.
+- The gap-features end-to-end spec looks up the cleared and review marks by their current test ids.
 
 ### Changed
 - The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.
