@@ -173,6 +173,9 @@ type EntityRowProps struct {
 	// balance or an amount. A nil Value renders nothing. It is wrapped in .row-value, which keeps
 	// it from shrinking and sets tabular numerals.
 	Value uic.Node
+	// Badges, when set, sit on the same line as the Meta lines, after them, so the metadata and
+	// the badges read as one horizontal line. Nil keeps the Meta lines on their own lines.
+	Badges uic.Node
 	// Actions are pre-built interactive nodes placed in the trailing slot.
 	// Because they are already-constructed nodes (not callbacks), EntityRow itself
 	// registers no per-row hooks and is safe to call inside a MapKeyed loop.
@@ -194,8 +197,17 @@ type EntityRowProps struct {
 func EntityRow(props EntityRowProps) uic.Node {
 	mainArgs := []any{css.Class("row-main")}
 	mainArgs = append(mainArgs, Span(css.Class("row-desc"), props.Title))
-	for _, m := range props.Meta {
-		mainArgs = append(mainArgs, Span(css.Class("row-meta"), m))
+	if props.Badges != nil {
+		metaArgs := []any{css.Class("row-meta-line")}
+		for _, m := range props.Meta {
+			metaArgs = append(metaArgs, Span(css.Class("row-meta"), m))
+		}
+		metaArgs = append(metaArgs, props.Badges)
+		mainArgs = append(mainArgs, Div(metaArgs...))
+	} else {
+		for _, m := range props.Meta {
+			mainArgs = append(mainArgs, Span(css.Class("row-meta"), m))
+		}
 	}
 
 	rowArgs := []any{css.Class("row")}

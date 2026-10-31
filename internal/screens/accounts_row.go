@@ -314,6 +314,49 @@ func AccountRow(props accountRowProps) ui.Node {
 			Title: a.Name,
 			Meta:  []string{meta},
 			Value: balance,
+			Badges: Div(css.Class("acct-row-badges"),
+				If(props.DefaultHousehold || len(props.DefaultMembers) > 0, uiw.Pill(uiw.PillProps{Label: uistate.T("defaultAccount.pill"), Tone: uiw.PillDim, Title: defaultAccountPillTitle(props)})),
+				// Shared, group-owned and fractionally shared accounts wear a quiet badge, so
+				// shared and individual ownership is visible in the list. Scope is checked too,
+				// because seeded or imported data can mark an account shared while a person
+				// administers it (OwnerID set).
+				If(a.IsShared(),
+					Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-shared-badge-"+a.ID),
+						Title(uistate.T("accounts.sharedBadgeTitle")), AriaLabel(uistate.T("accounts.sharedBadge")),
+						uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+				// Individually owned rows name their owner (a member) in a quiet chip, the same
+				// weight as the shared chip.
+				acctOwnerChip(props),
+				// Freshness marker: full badge normally; a subdued dot when the list has
+				// collapsed the stale badges (StaleCollapsed) into one summary line.
+				staleBadgeNode(props),
+				smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
+				smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
+				If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),
+				// Investment accounts link to their holdings and growth on /investments. This is
+				// a quiet link, not an everyday-action button, so the row still leads with one
+				// inline action.
+				If(isInvest,
+					Button(css.Class("btn-link acct-holdings-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+						Attr("data-testid", "acct-holdings-link-"+a.ID),
+						AriaLabel(uistate.T("accountsInvest.viewHoldingsTitle")),
+						Title(uistate.T("accountsInvest.viewHoldingsTitle")),
+						OnClick(openHoldings),
+						uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
+						Span(uistate.T("accountsInvest.viewHoldings")))),
+				// The detail block (balance chart, this-period flow, projection, filed documents,
+				// notes, custom fields) sits behind a quiet per-row disclosure, so the resting list
+				// reads as name then balance. The body mounts only while open or fading out, so the
+				// panel's facts are prepared only for a row the reader opened.
+				uiw.Disclosure(uiw.DisclosureProps{
+					ID: "acct-details-" + a.ID, TestID: "acct-details-toggle-" + a.ID, Class: "acct-details",
+					Summary: Span(css.Class("sr-only"), uistate.T("accountsRedesign.detailsAria", a.Name)),
+					Body: ui.CreateElement(accountDetailsPanel, accountDetailsPanelProps{
+						Row: props, Range: chartRange.Get(), OnRange: onChartRange,
+					}),
+				}),
+				ui.CreateElement(accountRecurringPanel, accountRecurProps{Account: a}),
+			),
 			Actions: []ui.Node{
 				// Each row's Transactions button names its account, so the buttons stay
 				// distinguishable in a long list.
@@ -326,57 +369,10 @@ func AccountRow(props accountRowProps) ui.Node {
 				ui.CreateElement(accountOverflowMenu, props),
 			},
 		}),
-		// SECONDARY line: the badges that qualify the account, then the holdings link.
-		Div(css.Class("acct-row-badges"),
-			If(props.DefaultHousehold || len(props.DefaultMembers) > 0, uiw.Pill(uiw.PillProps{Label: uistate.T("defaultAccount.pill"), Tone: uiw.PillDim, Title: defaultAccountPillTitle(props)})),
-			// Shared, group-owned and fractionally shared accounts wear a quiet badge, so
-			// shared and individual ownership is visible in the list. Scope is checked too,
-			// because seeded or imported data can mark an account shared while a person
-			// administers it (OwnerID set).
-			If(a.IsShared(),
-				Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-shared-badge-"+a.ID),
-					Title(uistate.T("accounts.sharedBadgeTitle")), AriaLabel(uistate.T("accounts.sharedBadge")),
-					uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
-			// Individually owned rows name their owner (a member) in a quiet chip, the same
-			// weight as the shared chip.
-			acctOwnerChip(props),
-			// Freshness marker: full badge normally; a subdued dot when the list has
-			// collapsed the stale badges (StaleCollapsed) into one summary line.
-			staleBadgeNode(props),
-			smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
-			smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
-			If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),
-			// Investment accounts link to their holdings and growth on /investments. This is
-			// a quiet link, not an everyday-action button, so the row still leads with one
-			// inline action.
-			If(isInvest,
-				Button(css.Class("btn-link acct-holdings-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-					Attr("data-testid", "acct-holdings-link-"+a.ID),
-					AriaLabel(uistate.T("accountsInvest.viewHoldingsTitle")),
-					Title(uistate.T("accountsInvest.viewHoldingsTitle")),
-					OnClick(openHoldings),
-					uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
-					Span(uistate.T("accountsInvest.viewHoldings")))),
-			// The detail block (balance chart, this-period flow, projection, filed documents,
-			// notes, custom fields) sits behind a quiet per-row disclosure, so the resting list
-			// reads as name then balance. The body mounts only while open or fading out, so the
-			// panel's facts are prepared only for a row the reader opened.
-			uiw.Disclosure(uiw.DisclosureProps{
-				ID: "acct-details-" + a.ID, TestID: "acct-details-toggle-" + a.ID, Class: "acct-details",
-				Summary: Span(css.Class("sr-only"), uistate.T("accountsRedesign.detailsAria", a.Name)),
-				Body: ui.CreateElement(accountDetailsPanel, accountDetailsPanelProps{
-					Row: props, Range: chartRange.Get(), OnRange: onChartRange,
-				}),
-			}),
-		),
 		// The account's own findings, stated inline. The dot above says something is true
 		// about this row; these lines say what, and let it be acted on. They show at
 		// Standard density and up. At Minimal, the row keeps only the dot.
 		smartRowInsightsFor(props.SmartSettings, props.SmartByEntity, a.ID, accountRowSmartCodes),
-		// The repeats found on this account, each with the one action worth having on
-		// them. Collapsed by default: the row is already dense, and this is opt-in detail,
-		// like the budget card's drivers disclosure.
-		ui.CreateElement(accountRecurringPanel, accountRecurProps{Account: a}),
 	)
 }
 

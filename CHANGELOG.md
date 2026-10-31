@@ -92,6 +92,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Fixed
 - The follow-up button on a transaction row previews its open follow-ups in a popover first. The popover holds the way on to the To-do page, and a receipt button when the row has one.
+- The Accounts row puts its meta line (type, currency, cleared balance) and its badges on one horizontal line. Long meta text truncates instead of pushing the badges onto a line of their own. The details chevron sits at the line's right end.
 - The Accounts row's details chevron sits at the right end of its badge line, not on a line of its own. An open details panel wraps to a full-width line beneath the badges.
 - Edit transaction moved from the row's pencil button into its ⋯ menu, as the first entry. The actions column now holds the one button.
 - The row Edit and ⋯ buttons are spaced like the Accounts row actions, a 0.75rem gap, and each keeps its standard size. The actions column is 104px to fit them.

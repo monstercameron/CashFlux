@@ -84,6 +84,26 @@ func registerAccountsS1() {
 		gap("0.4rem 0.5rem"),
 		minWidth("0"),
 	)
+	// The meta text and the badges share one horizontal line. Long meta text truncates rather
+	// than pushing the badges onto a line of their own.
+	rule(".row-meta-line",
+		display("flex"),
+		flexWrap("nowrap"),
+		alignItems("center"),
+		gap("0.4rem 0.6rem"),
+		minWidth("0"),
+	)
+	rule(".row-meta-line > .row-meta",
+		flex("0 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".row-meta-line > .acct-row-badges",
+		flex("1 1 auto"),
+		minWidth("0"),
+	)
 	rule(".acct-row-badges:empty",
 		display("none"),
 	)
