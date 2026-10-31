@@ -8,6 +8,17 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// The ledger's title sits on the left of its count line, as the Accounts list title does.
+	rule(".txn-table-head",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		gap("0.25rem 1rem"),
+		marginBottom("0.5rem"),
+	)
+	rule(".txn-table-head .card-title",
+		margin("0"),
+	)
 	// The cleared mark is a quiet inline glyph beside the description. It is not a control.
 	rule(".txn-row-glyph",
 		display("inline-flex"),

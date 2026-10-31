@@ -800,7 +800,10 @@ func txnTableRegion(props txnTableRegionProps) ui.Node {
 	})
 	return uiw.Widget(uiw.WidgetProps{ID: "txn-table", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(Attr("role", "region"), Attr("aria-label", uistate.T("txw1.tableRegion")), OnKeyDown(keyDown),
-			txnTableScopedCountFacts(props.App, props.Filter, props.Shown, props.Base, props.App.Settings().FXRates, txnTableFactsContext{Snapshot: props.Derived, Lens: props.Lens}), props.Body,
+			Div(css.Class("txn-table-head"),
+				H2(css.Class("card-title"), uistate.T("nav.transactions")),
+				txnTableScopedCountFacts(props.App, props.Filter, props.Shown, props.Base, props.App.Settings().FXRates, txnTableFactsContext{Snapshot: props.Derived, Lens: props.Lens})),
+			props.Body,
 			ui.CreateElement(txnPageCategoryPicker, txnPageCategoryPickerProps{App: props.App, ID: props.Category.ID, Close: props.Category.Close})),
 	})
 }
