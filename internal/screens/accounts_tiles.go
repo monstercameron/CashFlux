@@ -28,8 +28,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
-	"github.com/monstercameron/CashFlux/internal/smart"
-	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -1180,7 +1178,7 @@ func acctListWidget(props acctListProps) ui.Node {
 	smartSettings := uistate.LoadSmartSettings()
 	pr := uistate.UsePrefs().Get()
 	smartIn := buildSmartInput(app, pr.WeekStartWeekday())
-	accountInsights := smartengine.RunPage(smartIn, smartSettings, smart.PageAccounts)
+	accountInsights := accountsPageInsights(app, smartIn, smartSettings, pr.WeekStartWeekday())
 	accountByEntity := insightsByEntity(accountInsights)
 
 	categories := app.Categories()
@@ -1314,10 +1312,9 @@ func acctListWidget(props acctListProps) ui.Node {
 				nf := filterAtom.Get()
 				nf.Class = v
 				filterAtom.Set(nf.Normalize())
+				// The class view is a viewer preference, not household data, so saving it does not
+				// touch the dataset or schedule a save.
 				uistate.PersistAcctClass(v)
-				// Flush now so a quick reload after toggling doesn't race the
-				// autosave ticker and lose the choice (same guard as sample load, C2).
-				uistate.RequestPersist()
 			},
 		})
 	}

@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -28,6 +29,11 @@ var smartInputCache = newViewCache[smartengine.Input](1)
 // Free findings are consumed by both the anomaly and next-action sections. Share
 // their engine pass; each caller still applies the current dismissals immediately.
 var freeFindingsCache = newViewCache[[]smart.Insight](1)
+
+// accountsPageInsightsCache memoizes the Accounts page insight pass. The pass is the costly part
+// of an Accounts list render, and its answer depends only on the same context as the input plus
+// the Smart settings, so a filter change or hover does not run the engine again.
+var accountsPageInsightsCache = newViewCache[[]smart.Insight](1)
 
 func smartContextKey(app *appstate.App, weekStart time.Weekday, now time.Time) string {
 	return revKey(app) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(now.Unix()/60, 10)
@@ -146,4 +152,15 @@ func aiProviderConfigured(app *appstate.App, backendAI bool) bool {
 		return true
 	}
 	return app.Settings().OpenAIKey != ""
+}
+
+// accountsPageInsights runs the Accounts page's insight pass once per data revision, minute,
+// week start and Smart settings, rather than on every list render.
+// accountsPageInsights runs the Accounts page's insight pass once per data revision, minute,
+// week start and Smart settings, rather than on every list render.
+func accountsPageInsights(app *appstate.App, in smartengine.Input, s smart.Settings, weekStart time.Weekday) []smart.Insight {
+	key := smartContextKey(app, weekStart, time.Now()) + "|" + fmt.Sprint(s)
+	return memoByRev(accountsPageInsightsCache, key, func() []smart.Insight {
+		return smartengine.RunPage(in, s, smart.PageAccounts)
+	})
 }

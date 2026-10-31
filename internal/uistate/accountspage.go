@@ -119,11 +119,11 @@ func UseAccountsFilter() state.Atom[AccountsFilter] {
 // "liability") so the All/Assets/Liabilities toggle survives reloads. Call it
 // alongside setting the filter atom's Class (the atom itself is otherwise
 // ephemeral).
-func PersistAcctClass(class string) { kvSet(acctClassStore, class) }
+func PersistAcctClass(class string) { chromePreferenceSet(acctClassStore, class) }
 
 // loadAcctClass reads the saved accounts class view, defaulting to "" (All) when
 // absent.
-func loadAcctClass() string { return kvGet(acctClassStore) }
+func loadAcctClass() string { return chromePreferenceGet(acctClassStore) }
 
 // UseAcctTransferOpen returns the shared atom selecting whether the page-level
 // transfer form sub-view is open. The toolbar's "Transfer money" action sets it; the
