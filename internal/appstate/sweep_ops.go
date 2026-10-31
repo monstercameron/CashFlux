@@ -3,6 +3,7 @@
 package appstate
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -74,6 +75,28 @@ func (a *App) DeleteSweepRule(ruleID string) error {
 // MarkSweepProposed records that a rule generated a proposal as of now, resetting
 // its cadence clock. The UI calls this when it surfaces (or the user acts on) a
 // proposal so the same sweep is not re-proposed until the next cadence window.
+// ErrSweepPostedUnmarked is returned by ApproveSweepProposal when the transfer posted but the
+// proposal could not be marked handled. The money has moved, so the proposal must not be approved
+// again.
+var ErrSweepPostedUnmarked = errors.New("appstate: sweep transfer posted but the proposal was not marked handled")
+
+// ApproveSweepProposal moves the money a sweep proposal describes and then marks the proposal
+// handled. The transfer comes first, so a failed transfer leaves the proposal open to try again.
+// If marking fails after the transfer, the error wraps ErrSweepPostedUnmarked.
+func (a *App) ApproveSweepProposal(p sweep.Proposal, desc string, now time.Time) error {
+	if _, _, err := a.CreateTransferPair(TransferParams{
+		FromAccountID: p.SourceAccountID,
+		ToAccountID:   p.DestAccountID,
+		AmountMinor:   p.AmountMinor,
+		Desc:          desc,
+	}); err != nil {
+		return fmt.Errorf("sweep transfer: %w", err)
+	}
+	if err := a.MarkSweepProposed(p.RuleID, now); err != nil {
+		return fmt.Errorf("%w: %v", ErrSweepPostedUnmarked, err)
+	}
+	return nil
+}
 func (a *App) MarkSweepProposed(ruleID string, now time.Time) error {
 	r, ok, err := a.store.GetSweepRule(ruleID)
 	if err != nil {

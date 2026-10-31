@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -70,24 +71,23 @@ func accountsSweepCard(props accountsSweepCardProps) ui.Node {
 	amtStr := fmtMoney(money.New(p.AmountMinor, p.Currency))
 
 	onApprove := ui.UseEvent(func() {
-		app := appstate.Default
-		if _, _, err := app.CreateTransferPair(appstate.TransferParams{
-			FromAccountID: p.SourceAccountID,
-			ToAccountID:   p.DestAccountID,
-			AmountMinor:   p.AmountMinor,
-			Desc:          uistate.T("acctSweep.transferDesc", props.ToName),
-		}); err != nil {
+		err := appstate.Default.ApproveSweepProposal(p,
+			uistate.T("acctSweep.transferDesc", props.ToName), time.Now())
+		switch {
+		case err == nil:
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("acctSweep.done", amtStr, props.ToName), false)
+			hidden.Set(true)
+		case errors.Is(err, appstate.ErrSweepPostedUnmarked):
+			// The money has moved, so the card must not be offered again.
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
 			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		if err := app.MarkSweepProposed(p.RuleID, time.Now()); err != nil {
+			hidden.Set(true)
+		default:
 			uistate.PostNotice(err.Error(), true)
-			return
 		}
-		uistate.BumpDataRevision()
-		uistate.RequestPersist()
-		uistate.PostNotice(uistate.T("acctSweep.done", amtStr, props.ToName), false)
-		hidden.Set(true)
 	})
 	onDismiss := ui.UseEvent(func() {
 		if err := appstate.Default.MarkSweepProposed(p.RuleID, time.Now()); err != nil {
