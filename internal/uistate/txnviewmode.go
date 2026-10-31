@@ -7,8 +7,9 @@ package uistate
 import "github.com/monstercameron/GoWebComponents/v7/state"
 
 const (
-	txnViewModeAtomID = "transactions:viewMode"
-	txnRegisterAtomID = "transactions:register"
+	txnViewModeAtomID      = "transactions:viewMode"
+	txnRegisterAtomID      = "transactions:register"
+	txnCalendarDrillAtomID = "transactions:calendarDrill"
 )
 
 // Transaction view modes: the ledger surface renders either the sortable table
@@ -29,6 +30,10 @@ func UseTxnViewMode() state.Atom[string] { return state.UseAtom(txnViewModeAtomI
 // running-balance column, TX12) is on. It only takes effect when the filter is
 // scoped to exactly one account; the toolbar hides the toggle otherwise.
 func UseTxnRegisterMode() state.Atom[bool] { return state.UseAtom(txnRegisterAtomID, false) }
+
+// UseTxnCalendarDrill reports whether the ledger was opened by picking a day in the calendar. While it
+// is set, clearing the date range returns the page to the calendar. Choosing a view clears it.
+func UseTxnCalendarDrill() state.Atom[bool] { return state.UseAtom(txnCalendarDrillAtomID, false) }
 
 // Removed (C560): the calendar used to page a private month atom anchored on
 // time.Now(), independent of the ledger's date filter — which is how the grid

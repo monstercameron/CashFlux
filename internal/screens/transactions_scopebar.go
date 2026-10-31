@@ -43,6 +43,8 @@ func txnScopeLabel(s txnscope.Scope) string {
 // Transactions toolbar can place them beside Search without moving the view switch.
 func txnDateScope(_ struct{}) ui.Node {
 	filterAtom := uistate.UseTxFilter()
+	viewAtom := uistate.UseTxnViewMode()
+	drillAtom := uistate.UseTxnCalendarDrill()
 	f := filterAtom.Get()
 	now := time.Now()
 	scope := txnscope.Of(f.From, f.To, now)
@@ -56,6 +58,14 @@ func txnDateScope(_ struct{}) ui.Node {
 		from, to, preset := txnScopeStepRange(scope, direction)
 		setRange(from, to, preset)
 	}
+	// Closing the picked day (clearing the range) returns the page to the calendar it came from.
+	ui.UseEffect(func() func() {
+		if drillAtom.Get() && f.From == "" && f.To == "" {
+			drillAtom.Set(false)
+			viewAtom.Set(uistate.TxnViewCalendar)
+		}
+		return nil
+	}, f.From, f.To)
 	preset := txnScopePreset(f, now)
 	customOpen := ui.UseState(false)
 	idBase := ui.UseId()
@@ -290,6 +300,7 @@ func txnScopePreset(f uistate.TxFilter, now time.Time) string {
 // shared RadioGroup the Accounts page uses for its single-choice views.
 func txnViewToggle(_ struct{}) ui.Node {
 	viewAtom := uistate.UseTxnViewMode()
+	drillAtom := uistate.UseTxnCalendarDrill()
 	return uiw.RadioGroup(uiw.RadioGroupProps{
 		Label: uistate.T("txnperiod.viewLabel"),
 		Value: viewAtom.Get(),
@@ -297,6 +308,9 @@ func txnViewToggle(_ struct{}) ui.Node {
 			{Value: uistate.TxnViewTable, Label: uistate.T("txnperiod.viewLedger"), TestID: "txn-view-ledger"},
 			{Value: uistate.TxnViewCalendar, Label: uistate.T("txnperiod.viewCal"), TestID: "txn-view-calendar"},
 		},
-		OnChange: func(v string) { viewAtom.Set(v) },
+		OnChange: func(v string) {
+			drillAtom.Set(false)
+			viewAtom.Set(v)
+		},
 	})
 }

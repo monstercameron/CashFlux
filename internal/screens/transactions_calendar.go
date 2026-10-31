@@ -83,6 +83,7 @@ type txnCalMonthCellProps struct {
 func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	viewAtom := uistate.UseTxnViewMode()
+	drillAtom := uistate.UseTxnCalendarDrill()
 	filterAtom := uistate.UseTxFilter()
 	pr := uistate.UsePrefs().Get()
 	lens := uistate.UseMemberLens()
@@ -94,6 +95,7 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 		selection := labels.PickDay(dateKey, f.From, f.To)
 		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { *x = selection.Apply(*x) })
 		viewAtom.Set(selection.ViewMode)
+		drillAtom.Set(true)
 		uistate.PostNotice(selection.Notice, false)
 	}
 	return ui.CreateElement(txnCalCalendar, txnCalCalendarProps{

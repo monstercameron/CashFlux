@@ -91,6 +91,7 @@ and every commit updates this file under `Unreleased`.
 - Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
 
 ### Fixed
+- Opening a day from the transaction calendar shows that day in the ledger. Clearing the date returns the page to the calendar, instead of staying in the ledger.
 - Pointing at a calendar day opens its transactions after a short pause. A loader shows over the rows, and the list of that day's transactions is there beneath it.
 - Every day in the transaction calendar is clickable, including the days from the neighbouring months, and the week-total column is one of eight equal columns, so every cell is the same width.
 - Cleared rows show a check glyph beside the description instead of the word "Cleared". A row with a note shows a note glyph; clicking it reveals the note under the description without opening the editor.
