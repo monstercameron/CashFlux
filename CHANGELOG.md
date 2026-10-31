@@ -22,6 +22,7 @@ and every commit updates this file under `Unreleased`.
 - The Transactions actions are pinned to the top-right corner of the summary bubble, and the net figure starts at the top-left.
 - The Accounts trend shows a spinner while its series is worked out, then draws in from the left. Both stop under reduced motion.
 - The accounts spinner holds for at least 700 ms and the drawn line lasts 1.1 s, so the loading state reads on screen. The spinner fades in.
+- The Investments panel is removed from the Accounts page. The Investments page is unchanged.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
