@@ -156,9 +156,8 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 		toggleLabel = uistate.T("accounts.documentsToggleHide")
 	}
 
-	toggleBtn := Button(css.Class("btn-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "acct-docs-toggle-"+a.ID), AriaExpanded(expanded.Get()), OnClick(toggle),
-		uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(toggleLabel))
+	toggleBtn := uiw.ToolButton(uiw.ToolButtonProps{Label: toggleLabel, Icon: icon.Paperclip, Open: expanded.Get(), TestID: "acct-docs-toggle-" + a.ID},
+		AriaExpanded(expanded.Get()), OnClick(toggle))
 
 	if !expanded.Get() && !bodyMounted {
 		return Div(css.Class("acct-docs"), toggleBtn)

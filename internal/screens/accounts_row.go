@@ -547,8 +547,8 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(css.Class("row-meta"), Title(uistate.T("accounts.projectedTitle")),
 				AriaLabel(uistate.T("accounts.projectedLowAria", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
 				uistate.T("accounts.projectedLow", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
-			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-proj-toggle-"+a.ID),
-				AriaExpanded(projExpanded.Get()), OnClick(toggleProj), toggleLabel),
+			uiw.ToolButton(uiw.ToolButtonProps{Label: toggleLabel, Open: projExpanded.Get(), TestID: "acct-proj-toggle-" + a.ID},
+				AriaExpanded(projExpanded.Get()), OnClick(toggleProj)),
 			driverNode,
 		)
 	}
@@ -593,40 +593,45 @@ func AccountRow(props accountRowProps) ui.Node {
 		} else {
 			chart = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 		}
+		// The panel is a grid: the period figures run across the top, the balance chart and
+		// the 90-day projection sit left, the reading and the account's facts sit right, and
+		// the documents and the institution share a footer line.
 		detailsNode = Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("data-testid", "acct-details-"+a.ID),
-			valChange,
-			projNode,
-			billNode,
 			flowNode,
-			// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
-			// when the account has more than 90 days of history.
-			chart,
-			// C381: and where it goes next. The history chart above answers where the
-			// account has been; this answers whether it survives until payday.
-			accountForwardLine(a, props.Balance, props.ForwardProjection, props.ForwardProjectionErr, time.Now()),
-			// XC7: warn when goals have earmarked more against this account than it
-			// holds (goal money has been spent). Own component; healthy → Fragment().
-			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
-			// Read-only summary of the account's custom-field values (a compact
-			// "Label: value · …" line), shown only when any are set.
-			If(customSummary(props.AccountDefs, a.Custom) != "",
-				Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
-					customSummary(props.AccountDefs, a.Custom))),
-			// Readable, clickable-to-expand notes line (the attached note itself).
-			notesNode,
-			// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
-			// payoff letters) with an attach form carrying an optional renewal date.
-			ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
-			// MIA-extend (#445-10): nudge to fill missing institution. Styled as a
-			// real link action — the dim caption treatment made it read as stray
-			// plain text in the details panel (UI/UX task #7).
-			If(a.Institution == "" && !a.Archived,
-				Button(css.Class("btn-link acct-set-institution"), Type("button"),
-					Attr("data-testid", "set-institution-"+a.ID),
-					Title(uistate.T("accounts.setInstitution")),
-					OnClick(startEdit),
-					uistate.T("accounts.setInstitution"),
-				)),
+			Div(css.Class("acct-panel-chart"),
+				// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
+				// when the account has more than 90 days of history.
+				chart,
+				// C381: and where it goes next. The history chart above answers where the
+				// account has been; this answers whether it survives until payday.
+				accountForwardLine(a, props.Balance, props.ForwardProjection, props.ForwardProjectionErr, time.Now()),
+			),
+			Div(css.Class("acct-panel-side"),
+				valChange,
+				projNode,
+				billNode,
+				// XC7: warn when goals have earmarked more against this account than it
+				// holds (goal money has been spent). Own component; healthy is Fragment().
+				ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
+				// Read-only summary of the account's custom-field values (a compact
+				// "Label: value" line), shown only when any are set.
+				If(customSummary(props.AccountDefs, a.Custom) != "",
+					Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
+						customSummary(props.AccountDefs, a.Custom))),
+				// Readable, clickable-to-expand notes line (the attached note itself).
+				notesNode,
+			),
+			Div(css.Class("acct-panel-footer"),
+				// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
+				// payoff letters) with an attach form carrying an optional renewal date.
+				ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
+				// MIA-extend (#445-10): nudge to fill missing institution. Styled as a
+				// real link action; the dim caption treatment read as stray plain text in
+				// the details panel (UI/UX task #7).
+				If(a.Institution == "" && !a.Archived,
+					uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.setInstitution"), Icon: icon.Pencil, Class: "acct-set-institution", TestID: "set-institution-" + a.ID},
+						OnClick(startEdit))),
+			),
 		)
 	}
 

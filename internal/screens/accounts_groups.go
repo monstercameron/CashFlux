@@ -214,11 +214,11 @@ func accountBalanceChart(a domain.Account, s90, s12m, sall []int64, hasRange boo
 	if seriesFlat(series) {
 		aria = uistate.T(flatKey, a.Name)
 	}
-	picker := uiw.Segmented(uiw.SegmentedProps{
+	picker := uiw.RadioGroup(uiw.RadioGroupProps{
 		Label:    uistate.T("accountsRange.label"),
-		Selected: sel,
-		OnSelect: onSelect,
-		Options: []uiw.SegOption{
+		Value:    sel,
+		OnChange: onSelect,
+		Options: []uiw.RadioOption{
 			{Value: "90d", Label: uistate.T("accountsRange.d90"), TestID: "acct-range-90d-" + a.ID},
 			{Value: "12m", Label: uistate.T("accountsRange.m12"), TestID: "acct-range-12m-" + a.ID},
 			{Value: "all", Label: uistate.T("accountsRange.all"), TestID: "acct-range-all-" + a.ID},
@@ -241,19 +241,30 @@ func accountFlowFigures(a domain.Account, f accountflow.Flow, show bool) ui.Node
 	if !show || (f.In.Amount == 0 && f.Out.Amount == 0) {
 		return Fragment()
 	}
-	netCls := "acct-flow-net"
+	tone := ""
 	if f.Net.Amount > 0 {
-		netCls += " " + tw.ColorClass("pos")
+		tone = tw.ColorClass("pos")
 	} else if f.Net.Amount < 0 {
-		netCls += " " + tw.ColorClass("neg")
+		tone = tw.ColorClass("neg")
 	}
-	return Span(css.Class("row-meta acct-flow"), Attr("data-testid", "acct-flow-"+a.ID),
+	return Div(css.Class("acct-flow"), Attr("data-testid", "acct-flow-"+a.ID),
 		AriaLabel(uistate.T("accounts.flowAria", fmtMoney(f.In), fmtMoney(f.Out), fmtMoney(f.Net))),
-		Span(css.Class("acct-flow-in"), uistate.T("accounts.flowIn"), " ", fmtMoney(f.In)),
-		Span(css.Class(tw.TextDim), " · "),
-		Span(css.Class("acct-flow-out"), uistate.T("accounts.flowOut"), " ", fmtMoney(f.Out)),
-		Span(css.Class(tw.TextDim), " · "),
-		Span(ClassStr(netCls), uistate.T("accounts.flowNet"), " ", fmtMoney(f.Net)),
+		flowFigure("acct-flow-in", uistate.T("accounts.flowIn"), fmtMoney(f.In), ""),
+		flowFigure("acct-flow-out", uistate.T("accounts.flowOut"), fmtMoney(f.Out), ""),
+		flowFigure("acct-flow-net", uistate.T("accounts.flowNet"), fmtMoney(f.Net), tone),
+	)
+}
+
+// flowFigure is one period figure: a quiet label above its amount, the amount in the body
+// size so the three read as the panel's headline numbers. tone colours the amount and may be empty.
+func flowFigure(class, label, amount, tone string) ui.Node {
+	value := "acct-flow-value"
+	if tone != "" {
+		value += " " + tone
+	}
+	return Div(css.Class("acct-fig", class),
+		Span(css.Class("acct-fig-label"), label),
+		Span(css.Class(value), amount),
 	)
 }
 

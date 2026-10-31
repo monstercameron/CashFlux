@@ -498,10 +498,10 @@ func registerVSweep() {
 		gap("0.4rem"),
 	)
 	rule(".acct-fwd-label",
-		color("var(--text-faint)"),
+		color("var(--text-dim)"),
 		textTransform("uppercase"),
 		letterSpacing("0.04em"),
-		fontSize("0.65rem"),
+		fontSize("var(--type-12)"),
 	)
 	// Running out of money is the one reading here that should raise its voice.
 	rule(".acct-fwd-warn",
@@ -510,8 +510,8 @@ func registerVSweep() {
 	rule(".acct-fwd-note",
 		display("block"),
 		marginTop("0.15rem"),
-		fontSize("0.68rem"),
-		color("var(--text-faint)"),
+		fontSize("var(--type-12)"),
+		color("var(--text-dim)"),
 	)
 
 	// ─── C376: the holdings paste importer ───────────────────────────────────

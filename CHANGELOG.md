@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- The account details panel is a two-column layout: the period money in, out and net sit across the top, the balance chart and the 90-day projection sit on the left, the reading and the account facts sit on the right, and documents and the institution share a footer line. Narrow screens stack it into one column.
 - Update balance shows the current figure with its sign, explains a debt going down or up in plain words, and flags a debt typed without its minus sign. The typed figure is converted to the account's stored convention before it is posted, so debts no longer move in opposite directions.
 - "These figures disagree" rows can be dismissed, and "Bring back" restores them. Dismissals are kept with the household data and follow each finding, so they survive the amounts changing and end when the contradiction does. Dismissing and bringing back can be undone.
 - Budgets and Accounts open with one shared page headline, so the summary reads the same as Transactions; Accounts drops its three summary cards for a single net-worth figure with assets and liabilities beneath it.

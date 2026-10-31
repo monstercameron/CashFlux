@@ -166,8 +166,8 @@ func registerSmartRowHint() {
 		display("flex"),
 		alignItems("center"),
 		justifyContent("space-between"),
-		gap("0.6rem"),
-		padding("0.45rem 0.6rem"),
+		gap("0.9rem"),
+		padding("0.7rem 0.9rem"),
 		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
 	)
 	rule(".acct-recur-list .acct-recur-row:first-child",
@@ -184,9 +184,12 @@ func registerSmartRowHint() {
 		whiteSpace("nowrap"),
 		color("var(--text)"),
 		fontWeight("600"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--type-14)"),
 	)
+	// The meta line reads at the caption step in the dim text colour, with figures aligned.
 	rule(".acct-recur-meta",
+		fontSize("var(--type-12)"),
+		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".acct-recur-track",

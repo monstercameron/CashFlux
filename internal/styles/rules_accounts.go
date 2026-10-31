@@ -107,19 +107,6 @@ func registerAccountsSurface() {
 		prop("overflow", "visible"),
 	)
 
-	// --- AC9: in / out / net flow figures ---
-	rule(".acct-flow",
-		prop("display", "inline-flex"),
-		prop("align-items", "baseline"),
-		prop("flex-wrap", "wrap"),
-		prop("gap", "0.15rem"),
-		prop("font-variant-numeric", "tabular-nums"),
-		prop("margin-top", "0.2rem"),
-	)
-	rule(".acct-flow-net",
-		prop("font-weight", "500"),
-	)
-
 	// --- account row redesign: calm, scannable hierarchy -----------------------------
 	// The row is now vertical: a strong PRIMARY line (name + balance + actions) over a
 	// quiet SECONDARY line (meta + a "Details" disclosure). Everything else folds into
@@ -222,17 +209,9 @@ func registerAccountsSurface() {
 	ruleContentMax(contentGrid4, ".acct-row-actions",
 		prop("margin-left", "auto"),
 	)
-	// The revealed detail block: indented to sit under the name, quietly separated from
-	// the primary line, with comfortable spacing between its stacked items.
+	// The revealed detail block's layout lives in rules_acctdetails.go; this file only sets its width.
 	rule(".acct-row-details",
-		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("align-items", "flex-start"),
-		prop("gap", "0.4rem"),
 		prop("width", "100%"),
-		prop("margin-top", "0.55rem"),
-		prop("padding", "0.6rem 0 0.15rem 1.9rem"),
-		prop("border-top", "1px solid var(--border)"),
 	)
 
 	// --- sweep-rules add form: one field per line ------------------------------------

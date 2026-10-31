@@ -157,11 +157,9 @@ func accountRecurRow(props accountRecurRowProps) ui.Node {
 	return Div(css.Class("acct-recur-row"),
 		Div(css.Class("acct-recur-main"),
 			Span(css.Class("acct-recur-name"), c.Payee),
-			Span(css.Class("acct-recur-meta", tw.Text12, tw.TextDim),
+			Span(css.Class("acct-recur-meta"),
 				uistate.T("sm6.rowMeta", cadenceLabel(cad), fmtMoney(amt))),
 		),
-		Button(css.Class("btn btn-sm acct-recur-track"), Type("button"),
-			Attr("data-testid", "acct-recur-track-"+c.Signature),
-			OnClick(track), uistate.T("sm6.makeRecur")),
+		uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("sm6.makeRecur"), Class: "acct-recur-track", TestID: "acct-recur-track-" + c.Signature}, OnClick(track)),
 	)
 }
