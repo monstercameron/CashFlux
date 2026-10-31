@@ -563,6 +563,8 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// AC15: client-side nav for the idle-cash line's "See allocation options" link,
 	// declared unconditionally (stable hook position) like acctListWidget's goToDebt.
 	goToAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
+	// The page's add-account action, pinned over the summary's top-right corner.
+	openAdd := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
@@ -607,8 +609,11 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	})
 
 	body := Div(
-		acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,
-			smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual, acctLiquidityLine(app, props.Base, props.Rates)),
+		Div(css.Class("acct-summary-frame"),
+			acctToolbarGlyph("accounts-add", icon.Plus, uistate.T("accounts.addTitle"), "", "modal", "primary", false, openAdd),
+			acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,
+				smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual, acctLiquidityLine(app, props.Base, props.Rates)),
+		),
 		If(!nw.Complete(), P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "acct-networth-note"), netWorthAvailabilityNote(nw))),
 		// AC11: disclose accounts left out of net worth by the household's choice.
 		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
@@ -839,8 +844,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 	openTransfer := ui.UseEvent(Prevent(func() { transferAtom.Set(true) }))
-	// G1: page-local account creation — every sibling page anchors its toolbar with Add.
-	openAdd := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
 	// AC1: open the account-group manager. When at least one group exists, jump
 	// straight to editing the first (its header carries per-group edit too); with
 	// none, start a new group. Plain funcs (not UseEvent): they run from the
@@ -978,10 +981,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 			})),
 			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
 				uistate.T("accounts.transferMoney"), "", "modal", "", transferAtom.Get(), openTransfer)),
-			// G1 + primary-last convention: "+ Add account" anchors the right end, exactly
-			// like the budgets and goals toolbars.
-			acctToolbarGlyph("accounts-add", icon.Plus,
-				uistate.T("accounts.addTitle"), "", "modal", "primary", false, openAdd),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{

@@ -28,6 +28,7 @@ and every commit updates this file under `Unreleased`.
 - The radio group uses the button radius token, so its corners match buttons and fields.
 - The radio group keeps the same label weight in every state, so changing the selection no longer resizes the group or its options.
 - The radio selection indicator slides between options even when reduced motion is on, since it is the selection itself. Option hover and colour transitions still stop there.
+- The Accounts "Add account" button sits in the top-right corner of the summary, over the trend graph, and leaves the toolbar row.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.

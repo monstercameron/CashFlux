@@ -139,4 +139,13 @@ func registerPageHeadline() {
 	ruleMedia("(prefers-reduced-motion: reduce)", ".page-headline-spinner",
 		prop("animation", "pageHeadlineSpin 2400ms linear infinite"),
 	)
+	rule(".acct-summary-frame",
+		position("relative"),
+	)
+	rule(".acct-summary-frame > [data-testid=\"accounts-add\"]",
+		position("absolute"), top("0"), right("0"), zIndex("2"),
+	)
+	ruleMedia("(max-width: 720px)", ".acct-summary-frame > [data-testid=\"accounts-add\"]",
+		position("static"),
+	)
 }
