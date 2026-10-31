@@ -274,7 +274,7 @@ func Allocate() ui.Node {
 	// --- AI narrative ---
 	aiKey := settings.OpenAIKey
 	pr := uistate.UsePrefs().Get().Normalize()
-	useBackendAI := uistate.BackendConnectionActive(pr)
+	useBackendAI := uistate.BackendAIActive(pr)
 	aiModel := settings.OpenAIModel
 	if aiModel == "" {
 		aiModel = "gpt-5.4-mini"

@@ -46,7 +46,7 @@ func startReceiptSplitFlow(app *appstate.App, txn domain.Transaction) {
 	}
 	settings := app.Settings()
 	pr := uistate.CurrentPrefs().Normalize()
-	useBackendAI := uistate.BackendConnectionActive(pr)
+	useBackendAI := uistate.BackendAIActive(pr)
 	if settings.OpenAIKey == "" && !useBackendAI {
 		uistate.PostNotice(uistate.T("receiptsplit.needsKey"), true)
 		return

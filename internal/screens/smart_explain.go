@@ -77,7 +77,7 @@ func smartExplainBlock(props smartExplainProps) ui.Node {
 	errText := ui.UseState("")
 
 	settings := uistate.LoadSmartSettings()
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	enabled := app != nil && aiProviderConfigured(app, backendAI) &&
 		settings.IsEnabled(props.Code) && !settings.IsMuted(props.Code)
 	aiConn := smartAIConn{}

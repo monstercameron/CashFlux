@@ -61,6 +61,7 @@ func importRemoteDataset(app *appstate.App, dataset []byte) ([]byte, error) {
 	}
 	remote.ServerURL, remote.ServerToken, remote.ServerCSRF = connection.ServerURL, connection.ServerToken, connection.ServerCSRF
 	remote.ServerMode, remote.ConnectionSegment, remote.BackendDisabled = connection.ServerMode, connection.ConnectionSegment, connection.BackendDisabled
+	remote.AIProxyDisabled = connection.AIProxyDisabled
 	if err := uistate.PersistPrefs(remote.Normalize()); err != nil {
 		return nil, fmt.Errorf("keep this device's server connection after import: %w", err)
 	}
