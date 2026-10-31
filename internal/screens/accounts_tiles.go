@@ -933,6 +933,13 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 
 	showFX := hasForeign || len(app.Settings().FXRates) > 0
 
+	// Mark all updated appears only while some balances are stale. An empty actions row
+	// would still reserve a gap under the search, so the list is built only when it has an entry.
+	var staleActions []ui.Node
+	if staleCount > 0 {
+		staleActions = append(staleActions, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
+			uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll))
+	}
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search:       f.Search,
 		SearchLabel:  uistate.T("accounts.searchPlaceholder"),
@@ -976,16 +983,7 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				},
 			})),
 		},
-		Actions: []ui.Node{
-			// 2026-07-17 audit: the everyday actions stay labeled buttons — Mark-all
-			// (contextual, amber), Transfer money, and the primary "+ Add account" —
-			// while the setup/management surfaces (Groups, Institutions, Sweep rules,
-			// Exchange rates) fold into ONE labeled "Account settings" menu (renamed
-			// from the vague "Manage"), so the row before the account list stops
-			// presenting seven equally weighted verbs.
-			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
-				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
-		},
+		Actions: staleActions,
 	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

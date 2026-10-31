@@ -2473,11 +2473,18 @@ func registerGenerated() {
 	)
 	// Two-row standard toolbar: primary row (search fills + Filters trigger), then an
 	// actions row beneath. A column so the two rows stack; each row is its own flex line.
+	// The toolbar keeps a gap under itself only when a chips row or the open panel follows, so
+	// an empty row never leaves dead space under the search.
 	rule(".filter-toolbar",
 		display("flex"),
 		flexDirection("column"),
 		gap("0.5rem"),
+	)
+	rule(".filter-toolbar:has(~ .filter-chips:not(:empty)), .filter-toolbar:has(~ .filter-inline-panel:not(:empty))",
 		marginBottom("0.6rem"),
+	)
+	rule(".filter-chips:empty, .filter-inline-panel:empty",
+		display("none"),
 	)
 	rule(".filter-toolbar-primary",
 		display("flex"),
@@ -2830,6 +2837,56 @@ func registerGenerated() {
 	)
 	rule(".filter-inline-body .filter-fields .field-label .field",
 		color("var(--text)"),
+	)
+	// The filter fields are standard labelled fields: a sentence-case label above a control
+	// with the shared field height, border and radius, so values never clip to the pill.
+	rule(".filter-inline-body .filter-fields .field-label",
+		flexDirection("column"),
+		alignItems("stretch"),
+		gap("0.35rem"),
+		minHeight("0"),
+		padding("0"),
+		background("transparent"),
+		border("0"),
+		borderRadius("0"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("500"),
+		letterSpacing("normal"),
+		prop("text-transform", "none"),
+		color("var(--text-dim)"),
+		whiteSpace("normal"),
+	)
+	rule(".filter-inline-body .filter-fields .field-label .field, .filter-inline-body .filter-fields .field-label select",
+		width("100%"),
+		minWidth("0"),
+		boxSizing("border-box"),
+		minHeight("var(--field-h)"),
+		padding("0 0.65rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		color("var(--text)"),
+		fontSize("var(--fs-body)"),
+		fontWeight("500"),
+		prop("text-transform", "none"),
+		letterSpacing("normal"),
+	)
+	rule(".filter-inline-body .filter-fields .field-label .field:focus, .filter-inline-body .filter-fields .field-label select:focus",
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		boxShadow("none"),
+	)
+	rule(".filter-inline-body .filter-fields .field-label .btn",
+		width("100%"),
+		minHeight("var(--field-h)"),
+		justifyContent("flex-start"),
+		padding("0 0.65rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		color("var(--text)"),
+		fontSize("var(--fs-body)"),
+		fontWeight("500"),
+		prop("text-transform", "none"),
 	)
 	rule(".form-grid",
 		display("grid"),

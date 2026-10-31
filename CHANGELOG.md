@@ -36,6 +36,7 @@ and every commit updates this file under `Unreleased`.
 - The overflow menu trigger shows the same open state as the Filters button, so More highlights while its menu is open.
 - The toolbar search and the Filters button share one row height, so their top and bottom edges line up.
 - The toolbar search uses the Filters open border when focused, instead of a glow ring, on Accounts and Transactions.
+- The accounts toolbar no longer leaves an empty row under the search, and the Filters panel fields are standard labelled fields with the shared field tokens.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
