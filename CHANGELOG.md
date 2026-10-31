@@ -39,6 +39,7 @@ and every commit updates this file under `Unreleased`.
 - The accounts toolbar no longer leaves an empty row under the search, and the Filters panel fields are standard labelled fields with the shared field tokens.
 - The Account metrics (formulas) toggle is removed from the Accounts Filters panel.
 - The accounts header trend fits the text column, so the dead space under the headline is gone.
+- The liquidity line under the accounts headline no longer adds its caption margin, so the space under it matches the top.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.

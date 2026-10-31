@@ -80,6 +80,10 @@ func registerPageHeadline() {
 	rule(".page-headline-footer",
 		fontSize("var(--fs-meta)"), color("var(--text-dim)"),
 	)
+	// The footer line brings its own caption margin; the headline spaces its rows itself.
+	rule("main .page-headline-footer > p.t-caption",
+		marginTop("0"), marginBottom("0"),
+	)
 	rule(".page-headline-footer:empty",
 		display("none"),
 	)
