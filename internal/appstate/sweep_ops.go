@@ -339,7 +339,11 @@ func (a *App) ApproveSweepProposal(p sweep.Proposal, desc string, now time.Time)
 	if err != nil {
 		return fmt.Errorf("sweep transfer: read earmarks: %w", err)
 	}
-	in, err := a.sweepInputs(src, a.Transactions(), gs, earmarks)
+	txns, err := a.TransactionsChecked()
+	if err != nil {
+		return fmt.Errorf("sweep transfer: %w", err)
+	}
+	in, err := a.sweepInputs(src, txns, gs, earmarks)
 	if err != nil {
 		return fmt.Errorf("sweep transfer: read source balance: %w", err)
 	}
@@ -414,7 +418,7 @@ func (a *App) commitSweepTransfer(rule domain.SweepRule, src, dest domain.Accoun
 // proposals never add up to more than the source holds; a proposal's BalanceMinor is
 // the balance left after the proposals before it. Rules whose accounts are missing,
 // archived, in different currencies or sourced from a liability propose nothing, and
-// when goals or earmarks cannot be read nothing is proposed, because the reserved
+// when transactions, goals or earmarks cannot be read nothing is proposed, because the reserved
 // money is unknown.
 func (a *App) SweepProposals(now time.Time) []sweep.Proposal {
 	if a.ready() != nil {
@@ -423,7 +427,11 @@ func (a *App) SweepProposals(now time.Time) []sweep.Proposal {
 	if now.IsZero() {
 		now = a.clock()
 	}
-	txns := a.Transactions()
+	txns, err := a.TransactionsChecked()
+	if err != nil {
+		a.logErr("sweep transactions", err)
+		return nil
+	}
 	gs, err := a.GoalsChecked()
 	if err != nil {
 		a.logErr("sweep goals", err)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/sweep"
 )
 
@@ -688,5 +689,55 @@ func TestSweepReplayAfterACadenceEditIsAlreadyPosted(t *testing.T) {
 				t.Fatalf("%d transactions after the replay, want %d", n, legs)
 			}
 		})
+	}
+}
+
+// unreadableTransactionRow stores a transaction row that is valid JSON but not a transaction, so the
+// ledger read fails while every other table stays readable. The returned func removes the row.
+func unreadableTransactionRow(t *testing.T, app *App) func() {
+	t.Helper()
+	if err := app.Store().ReplayChanges([]store.RecordChange{{Table: "transactions", ID: "bad-row", After: []byte(`[]`)}}); err != nil {
+		t.Fatalf("inject unreadable transaction row: %v", err)
+	}
+	if _, err := app.TransactionsChecked(); err == nil {
+		t.Fatal("precondition: the injected row did not make the ledger read fail")
+	}
+	return func() {
+		if err := app.Store().ReplayChanges([]store.RecordChange{{Table: "transactions", ID: "bad-row"}}); err != nil {
+			t.Fatalf("remove unreadable transaction row: %v", err)
+		}
+	}
+}
+
+func TestApproveSweepProposalRefusesWhenTheLedgerCannotBeRead(t *testing.T) {
+	now := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
+	app := sweepFixture(t)
+	if _, err := app.PutSweepRule(domain.SweepRule{ID: "r1", SourceAccountID: "chk", DestAccountID: "sav", KeepMinor: 300000, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	props := app.SweepProposals(now)
+	if len(props) != 1 {
+		t.Fatalf("proposals = %+v, want one", props)
+	}
+	restore := unreadableTransactionRow(t, app)
+
+	if got := app.SweepProposals(now); len(got) != 0 {
+		t.Fatalf("SweepProposals = %+v with an unreadable ledger, want none", got)
+	}
+	err := app.ApproveSweepProposal(props[0], "Surplus sweep", now)
+	if err == nil || !strings.Contains(err.Error(), "read transactions") || errors.Is(err, ErrSweepPostedUnmarked) {
+		t.Fatalf("ApproveSweepProposal = %v, want a wrapped read-transactions error", err)
+	}
+	receipts, rerr := app.Store().ListAllTransferReceipts()
+	if rerr != nil || len(receipts) != 0 {
+		t.Fatalf("receipts = %+v, %v; want none", receipts, rerr)
+	}
+	rule, _, _ := app.Store().GetSweepRule("r1")
+	if rule.LastProposed != "" {
+		t.Fatalf("LastProposed = %q, want it untouched", rule.LastProposed)
+	}
+	restore()
+	if n := len(app.Transactions()); n != 0 {
+		t.Fatalf("%d transactions posted by a refused approval", n)
 	}
 }

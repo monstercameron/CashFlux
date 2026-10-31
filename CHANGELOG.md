@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Sweep operations post through one commit that cannot move money twice, with tests for replay and refusal.
 - Institutions save and validate through one appstate path with tests for the write and the refusal.
 - Account documents attach through one appstate call that checks the file, the account and the reference, and cancel cleanly on failure.
 - The flip panel moves focus into a new panel even where requestAnimationFrame is missing, such as the Node runner the wasm tests use.
