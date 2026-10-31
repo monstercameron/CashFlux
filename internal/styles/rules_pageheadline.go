@@ -125,6 +125,10 @@ func registerPageHeadline() {
 		at("from", transform("rotate(0deg)")),
 		at("to", transform("rotate(360deg)")),
 	)
+	// AreaChart writes a fixed height attribute; CSS overrides it so the trend fits the text column.
+	rule(".page-headline-trend-enter svg",
+		height("4rem"),
+	)
 	rule(".page-headline-trend-enter",
 		prop("animation", "pageHeadlineDraw 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) both"),
 	)

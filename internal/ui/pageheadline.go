@@ -105,7 +105,7 @@ func PageHeadlineTrend(props PageHeadlineTrendProps) uic.Node {
 	}
 	return Div(css.Class("page-headline-trend-enter"),
 		AreaChart(AreaChartProps{
-			Values: props.Values, GradientID: gid, Width: 420, Height: 96, Label: props.Label,
+			Values: props.Values, GradientID: gid, Width: 420, Height: 64, Label: props.Label,
 		}))
 }
 
