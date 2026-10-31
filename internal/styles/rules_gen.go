@@ -1488,12 +1488,15 @@ func registerGenerated() {
 		background("#cfcdc7"),
 		borderColor("#f7f6f3"),
 	)
+	// .card-title is the one card heading. Its size, weight, leading, tracking and colour come
+	// from the heading tokens, so a page only overrides the tokens, never the heading itself.
 	rule(".card-title",
-		margin("0 0 0.75rem"),
-		fontSize("1.05rem"),
-		color("var(--text)"),
-		fontWeight("600"),
-		letterSpacing("-0.01em"),
+		margin("0"),
+		fontSize("var(--heading-size)"),
+		fontWeight("var(--heading-weight)"),
+		lineHeight("var(--heading-line)"),
+		letterSpacing("var(--heading-tracking)"),
+		color("var(--heading-color)"),
 	)
 	rule(".hero-main",
 		display("flex"),
@@ -4717,6 +4720,13 @@ func registerGenerated() {
 		customProp("--type-24", "calc(24px * var(--ui-scale, 1))"),
 		customProp("--type-32", "calc(32px * var(--ui-scale, 1))"),
 		customProp("--control-h", "36px"),
+		// Section headings: one set of tokens, read by .card-title and every page that shows a
+		// card heading, so the same heading looks the same wherever it appears.
+		customProp("--heading-size", "1rem"),
+		customProp("--heading-weight", "600"),
+		customProp("--heading-line", "1.35"),
+		customProp("--heading-tracking", "-0.01em"),
+		customProp("--heading-color", "var(--text)"),
 		customProp("--control-h-compact", "32px"),
 		customProp("--field-h", "36px"),
 		customProp("--icon-button-size", "32px"),
@@ -12287,9 +12297,6 @@ func registerGenerated() {
 	)
 	rule("[data-density=\"compact\"] .card",
 		borderRadius("var(--radius-lg)"),
-	)
-	rule(".card-title",
-		fontWeight("600"),
 	)
 	rule(".stat-value.neg",
 		color("var(--money-negative) !important"),

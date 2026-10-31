@@ -213,9 +213,10 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	// the hit-test over the menu items themselves when the row sits inside a bento tile's
 	// stacking context, so clicks on the items land on the backdrop and never fire.
 	wrapClass := "add-wrap"
-	if open.Get() {
-		// The transaction-table styles use this state to tint the owning row while
-		// its menu is open. It is harmless for menus outside a table.
+	if shown {
+		// The transaction-table styles use this state to tint and raise the owning row while
+		// its menu is open. It holds through the fade-out, or the next row paints over the
+		// menu as it leaves. It is harmless for menus outside a table.
 		wrapClass += " overflow-menu-open"
 	}
 	var menu uic.Node = Fragment()
