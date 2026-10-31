@@ -14,8 +14,8 @@ import (
 
 // KebabMenuProps configures a KebabMenu.
 type KebabMenuProps struct {
-	// ID is the stable element id on the `.add-wrap` wrapper — AnchorPopover and
-	// DismissPopover use it to find the popover. Supply a value that's stable across
+	// ID is the stable element id on the `.add-wrap` wrapper. The menu uses it to find its
+	// popover and to tell clicks inside it from clicks outside. Supply a value that's stable across
 	// renders (e.g. "task-menu-"+entityID); when empty a per-instance id is used.
 	ID string
 	// AriaLabel labels the ⋯ toggle button (default "More actions").
@@ -35,31 +35,24 @@ type KebabMenuProps struct {
 	Items []uic.Node
 }
 
-// KebabMenu is the shared "⋯" overflow menu: a trigger button plus a popover that is
-// VIEWPORT-AWARE — AnchorPopover flips it left/up when it would spill past an edge, and
-// DismissPopover closes it on Escape / outside-pointerdown (with menu keyboard roving).
-// It replaces the hand-rolled `.add-wrap`/`.add-menu` blocks the entity rows each copied,
-// and guarantees the menu never overflows its container (the bug that scrolled the to-do
-// page sideways). Pass pre-built `.add-item` nodes as Items.
+// KebabMenu is the shared "⋯" menu for a row of pre-built items. It is built on the same
+// menu state as OverflowMenu, so it opens and closes with the same fade, stays on screen
+// with the same flip, dismisses on Escape or an outside press, and stacks above its
+// neighbours. The caller builds the Items, with its own handlers. Use OverflowMenu when the
+// menu can be described as data.
 func KebabMenu(props KebabMenuProps) uic.Node { return uic.CreateElement(kebabMenu, props) }
 
 func kebabMenu(props KebabMenuProps) uic.Node {
-	open := uic.UseState(false)
 	autoID := uic.UseId()
 	id := props.ID
 	if id == "" {
 		id = autoID
 	}
-	toggle := uic.UseEvent(sh.Prevent(func() { open.Set(!open.Get()) }))
-	closeM := uic.UseEvent(sh.Prevent(func() { open.Set(false) }))
-	// Viewport-aware placement + dismissal (declared unconditionally — they're hooks).
-	DismissPopover(open.Get(), id, func() { open.Set(false) })
-	AnchorPopover(open.Get(), id)
+	menu := useMenu(id)
+	toggle := uic.UseEvent(sh.Prevent(func() { menu.Toggle() }))
+	// An item click bubbles up to the menu, which closes it.
+	closeM := uic.UseEvent(sh.Prevent(func() { menu.Set(false) }))
 
-	hidden := ""
-	if !open.Get() {
-		hidden = " hidden-menu"
-	}
 	aria := props.AriaLabel
 	if aria == "" {
 		aria = "More actions"
@@ -68,19 +61,17 @@ func kebabMenu(props KebabMenuProps) uic.Node {
 	if props.WrapClass != "" {
 		wrapCls += " " + props.WrapClass
 	}
-	expanded := "false"
-	if open.Get() {
-		expanded = "true"
-	}
-
 	toggleClass := props.ToggleClass
 	if toggleClass == "" {
 		toggleClass = "btn"
 	}
+	if menu.Open {
+		toggleClass += " is-open"
+	}
 	toggleArgs := []any{
 		css.Class(toggleClass), sh.Type("button"),
 		sh.Attr("title", aria), sh.Attr("aria-label", aria),
-		sh.Attr("aria-haspopup", "menu"), sh.Attr("aria-expanded", expanded),
+		sh.Attr("aria-haspopup", "menu"), sh.Attr("aria-expanded", boolAttr(menu.Open)),
 		sh.OnClick(toggle),
 	}
 	if props.ToggleTestID != "" {
@@ -88,16 +79,15 @@ func kebabMenu(props KebabMenuProps) uic.Node {
 	}
 	toggleArgs = append(toggleArgs, Icon(icon.MoreH, css.Class(tw.W4, tw.H4)))
 
-	// Menu children: role + a close-on-click (an item click bubbles up and dismisses),
-	// then the caller's pre-built items.
-	menuChildren := []any{sh.ClassStr("add-menu" + hidden), sh.Attr("role", "menu"), sh.OnClick(closeM)}
+	// The items are pre-built by the caller, so the panel is always mounted and its class
+	// carries the open, fading and hidden states.
+	menuChildren := []any{sh.ClassStr(menu.panelClass()), sh.Attr("role", "menu"), sh.OnClick(closeM)}
 	for _, it := range props.Items {
 		menuChildren = append(menuChildren, it)
 	}
 
-	return sh.Div(sh.ClassStr(wrapCls), sh.Attr("id", id),
+	return sh.Div(sh.ClassStr(menu.wrapClass(wrapCls)), sh.Attr("id", id),
 		sh.Button(toggleArgs...),
-		sh.Div(sh.ClassStr("add-backdrop"+hidden), sh.OnClick(closeM)),
 		sh.Div(menuChildren...),
 	)
 }

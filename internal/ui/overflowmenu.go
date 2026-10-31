@@ -92,54 +92,30 @@ func OverflowMenu(props OverflowMenuProps) uic.Node {
 }
 
 func overflowMenu(props OverflowMenuProps) uic.Node {
-	open := uic.UseState(false)
-	panelMounted := usePanelFade(open.Get())
-	// placement holds the flip classes the anchor picked for the open menu. It lives in state so
-	// the menu renders with it, and it survives the fade-out.
-	placement := uic.UseState("")
-	// Stable per-instance id on the wrapper so the document-level dismissal
-	// listeners can tell clicks inside THIS menu from clicks in another instance
-	// (many overflow menus can be on a page at once).
+	// Stable per-instance id on the wrapper so the document-level dismissal listeners can tell
+	// clicks inside THIS menu from clicks in another instance (many can be on a page at once).
 	id := uic.UseId()
+	menu := useMenu(id)
 
 	triggerLabel := props.TriggerLabel
 	if triggerLabel == "" {
 		triggerLabel = "More actions"
 	}
-	toggleOpen := uic.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	toggleOpen := uic.UseEvent(Prevent(func() { menu.Toggle() }))
 	openFromKeyboard := uic.UseEvent(func(e uic.KeyboardEvent) {
 		if e.GetKey() != "Enter" && e.GetKey() != " " {
 			return
 		}
 		e.PreventDefault()
-		open.Set(true)
+		menu.Set(true)
 	})
-
-	// Keyboard + outside-click dismissal (WAI-ARIA menu button). Registered only
-	// while open, torn down on close/unmount (mirrors addmenu.go):
-	//   • Escape closes and returns focus to the ⋯ trigger;
-	//   • pointerdown outside this instance's wrapper closes it — robust regardless
-	//     of the `.add-backdrop` stacking (the fixed backdrop doesn't paint over
-	//     page content, so it can't be relied on for outside-clicks).
-	dismissOverflowMenu(open.Get(), id, func() { open.Set(false) })
-	// Keep the popover inside the viewport (the ⋯ trigger usually sits near a row's
-	// right edge): flip it left/up when its natural below-right position would overflow.
-	anchorOverflowMenu(open.Get(), id, placement.Set)
-
-	// Use the `hidden-menu` class: it's the one the stylesheet actually hides
-	// (display:none on `.add-menu`). The bare `hidden` class is unstyled.
-	// aria-expanded reflects the popover state for assistive tech.
-	expanded := "false"
-	if open.Get() {
-		expanded = "true"
-	}
 
 	trigClass := props.TriggerClass
 	if trigClass == "" {
 		trigClass = "btn"
 	}
 	// An open menu keeps its trigger highlighted, the same state the Filters button shows.
-	if open.Get() {
+	if menu.Open {
 		trigClass += " is-open"
 	}
 	trigIcon := props.TriggerIcon
@@ -152,13 +128,13 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		Attr("title", triggerLabel),
 		Attr("aria-label", triggerLabel),
 		Attr("aria-haspopup", "menu"),
-		Attr("aria-expanded", expanded),
+		Attr("aria-expanded", boolAttr(menu.Open)),
 		OnKeyDown(openFromKeyboard),
 		OnClick(toggleOpen),
 		Icon(trigIcon, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 	}
-	// Labeled variant: append the visible text after the glyph (glyph + label), so the
-	// overflow reads as "⋯ More" rather than a bare, ambiguous dots button.
+	// Labeled variant: append the visible text after the glyph, so the overflow reads as
+	// "⋯ More" rather than a bare, ambiguous dots button.
 	if props.TriggerText != "" {
 		triggerArgs = append(triggerArgs, Span(props.TriggerText))
 	}
@@ -166,28 +142,12 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		triggerArgs = append(triggerArgs, Attr("data-testid", props.TriggerTestID))
 	}
 
-	shown := open.Get() || panelMounted
-	menuClass := "add-menu fade-panel" + placement.Get()
-	if !open.Get() {
-		if panelMounted {
-			menuClass += " is-leaving"
-		} else {
-			menuClass += " hidden-menu"
-		}
-	}
-	menuArgs := []any{ClassStr(menuClass), Attr("role", "menu")}
-	// Sections (C572): a heading is emitted the first time a section name appears.
-	// It carries role="presentation" so it stays out of the menu's owned children —
-	// a role="menu" may only own menuitems (and groups), and a stray labelled div
-	// would make the menu structurally invalid to a screen reader.
-	//
-	// The heading is therefore a SIGHTED affordance, and each item carries the same
-	// fact in its own accessible name ("Delete — Remove") so the grouping survives
-	// for anyone who never sees the heading. That keeps one flat list of menuitems,
-	// which is both valid ARIA and what the existing keyboard handling expects.
-	// Items with no Section stay unlabelled at the top, which is what an unsectioned
-	// menu (every other caller) renders today.
-	if shown {
+	// Menu children: role and class, then the actions. Sections (C572): a heading is emitted the
+	// first time a section name appears. It carries role="presentation" so it stays out of the
+	// menu's owned children, and each item carries the same fact in its own accessible name, so
+	// the grouping survives for anyone who never sees the heading.
+	menuArgs := []any{ClassStr(menu.panelClass()), Attr("role", "menu")}
+	if menu.Shown {
 		lastSection := ""
 		for _, item := range props.Items {
 			if item.Hidden {
@@ -202,7 +162,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 			}
 			menuArgs = append(menuArgs, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
 				Item:      item,
-				CloseMenu: func() { open.Set(false) },
+				CloseMenu: func() { menu.Set(false) },
 			}))
 		}
 	}
@@ -210,23 +170,14 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		menuArgs = append(menuArgs, props.ExtraContent)
 	}
 
-	// No `.add-backdrop` click-catcher: DismissPopover (above) already closes the menu
-	// on any outside pointerdown via a document listener. A fixed backdrop is not only
-	// redundant, it's harmful here — as a transparent, viewport-covering element it wins
-	// the hit-test over the menu items themselves when the row sits inside a bento tile's
-	// stacking context, so clicks on the items land on the backdrop and never fire.
-	wrapClass := "add-wrap"
-	if shown {
-		// The transaction-table styles use this state to tint and raise the owning row while
-		// its menu is open. It holds through the fade-out, or the next row paints over the
-		// menu as it leaves. It is harmless for menus outside a table.
-		wrapClass += " overflow-menu-open"
+	// No backdrop click-catcher: the outside-press listener in dismissOverflowMenu closes the
+	// menu. A fixed, viewport-covering backdrop wins the hit-test over the menu items when the
+	// row sits inside a bento tile's stacking context, so clicks never reach the items.
+	var panel uic.Node = Fragment()
+	if menu.Shown || props.ExtraContent != nil {
+		panel = Div(menuArgs...)
 	}
-	var menu uic.Node = Fragment()
-	if shown || props.ExtraContent != nil {
-		menu = Div(menuArgs...)
-	}
-	return Div(css.Class(wrapClass), Attr("id", id), Button(triggerArgs...), menu)
+	return Div(css.Class(menu.wrapClass("add-wrap")), Attr("id", id), Button(triggerArgs...), panel)
 }
 
 // dismissOverflowMenu installs the menu-button keyboard and outside-pointer
