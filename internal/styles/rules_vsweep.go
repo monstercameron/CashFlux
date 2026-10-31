@@ -483,9 +483,9 @@ func registerVSweep() {
 		maxWidth("11rem"),
 	)
 
-	// ─── C381: the forward projection under the balance chart ────────────────
-	// A projection sits beside a record of what actually happened, so it must not
-	// look equally certain: faint stroke, dashed line, muted label.
+	// ─── Forward projection under the account balance chart ────────────────
+	// A projection sits beside a record of what actually happened, so it must not look as
+	// certain. It is drawn as a faint dashed rule with a muted label.
 	rule(".acct-fwd",
 		marginTop("0.4rem"),
 		paddingTop("0.4rem"),
@@ -503,7 +503,7 @@ func registerVSweep() {
 		letterSpacing("0.04em"),
 		fontSize("var(--type-12)"),
 	)
-	// Running out of money is the one reading here that should raise its voice.
+	// A projected negative balance is the one reading here that uses the warning color.
 	rule(".acct-fwd-warn",
 		color("var(--warn, var(--text))"),
 	)

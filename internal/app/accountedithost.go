@@ -12,20 +12,18 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// AccountEditHost is mounted at the shell root (beside TxnEditHost). It reads the
-// account-editor atom and renders the matching editor (edit / update-balance /
-// reconcile / transfer) inside a FlipPanel modal. When the atom is empty no overlay
-// is shown.
+// AccountEditHost is mounted at the shell root, beside TxnEditHost. It reads the account
+// editor atom and renders the matching editor (edit, update value, reconcile or transfer)
+// in a FlipPanel modal. When the atom is empty it renders nothing.
 //
-// Mounting at the shell root — rather than inside the account row — is the whole
-// point: a row lives under transformed bento/tile ancestors (`.w`, `.card`, and the
-// app-enter wrapper all carry a transform), which would make the modal's
-// position:fixed backdrop resolve against the tile instead of the viewport, so an
-// in-row modal rendered off-centre. Here there is no transformed ancestor, so the
-// modal centres on the viewport.
+// The modal lives at the shell root rather than inside the account row. A row sits under
+// transformed ancestors (.w, .card and the app-enter wrapper all carry a transform), and a
+// transform makes a position:fixed backdrop resolve against that ancestor instead of the
+// viewport, which pushed an in-row modal off-centre. Here there is no transformed ancestor,
+// so the modal centres on the viewport.
 //
-// The FlipPanel is CloseOnly (its footer is a single "Close"); the editor form owns
-// its own Save/Cancel and calls OnDone on completion, which clears the atom.
+// The panel has no footer. The editor form supplies its own Save and Cancel row and calls
+// OnDone when it finishes, which clears the atom.
 func AccountEditHost() uic.Node {
 	edit := uistate.UseAccountEdit()
 	e := edit.Get()
@@ -34,8 +32,7 @@ func AccountEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseAccountEdit() }
 
-	// All the account editors are Medium. "Update value" now opens the same merged
-	// edit form (value update + full details), so it is no longer the short Small form.
+	// Every account editor uses the medium panel size.
 	title, width, height := uistate.T("accounts.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	switch e.Mode {
 	case uistate.AcctEditModeSetBal:
@@ -48,9 +45,8 @@ func AccountEditHost() uic.Node {
 		title = uistate.T("accounts.transferTitle")
 	}
 
-	// NoFooter: the editor form supplies its own (sticky-pinned) Save/Cancel action row,
-	// so the modal isn't double-chromed with a redundant Close footer. The header ✕,
-	// Escape, and backdrop-click still dismiss via OnClose.
+	// NoFooter: the editor form supplies its own Save and Cancel row, so the panel has no
+	// footer of its own. The header close button, Escape and a backdrop click call OnClose.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     title,
 		Width:     width,

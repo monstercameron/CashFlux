@@ -19,17 +19,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// SweepRulesFormProps configures the AC7 sweep-rules manager. OnDone closes the
-// host modal.
+// SweepRulesFormProps configures the sweep-rules manager. OnDone closes the host modal.
 type SweepRulesFormProps struct {
 	OnDone func()
 }
 
-// SweepRulesForm lists the household's surplus-sweep rules and offers an add
-// form: keep $X in a source account, move the excess to a destination account on
-// a cadence. Each rule proposes (never auto-runs) a transfer via the card on
-// /accounts. Its own component so the add-form hooks sit at stable positions;
-// each rule row is a child component (no On* in a loop).
+// SweepRulesForm lists the household's surplus-sweep rules and offers an add form:
+// keep $X in a source account, and move the excess to a destination account on a
+// cadence. A rule never runs by itself. It proposes a transfer through the card on
+// /accounts. This component owns the add-form hooks, and each rule row is a child
+// component so no On* hook sits inside the rules loop.
 func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -41,7 +40,7 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 	dst := ui.UseState("")
 	keep := ui.UseState("")
 	cadence := ui.UseState(string(domain.SweepMonthly))
-	msg := ui.UseState("")
+	errMsg := ui.UseState("")
 
 	onSrc := ui.UseEvent(func(v string) { src.Set(v) })
 	onDst := ui.UseEvent(func(v string) { dst.Set(v) })
@@ -57,26 +56,26 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 	}
 
 	add := ui.UseEvent(Prevent(func() {
-		s, d := src.Get(), dst.Get()
-		if s == "" || d == "" || s == d {
-			msg.Set(uistate.T("acctSweepCfg.pickTwo"))
+		source, dest := src.Get(), dst.Get()
+		if source == "" || dest == "" || source == dest {
+			errMsg.Set(uistate.T("acctSweepCfg.pickTwo"))
 			return
 		}
-		keepMinor, _ := money.ParseMinor(keep.Get(), currency.Decimals(curOf[s]))
+		keepMinor, _ := money.ParseMinor(keep.Get(), currency.Decimals(curOf[source]))
 		if keepMinor < 0 {
 			keepMinor = 0
 		}
 		if _, err := app.PutSweepRule(domain.SweepRule{
-			SourceAccountID: s, DestAccountID: d, KeepMinor: keepMinor,
+			SourceAccountID: source, DestAccountID: dest, KeepMinor: keepMinor,
 			Cadence: domain.SweepCadence(cadence.Get()), Enabled: true,
 		}); err != nil {
-			msg.Set(err.Error())
+			errMsg.Set(err.Error())
 			return
 		}
 		src.Set("")
 		dst.Set("")
 		keep.Set("")
-		msg.Set("")
+		errMsg.Set("")
 		uistate.RequestPersist()
 		uistate.BumpDataRevision()
 	}))
@@ -84,25 +83,22 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 	rules := app.SweepRules()
 	var ruleNodes []ui.Node
 	for _, r := range rules {
-		r := r
 		ruleNodes = append(ruleNodes, ui.CreateElement(sweepRuleRow, sweepRuleRowProps{
 			Rule: r, FromName: nameOf[r.SourceAccountID], ToName: nameOf[r.DestAccountID],
 			KeepStr: fmtMoney(money.New(r.KeepMinor, curOf[r.SourceAccountID])),
 		}))
 	}
 
-	// QA CF-12: the pickers used to list EVERY account — mortgage, the condo,
-	// car/student loans, investments, and even the chosen source itself. A sweep
-	// is a cash transfer, so it shares the C2 transfer eligibility rule
-	// (acctTransferOptions): liquid cash sources only, no valuation-only
-	// destinations, liabilities labelled as payments, each side excluding the
-	// other's selection.
+	// The pickers list only accounts that can take part in a sweep. A sweep is a cash
+	// transfer, so it uses the transfer eligibility rule (acctTransferOptions): liquid
+	// cash sources only, no valuation-only destinations, liabilities labelled as
+	// payments, and each side excludes the other's selection.
 	sweepFromOpts, sweepToOpts := acctTransferOptions(accounts, src.Get(), dst.Get())
-	acctOptFrom := func(opts []uiw.SelectOption, sel string) []ui.Node {
+	optionNodes := func(opts []uiw.SelectOption, sel string) []ui.Node {
 		nodes := []ui.Node{Option(Value(""), uistate.T("acctSweepCfg.pickAccount"))}
 		for _, o := range opts {
 			if o.Value == "" {
-				continue // replace the transfer placeholder with the sweep one above
+				continue // the transfer placeholder is replaced by the sweep one above
 			}
 			args := []any{Value(o.Value), o.Label}
 			if o.Value == sel {
@@ -113,15 +109,18 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 		return nodes
 	}
 
-	var onDone ui.Handler
-	if props.OnDone != nil {
-		onDone = ui.UseEvent(func() { props.OnDone() })
-	}
-	// FlushBody form: the intro, existing rules, and the add-form fields scroll in
-	// .modal-scroll, while the primary "Add sweep rule" action stays pinned in the
-	// .modal-foot so it is always reachable (the small modal would otherwise push it
-	// below the fold). A submit there fires the form's OnSubmit — adding a rule without
-	// closing — so several rules can be added in a row; Done closes the modal.
+	// Called unconditionally so the hook keeps a stable position. The Done button
+	// only renders when OnDone is set.
+	onDone := ui.UseEvent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	})
+
+	// The intro, the rules and the add-form fields scroll inside .modal-scroll. The
+	// primary Add action stays pinned in .modal-foot so it is always reachable in the
+	// small modal. Submitting adds a rule and keeps the modal open, so several rules
+	// can be added in a row. Done closes the modal.
 	return Form(css.Class("acct-edit-form"), Attr("id", "sweep-rules-form"),
 		Attr("data-testid", "sweep-rules-form"), OnSubmit(add),
 		Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
@@ -129,18 +128,18 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 			If(len(ruleNodes) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2), ruleNodes)),
 			If(len(ruleNodes) == 0, P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.empty"))),
 			// The add form: one field per line (label over control) so the picks read in the
-			// order the sentence does — keep money in X, hold $Y, sweep the rest to Z, this often.
+			// order the sentence does: keep money in X, hold $Y, sweep the rest to Z, this often.
 			Div(css.Class("sweep-add"),
 				labeledField(uistate.T("accountsRedesign.sweepKeepIn"),
 					Select(css.Class("field"), AriaLabel(uistate.T("acctSweepCfg.source")),
-						Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), acctOptFrom(sweepFromOpts, src.Get()))),
+						Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), optionNodes(sweepFromOpts, src.Get()))),
 				labeledField(uistate.T("acctSweepCfg.keepAmount"),
 					Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
 						AriaLabel(uistate.T("acctSweepCfg.keepAmount")), Placeholder("3,000"),
 						Attr("data-testid", "sweep-cfg-keep"), OnInput(onKeep), uiw.FieldValue(keep.Get()))),
 				labeledField(uistate.T("accountsRedesign.sweepMoveTo"),
 					Select(css.Class("field"), AriaLabel(uistate.T("acctSweepCfg.dest")),
-						Attr("data-testid", "sweep-cfg-dest"), OnInput(onDst), acctOptFrom(sweepToOpts, dst.Get()))),
+						Attr("data-testid", "sweep-cfg-dest"), OnInput(onDst), optionNodes(sweepToOpts, dst.Get()))),
 				labeledField(uistate.T("acctSweepCfg.cadence"),
 					Select(css.Class("field"), AriaLabel(uistate.T("acctSweepCfg.cadence")),
 						Attr("data-testid", "sweep-cfg-cadence"), OnInput(onCadence),
@@ -149,7 +148,7 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 						sweepCadenceOption(domain.SweepMonthly, cadence.Get()),
 						sweepCadenceOption(domain.SweepQuarterly, cadence.Get()))),
 			),
-			If(msg.Get() != "", P(css.Class("t-caption", tw.TextDown), Role("alert"), msg.Get())),
+			If(errMsg.Get() != "", P(css.Class("t-caption", tw.TextDown), Role("alert"), errMsg.Get())),
 		),
 		Div(css.Class("modal-foot", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			If(props.OnDone != nil, Button(css.Class("btn"), Type("button"),
@@ -160,9 +159,14 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 	)
 }
 
+// sweepCadenceLabel is the plain-English name of a sweep cadence, such as "Monthly".
+func sweepCadenceLabel(c domain.SweepCadence) string {
+	return uistate.T("acctSweepCfg.cadence" + strconv.Itoa(c.CadenceDays()))
+}
+
+// sweepCadenceOption is one entry in the cadence picker, selected when sel matches it.
 func sweepCadenceOption(c domain.SweepCadence, sel string) ui.Node {
-	label := uistate.T("acctSweepCfg.cadence" + strconv.Itoa(c.CadenceDays()))
-	args := []any{Value(string(c)), label}
+	args := []any{Value(string(c)), sweepCadenceLabel(c)}
 	if string(c) == sel {
 		args = append(args, Attr("selected", "selected"))
 	}
@@ -176,7 +180,7 @@ type sweepRuleRowProps struct {
 	KeepStr  string
 }
 
-// sweepRuleRow renders one saved sweep rule with a delete button — its own
+// sweepRuleRow renders one saved sweep rule with a delete button. It is its own
 // component so the delete hook stays stable across the rules loop.
 func sweepRuleRow(props sweepRuleRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() {
@@ -191,7 +195,7 @@ func sweepRuleRow(props sweepRuleRowProps) ui.Node {
 		Attr("data-testid", "sweep-rule-row-"+props.Rule.ID),
 		Span(css.Class("t-body", tw.Flex1),
 			uistate.T("acctSweepCfg.ruleLine", props.FromName, props.KeepStr, props.ToName,
-				uistate.T("acctSweepCfg.cadence"+strconv.Itoa(props.Rule.Cadence.CadenceDays())))),
+				sweepCadenceLabel(props.Rule.Cadence))),
 		Button(css.Class("btn btn-ghost btn-sm btn-del"), Type("button"),
 			Attr("data-testid", "sweep-rule-del-"+props.Rule.ID), OnClick(del),
 			uistate.T("acctSweepCfg.remove")),

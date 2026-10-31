@@ -147,10 +147,10 @@ func registerSmartRowHint() {
 		overflowWrap("anywhere"),
 	)
 
-	// --- SM-6: the repeats found on one account -------------------------------
-	// Reuses the budget card's disclosure toggle (.budget-drivers-toggle) so the two
-	// "opt-in detail under a record" affordances are visibly the same control, then
-	// lists each repeat as a name/meta pair with its action pinned right.
+	// --- Recurring charges found on one account -------------------------------
+	// Reuses the budget card's disclosure toggle (.budget-drivers-toggle) so the two opt-in
+	// detail affordances look the same. Each charge is listed as a name and meta pair, with
+	// its track action pinned to the right.
 	rule(".acct-recur",
 		marginTop("0.35rem"),
 	)

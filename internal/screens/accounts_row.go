@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,15 +40,15 @@ type accountRowProps struct {
 	// period flow and projection. Direct row consumers can still supply the
 	// individual display facts below.
 	DetailContext *accountDetailContext
-	// DaysStale is the days since the balance was last confirmed (−1 = never), shown
-	// on the stale badge so the row says HOW stale it is — matching the "it's been N
-	// days" wording of the balance-update notification. Only read when Stale is true.
+	// DaysStale is the number of days since the balance was last confirmed, or -1 if
+	// it never was. The stale badge shows it so the row says how stale the balance is.
+	// Only read when Stale is true.
 	DaysStale int
 	// StaleCollapsed is set by the list when more than half the visible accounts are
 	// stale: in that state the loud per-row STALE badge collapses to a subdued dot and
 	// a single "Most accounts need a balance update — Mark all updated" summary line
-	// leads the list, so the warning keeps its prioritising force instead of becoming
-	// wallpaper. Below that threshold it's false and the full badge shows as before.
+	// leads the list, so the warning stands out instead of becoming wallpaper. Below
+	// that threshold it is false and the full badge shows.
 	StaleCollapsed          bool
 	Members                 []domain.Member
 	Accounts                []domain.Account // all non-archived accounts (for Transfer to-picker)
@@ -65,9 +66,9 @@ type accountRowProps struct {
 	DefaultMemberName       string
 	OnSetDefaultMember      func(accountID, memberID string)
 	OnClearDefaultMember    func(memberID string)
-	// OnSetBalance: newBalStr is the typed target; catID is the optional category;
-	// asOfISO is the date the balance was TRUE as of (C684), empty meaning today
-	// to attach to the adjustment transaction (empty = uncategorized).
+	// OnSetBalance posts a balance adjustment that brings the account to newBalStr, the
+	// typed target. catID is the optional category (empty = uncategorized), and asOfISO
+	// is the date the balance was true as of (empty = today).
 	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
 	OnTransfer   func(fromID, toID string, amountStr string, dateStr string, desc string)
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
@@ -88,45 +89,36 @@ type accountRowProps struct {
 	BillPayment ledger.BillPaymentInfo
 	OnViewBills func(string)
 	// Projection is this account's 30-day balance projection from its recurring cash
-	// flows (AC13). When it shows a dip below today's balance, the row renders a
+	// flows. When it shows a dip below today's balance, the row renders a
 	// "→ ~$X low on <date>" line that expands to list the drivers. Zero value renders
 	// nothing.
 	Projection    acctproject.Projection
 	ProjectionErr error
 	// ForwardProjection carries recurring drivers through the forward chart's 90-day
-	// horizon. Projection above remains the independent 30-day AC13 summary.
+	// horizon. Projection above is the separate 30-day summary.
 	ForwardProjection    acctproject.Projection
 	ForwardProjectionErr error
-	// Sparkline is the account's 90-day end-of-day balance series (AC2), oldest first,
+	// Sparkline is the account's 90-day end-of-day balance series, oldest first,
 	// in the account's currency (minor units). Rendered as an inline SVG polyline; a
 	// flat run is itself the "nothing has posted since your last update" signal. Fewer
 	// than two points renders nothing.
 	Sparkline []int64
 	// Sparkline12m / SparklineAll are the wider balance windows for the account-detail
-	// chart's range picker (C413): the trailing 12 months and the account's full
+	// chart's range picker: the trailing 12 months and the account's full
 	// history. Populated only when HasRange is set (the account has more than 90 days
 	// of history); otherwise the detail chart shows just the plain 90-day sparkline.
 	Sparkline12m []int64
 	SparklineAll []int64
 	HasRange     bool
-	// Flow is this account's money-in / money-out / net for the current period (AC9),
+	// Flow is this account's money-in / money-out / net for the current period,
 	// with transfers counted separately (never as income or spend). Rendered as compact
 	// row figures when ShowFlow is set.
 	Flow     accountflow.Flow
 	ShowFlow bool
-	// InstByID indexes the household's institution directory by id (AC10), so the
+	// InstByID indexes the household's institution directory by id, so the
 	// row can color its edge and show a chip for Account.InstitutionID. Nil or a
 	// miss renders nothing extra — free-text-only institutions are unaffected.
 	InstByID map[string]domain.Institution
-}
-
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
 }
 
 func defaultAccountPillTitle(props accountRowProps) string {
@@ -152,20 +144,18 @@ func defaultMemberNames(members []domain.Member, ids []string) []string {
 	return names
 }
 
-// moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
-// isValuationType reports whether an account's balance is a periodically
-// estimated valuation (an investment, retirement, crypto, or other/illiquid
-// asset) rather than a reconciled cash balance. C226/C73: these read better
-// with "Out of date / Update value" than the banking-flavoured "Stale / Update
-// balance".
+// isValuationType reports whether an account's balance is a periodic estimate (an
+// investment, retirement, crypto, property, vehicle or other asset) rather than a
+// reconciled cash balance. Those accounts read better as "Out of date / Update value"
+// than as the banking wording "Stale / Update balance".
 func isValuationType(t domain.AccountType) bool {
 	return t == domain.TypeInvestment || t == domain.TypeRetirement ||
 		t == domain.TypeCrypto || t == domain.TypeProperty ||
 		t == domain.TypeVehicle || t == domain.TypeOther
 }
 
-// staleBadgeKey / updateActionKey pick asset-appropriate wording for the stale
-// badge and the update action (C226).
+// staleBadgeKey returns the label key for the stale badge: the valuation wording for
+// valuation types, and the cash wording otherwise.
 func staleBadgeKey(t domain.AccountType) string {
 	if isValuationType(t) {
 		return "accounts.staleValue"
@@ -173,6 +163,8 @@ func staleBadgeKey(t domain.AccountType) string {
 	return "accounts.stale"
 }
 
+// updateActionKey returns the label key for the update action, using the same
+// valuation or cash split as staleBadgeKey.
 func updateActionKey(t domain.AccountType) string {
 	if isValuationType(t) {
 		return "accounts.updateValue"
@@ -222,6 +214,12 @@ func staleBadgeNode(props accountRowProps) ui.Node {
 		Title(staleBadgeTitle(a.Type, props.DaysStale)), staleBadgeText(a.Type, props.DaysStale))
 }
 
+// isSharedAccount reports whether an account is shared with the household: shared scope,
+// group-owned, or split by ownership shares.
+func isSharedAccount(a domain.Account) bool {
+	return a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0
+}
+
 // acctOwnerName resolves the display name of the member that owns an account, or ""
 // when the id is empty / group-owned / not a known member. Used to show ownership on
 // individually-owned rows (the Shared chip already marks group/shared ones).
@@ -243,7 +241,7 @@ func acctOwnerName(members []domain.Member, ownerID string) string {
 // no resolvable Member owner also render nothing.
 func acctOwnerChip(props accountRowProps) ui.Node {
 	a := props.Account
-	if a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0 {
+	if isSharedAccount(a) {
 		return Fragment()
 	}
 	name := acctOwnerName(props.Members, a.OwnerID)
@@ -255,6 +253,7 @@ func acctOwnerChip(props accountRowProps) ui.Node {
 		AriaLabel(uistate.T("accounts.ownerBadgeTitle", name)), name)
 }
 
+// moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
 func moneyMajorOrEmpty(m money.Money, dec int) string {
 	if m.Amount == 0 {
 		return ""
@@ -270,9 +269,9 @@ func floatOrEmpty(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-// rateFieldValue renders an account's APR for a form field, or "" when no rate
-// has been recorded — which is what the empty box means on the way back in
-// (WF4-b). A recorded 0% shows as "0", not as blank, because somebody typed it.
+// rateFieldValue renders an account's APR for a form field, or "" when no rate has been
+// recorded, so an empty box reads back as no rate. A recorded 0% shows as "0", not as
+// blank, because somebody typed it.
 func rateFieldValue(a domain.Account) string {
 	r, ok := a.RateAPR()
 	if !ok {
@@ -308,7 +307,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	a := props.Account
 
 	// Secondary actions live in a "⋯" overflow menu so each row stays uncluttered
-	// (primary: Transactions / Edit / ✕); selecting one closes the menu (C9).
+	// (primary: Transactions / Edit / ✕); selecting one closes the menu.
 	menuID := ui.UseId()
 	// The shared menu state: the same fade, placement, dismissal and stacking as the More menu.
 	menu := uiw.UseMenu(menuID)
@@ -342,12 +341,11 @@ func AccountRow(props accountRowProps) ui.Node {
 			props.OnClearDefaultMember(props.DefaultMemberID)
 		}
 	}))
-	// C365: investment/retirement/crypto rows deep-link to their holdings + growth
-	// card on /investments. The row navigates itself (like budgets_row) and sets the
-	// deep-link focus so the destination card scrolls into view and flashes once the
-	// page settles. The hook is always registered; the link renders only for
-	// investment accounts (isInvestmentAccount), so the AC "Accounts → holdings in
-	// one click" holds without a per-row prop.
+	// Investment accounts deep-link to their holdings and growth card on /investments.
+	// The row navigates itself and sets the deep-link focus, so the destination card
+	// scrolls into view and flashes once the page settles. The hook is always
+	// registered; the link renders only for investment accounts (isInvestmentAccount),
+	// so the row needs no extra prop.
 	nav := router.UseNavigate()
 	isInvest := isInvestmentAccount(a.Type) && !a.Archived
 	openHoldings := ui.UseEvent(Prevent(func() {
@@ -360,22 +358,21 @@ func AccountRow(props accountRowProps) ui.Node {
 	// hover tooltip on a tiny glyph.
 	notesExpanded := ui.UseState(false)
 	toggleNotes := ui.UseEvent(Prevent(func() { notesExpanded.Set(!notesExpanded.Get()) }))
-	// AC13: the projected-low "Why?" disclosure owns its own state at this stable
-	// render position (AccountRow is itself the per-row component, so this is not a
-	// loop-level hook).
+	// The projected-low "Why?" disclosure owns its state at this render position.
+	// AccountRow is itself the per-row component, so these hooks never run in a loop.
 	projExpanded := ui.UseState(false)
 	projMounted := uiw.UsePanelFade(projExpanded.Get())
 	toggleProj := ui.UseEvent(Prevent(func() { projExpanded.Set(!projExpanded.Get()) }))
-	// AC-series detail (90-day trend, this-period flow, projection, filed documents,
-	// notes, custom fields) is folded behind a quiet per-row disclosure so the resting
-	// list reads as name → balance and nothing competes; one click reveals the rest.
+	// The detail block (90-day trend, this-period flow, projection, filed documents,
+	// notes, custom fields) sits behind a quiet per-row disclosure, so the resting list
+	// reads as name then balance, and nothing competes.
 	detailsOpen := ui.UseState(false)
 	// Each disclosure keeps its content mounted for the fade-out, so opening and closing both animate.
 	detailsMounted := uiw.UsePanelFade(detailsOpen.Get())
 	toggleDetails := ui.UseEvent(Prevent(func() { detailsOpen.Set(!detailsOpen.Get()) }))
-	// C413: the account-detail chart's range picker (90d / 12m / all) keeps its
-	// selection in the row's own state (stable hook position; AccountRow is the
-	// per-row component). The choice is view-only, so it isn't persisted.
+	// The detail chart's range picker (90d / 12m / all) keeps its selection in the
+	// row's state, at a stable hook position. The choice is view-only, so it is not
+	// persisted.
 	chartRange := ui.UseState("90d")
 	onChartRange := func(v string) { chartRange.Set(v) }
 	if detailsOpen.Get() && props.DetailContext != nil {
@@ -420,11 +417,14 @@ func AccountRow(props accountRowProps) ui.Node {
 	// The encrypted credential vault opens in its own shell-root modal (CredentialVaultHost).
 	acctCredsAtom := uistate.UseAccountCredentials()
 	startCredentials := ui.UseEvent(Prevent(func() { menu.Set(false); acctCredsAtom.Set(a.ID) }))
-	// G8: quick institution assignment from the row — a prompt seeded with the current
-	// value, normalised the same way the add form normalises it. No modal round-trip.
+	// Quick institution assignment: a prompt seeded with the current value, normalised
+	// the same way the add form normalises it, with no modal in between.
 	setInstitution := ui.UseEvent(Prevent(func() {
 		menu.Set(false)
-		uistate.PromptModal(uistate.T("accounts.setInstitutionPrompt", a.Name), a.Institution, func(v string) {
+		uistate.PromptModalResult(uistate.T("accounts.setInstitutionPrompt", a.Name), a.Institution, func(ok bool, v string) {
+			if !ok {
+				return
+			}
 			ac := a
 			ac.Institution = titleCaseWords(strings.TrimSpace(v))
 			props.OnSave(ac)
@@ -439,14 +439,10 @@ func AccountRow(props accountRowProps) ui.Node {
 	if a.Archived {
 		archLabel, archTitle = uistate.T("accounts.restore"), uistate.T("accounts.restoreTitle")
 	}
-	// A liability is shown as a negative figure — a debt reduces net worth — taking
-	// -Abs so it reads correctly whether the balance is stored positive ("amount you
-	// owe" add form) or negative (the sample convention). Editing still works on the
-	// raw stored value; only the displayed figures are signed.
-	// A liability is shown as what it does to net worth. This goes through the
-	// account's own storage convention rather than -Abs (C683): -Abs turns an
-	// OVERPAID card — money the lender owes you — into more debt, which is the one
-	// case where the shortcut and the truth disagree.
+	// A liability is shown as what it does to net worth. The figure goes through the
+	// account's own storage convention rather than -Abs, because -Abs turns an
+	// overpaid card (money the lender owes you) into more debt. Editing still works on
+	// the raw stored value; only the displayed figures are converted.
 	dispBal, dispCleared := props.Balance, props.Cleared
 	if a.Class == domain.ClassLiability {
 		conv, _ := reconcile.ConventionOf(a, props.Balance.Amount)
@@ -455,22 +451,18 @@ func AccountRow(props accountRowProps) ui.Node {
 	}
 
 	meta := accountMeta(a, props.Balance)
-	// C685: the cleared-only figure is a RECONCILIATION aid — what a statement has
-	// confirmed so far — and it is shown beside the real balance, where it reads as
-	// a second claim about what is owed. On an account nobody reconciles that claim
-	// is false: a utility or HOA shell whose balance is zero because every bill was
-	// posted and every bill paid still carried a cleared figure of a few hundred
-	// dollars, and the card said you owed it. Property, vehicle and crypto are
-	// estimated on a revaluation cadence rather than reconciled, and have the same
-	// problem for the same reason.
+	// The cleared figure is a reconciliation aid: what a statement has confirmed so far.
+	// Beside the real balance it reads as a second claim about what is owed, so it is
+	// shown only for reconcilable accounts. Otherwise a utility or HOA shell with a zero
+	// balance would still show a cleared amount and look like a debt. Valuation-type
+	// accounts are estimated rather than reconciled, so the same reasoning applies.
 	if a.Type.IsReconcilable() && props.Cleared.Amount != props.Balance.Amount {
 		meta += uistate.T("accounts.clearedSuffix", fmtMoney(dispCleared))
 	}
 
-	// Month-to-date value change for illiquid-asset accounts (home / car /
-	// investment): a single signed figure — "▲ $2,000.00 this month" — in place of
-	// the old scrolling valuation-history list, which was noise in the row (C225
-	// [F31]). Shown only when there is history to compare against. Display-only.
+	// Month-to-date value change for valuation-type accounts (home, car, investment): one
+	// signed figure such as "▲ $2,000.00 this month". Shown only when there is history
+	// to compare against.
 	valChange := ui.If(isValuationType(a.Type) && len(props.ValuationHistory) >= 2, func() ui.Node {
 		chg, ok := valuation.MonthToDateChange(props.ValuationHistory, props.Balance, time.Now())
 		if !ok {
@@ -518,14 +510,15 @@ func AccountRow(props accountRowProps) ui.Node {
 		)
 	})
 
-	// AC13 projected-balance line: for cash-like asset accounts whose 30-day
-	// projection dips below today's balance, show "→ ~$X low on <date>" with a "Why?"
-	// disclosure that lists the recurring drivers ("Rent −$1,400 on Mar 1"). Skipped
-	// for liabilities and valuation-type assets, whose balances aren't cash curves.
+	// The projected-balance line: for cash accounts whose 30-day projection dips below
+	// today's balance, it shows "→ ~$X low on <date>" with a "Why?" disclosure that lists
+	// the recurring drivers ("Rent −$1,400 on Mar 1"). Liabilities and valuation-type
+	// assets are skipped, because their balances are not cash curves.
 	var projNode ui.Node = Fragment()
-	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.ProjectionErr != nil {
+	cashCurve := a.Class != domain.ClassLiability && !isValuationType(a.Type)
+	if cashCurve && props.ProjectionErr != nil {
 		projNode = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
-	} else if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
+	} else if cashCurve && props.Projection.HasLowDip() {
 		dec := currency.Decimals(a.Currency)
 		low := money.New(props.Projection.Low, a.Currency)
 		toggleLabel := uistate.T("accounts.projectedShow")
@@ -553,20 +546,19 @@ func AccountRow(props accountRowProps) ui.Node {
 		)
 	}
 
-	// C412: the row leads with exactly ONE inline everyday action — "Transactions" —
-	// for every account. The balance figure stays click-to-edit (the primary update
-	// affordance), and the explicit "Update value/balance" action is demoted into the
-	// ⋯ menu for the accounts you actively maintain (stale ones and valuation-type
-	// assets you revalue by hand), so no row carries a second prominent button.
+	// The row leads with one inline everyday action, "Transactions". The balance figure
+	// stays click-to-edit, which is the main update affordance. The explicit "Update
+	// value/balance" action sits in the ⋯ menu for the accounts that need it (stale ones
+	// and valuation-type assets revalued by hand), so no row has a second prominent button.
 	showValueInMenu := (props.Stale || isValuationType(a.Type)) && !a.Archived
 
-	// AC9: this-period in/out/net figures. (The AC2 balance chart is built inside the
-	// details block below so its range picker only mounts while the panel is open.)
+	// This-period in, out and net figures. The balance chart is built inside the details
+	// block below, so its range picker mounts only while the panel is open.
 	flowNode := accountFlowFigures(a, props.Flow, props.ShowFlow)
 
-	// AC10: color the row's left edge by its institution when the account
-	// references one from the directory; a bare border-left is the least intrusive
-	// way to add the cue without disturbing the row's existing layout.
+	// Color the row's left edge by the account's institution when it references one from
+	// the directory. A plain border keeps the cue light. Accounts without an institution
+	// keep the plain row.
 	rowStyle := map[string]string{}
 	inst, hasInst := props.InstByID[a.InstitutionID]
 	if hasInst {
@@ -578,11 +570,12 @@ func AccountRow(props accountRowProps) ui.Node {
 	if detailsOpen.Get() {
 		detailsLabel = uistate.T("accountsRedesign.detailsHide")
 	}
-	// The revealed block collects every AC-series extra. It mounts only while open so the
-	// resting row stays a clean name → balance line (child components' hooks are their own,
-	// so conditional mounting here is safe).
+	// The revealed block holds the extra detail. It mounts only while open, so the resting
+	// row stays a clean name-and-balance line. Child components own their hooks, so
+	// conditional mounting here is safe.
 	var detailsNode ui.Node = Fragment()
 	if detailsOpen.Get() || detailsMounted {
+		customText := customSummary(props.AccountDefs, a.Custom)
 		var chart ui.Node
 		validBalance := true
 		if props.DetailContext != nil {
@@ -599,35 +592,35 @@ func AccountRow(props accountRowProps) ui.Node {
 		detailsNode = Div(css.Class(uiw.FadeClass("acct-row-details", detailsOpen.Get())), Attr("id", "acct-details-"+a.ID), Attr("data-testid", "acct-details-"+a.ID),
 			flowNode,
 			Div(css.Class("acct-panel-chart"),
-				// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
+				// The 90-day balance figure, with a 90d/12m/all range picker
 				// when the account has more than 90 days of history.
 				chart,
-				// C381: and where it goes next. The history chart above answers where the
-				// account has been; this answers whether it survives until payday.
+				// Where the balance goes next. The history chart above shows where the
+				// account has been; this shows whether it lasts until payday.
 				accountForwardLine(a, props.Balance, props.ForwardProjection, props.ForwardProjectionErr, time.Now()),
 			),
 			Div(css.Class("acct-panel-side"),
 				valChange,
 				projNode,
 				billNode,
-				// XC7: warn when goals have earmarked more against this account than it
-				// holds (goal money has been spent). Own component; healthy is Fragment().
+				// Warn when goals have earmarked more against this account than it holds.
+				// A healthy account renders nothing.
 				ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
 				// Read-only summary of the account's custom-field values (a compact
 				// "Label: value" line), shown only when any are set.
-				If(customSummary(props.AccountDefs, a.Custom) != "",
+				If(customText != "",
 					Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
-						customSummary(props.AccountDefs, a.Custom))),
+						customText)),
 				// Readable, clickable-to-expand notes line (the attached note itself).
 				notesNode,
 			),
 			Div(css.Class("acct-panel-footer"),
-				// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
-				// payoff letters) with an attach form carrying an optional renewal date.
+				// The filed-documents drawer (statements, contracts, titles,
+				// payoff letters), with an attach form that takes an optional renewal date.
 				ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
-				// MIA-extend (#445-10): nudge to fill missing institution. Styled as a
-				// real link action; the dim caption treatment read as stray plain text in
-				// the details panel (UI/UX task #7).
+				// Nudge to fill in a missing institution. It is styled as a
+				// real link action, because the dim caption treatment read as stray plain text in
+				// the details panel.
 				If(a.Institution == "" && !a.Archived,
 					uiw.ToolButton(uiw.ToolButtonProps{Label: uistate.T("accounts.setInstitution"), Icon: icon.Pencil, Class: "acct-set-institution", TestID: "set-institution-" + a.ID},
 						OnClick(startEdit))),
@@ -639,24 +632,24 @@ func AccountRow(props accountRowProps) ui.Node {
 		// PRIMARY line: type glyph + name/badges on the left, the balance figure and the
 		// row actions right-aligned. Everything else is demoted to the sub-line or details.
 		Div(css.Class("acct-row-head"),
-			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
-			// Credit Card are distinguishable without reading the meta-line.
+			// Account-type glyph: a quick visual tag so checking, investment and credit card
+			// accounts are distinguishable without reading the meta line.
 			Span(css.Class("acct-type-icon", tw.TextDim), AriaHidden(true),
 				uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Div(css.Class("acct-row-id"),
 				Div(css.Class("acct-row-name"),
 					Span(css.Class("row-desc"), a.Name),
 					If(props.DefaultHousehold || len(props.DefaultMembers) > 0, uiw.Pill(uiw.PillProps{Label: uistate.T("defaultAccount.pill"), Tone: uiw.PillDim, Title: defaultAccountPillTitle(props)})),
-					// #66: shared vs individually-owned must be visible in the list —
-					// group-owned, shared-scope, or fractionally-shared accounts wear a
-					// quiet badge. Scope is checked too: seeded/imported data can mark
-					// an account shared while a person administers it (OwnerID set).
-					If(a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0,
+					// Shared, group-owned and fractionally shared accounts wear a quiet badge, so
+					// shared and individual ownership is visible in the list. Scope is checked too,
+					// because seeded or imported data can mark an account shared while a person
+					// administers it (OwnerID set).
+					If(isSharedAccount(a),
 						Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-shared-badge-"+a.ID),
 							Title(uistate.T("accounts.sharedBadgeTitle")), AriaLabel(uistate.T("accounts.sharedBadge")),
 							uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
-					// #66 follow-up: individually-owned rows name their owner (a Member) with a
-					// quiet chip of the same weight as SHARED, so ownership is visible for both.
+					// Individually owned rows name their owner (a member) in a quiet chip, the same
+					// weight as the shared chip.
 					acctOwnerChip(props),
 					// Freshness marker: full badge normally; a subdued dot when the list has
 					// collapsed the stale badges (StaleCollapsed) into one summary line.
@@ -677,9 +670,9 @@ func AccountRow(props accountRowProps) ui.Node {
 						AriaLabel(uistate.T("accountsRedesign.detailsAria", a.Name)),
 						Title(detailsLabel), OnClick(toggleDetails),
 						uiw.Icon(icon.ChevronDown, css.Class("acct-details-chev", tw.ShrinkO, tw.W4, tw.H4))),
-					// C365: investment accounts deep-link to their holdings + growth on
-					// /investments — a quiet link (not an everyday-action button), so the
-					// row still leads with exactly one inline action.
+					// Investment accounts link to their holdings and growth on /investments. This is
+					// a quiet link, not an everyday-action button, so the row still leads with one
+					// inline action.
 					If(isInvest,
 						Button(css.Class("btn-link acct-holdings-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 							Attr("data-testid", "acct-holdings-link-"+a.ID),
@@ -690,11 +683,11 @@ func AccountRow(props accountRowProps) ui.Node {
 							Span(uistate.T("accountsInvest.viewHoldings")))),
 				),
 			),
-			// L100-T1: the headline balance carries an explicit accessible name to
-			// disambiguate it from the dim "cleared (…)" figure. G2/C4: the figure is
-			// also the ONE consistent update affordance on every row — click it to open
-			// the update-balance editor (dotted underline on hover signals editability);
-			// archived rows keep a plain, non-interactive figure.
+			// The headline balance has an explicit accessible name, which tells it apart from
+			// the dim cleared figure. It is also the one update affordance on every row:
+			// clicking it opens the update-balance editor, and a dotted underline on hover
+			// shows that it is editable.
+			// Archived rows keep a plain figure.
 			IfElse(!a.Archived,
 				Button(ClassStr(amountClass(dispBal)+" acct-row-figure budget-limit-btn"), Type("button"),
 					Attr("data-testid", "acct-balance-btn-"+a.ID),
@@ -708,12 +701,12 @@ func AccountRow(props accountRowProps) ui.Node {
 					fmtMoney(dispBal))),
 			// Quieter rows: exactly ONE inline everyday action ("Transactions"), plus the
 			// ⋯ overflow. The balance figure itself is already click-to-edit for updates,
-			// and the explicit "Update value/balance" action lives in the menu (C412), so
+			// and the explicit "Update value/balance" action lives in the menu, so
 			// the resting row is a clean name → balance → [Transactions] [⋯] line instead
 			// of a wall of equal-weight buttons.
 			Div(css.Class("acct-row-actions"),
-				// 18 accounts render 18 "Transactions" buttons — the accessible name
-				// carries the account so they're distinguishable.
+				// Each row's Transactions button names its account, so the buttons stay
+				// distinguishable in a long list.
 				uiw.ToolButton(uiw.ToolButtonProps{
 					Label: uistate.T("nav.transactions"), Icon: icon.Receipt, Title: uistate.T("accounts.viewTxnsTitle"),
 					AriaLabel: uistate.T("nav.transactions") + " — " + a.Name, TestID: "acct-view-txns-" + a.ID,
@@ -730,31 +723,23 @@ func AccountRow(props accountRowProps) ui.Node {
 					Div(ClassStr(menu.PanelClass()), Role("menu"),
 						If(!a.Archived && !props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-default-household-"+a.ID), OnClick(setHouseholdDefault), uistate.T("defaultAccount.makeHousehold"))),
 						If(!a.Archived && props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-clear-household-default-"+a.ID), OnClick(clearHouseholdDefault), uistate.T("defaultAccount.clearHousehold"))),
-						If(!a.Archived && props.DefaultMemberID != "" && !containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-default-member-"+a.ID), OnClick(setMemberDefault), uistate.T("defaultAccount.makeMember", props.DefaultMemberName))),
-						If(!a.Archived && props.DefaultMemberID != "" && containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-clear-member-default-"+a.ID), OnClick(clearMemberDefault), uistate.T("defaultAccount.clearMember", props.DefaultMemberName))),
-						// C412: the demoted "Update value/balance" action leads the menu for
-						// the rows that actively need it (stale / valuation assets); it stamps
-						// the same set-balance editor the balance figure opens.
+						If(!a.Archived && props.DefaultMemberID != "" && !slices.Contains(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-default-member-"+a.ID), OnClick(setMemberDefault), uistate.T("defaultAccount.makeMember", props.DefaultMemberName))),
+						If(!a.Archived && props.DefaultMemberID != "" && slices.Contains(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-clear-member-default-"+a.ID), OnClick(clearMemberDefault), uistate.T("defaultAccount.clearMember", props.DefaultMemberName))),
+						// The "Update value/balance" action leads the menu for the rows that need it
+						// (stale rows and valuation assets). It opens the same set-balance editor as
+						// the balance figure.
 						If(showValueInMenu, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
-						// Edit leads the menu — the most common of the demoted actions. (The
-						// everyday balance update stays inline / on the figure; Edit covers the
-						// rarer name/type/attribute changes.) Available on archived rows too,
-						// matching the prior inline behavior.
+						// Edit leads the rest of the menu, as the most common of these actions. Balance
+						// updates stay on the figure; Edit covers the rarer name, type and attribute
+						// changes. It is also available on archived rows.
 						Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
-						// C1: reconcile-to-statement only where statements + transactions exist —
-						// a valuation account (property/vehicle/investment/…) uses Update value.
-						//
-						// C685: and only where the account HAS a statement. A utility or HOA
-						// shell is not a valuation account, so it used to be offered the full
-						// reconcile dialog — where a person could tick rows, post an
-						// adjustment and record reconciliation history against an account
-						// nobody sends a statement for, producing exactly the cleared figure
-						// the row now hides. Offering an action whose result the app then
-						// refuses to show is worse than offering neither.
+						// Reconcile is offered only for reconcilable account types, never for valuation
+						// types, which use Update value instead. Offering it on an account whose cleared
+						// figure the row hides would be worse than offering nothing.
 						If(!a.Archived && !isValuationType(a.Type) && a.Type.IsReconcilable(), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
-						// C2: money moves FROM liquid cash — a property or 401(k) row doesn't
-						// offer an outgoing transfer. (The page-level Transfer money picks any
-						// eligible source.) C9: one name for the action everywhere.
+						// Money moves out of liquid cash, so a property or 401(k) row does not offer a
+						// transfer. The page-level Transfer money action picks any eligible source. The
+						// action has one name everywhere.
 						If(!a.Archived && earmarkEligibleType(a.Type), Button(css.Class("add-item"), Type("button"), Role("menuitem"),
 							Attr("data-testid", "transfer-start-btn-"+a.ID), Title(uistate.T("accounts.transferWhen")), OnClick(startTransfer),
 							uistate.T("accounts.transferMoney"))),
@@ -764,22 +749,21 @@ func AccountRow(props accountRowProps) ui.Node {
 						// Archive/Delete, not amid everyday money actions.
 						Button(css.Class("add-item"), Type("button"), Role("menuitem"), Title(uistate.T("creds.menuItemTitle")), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
 						Button(css.Class("add-item"), Type("button"), Role("menuitem"), Title(archTitle), OnClick(arch), archLabel),
-						// Delete stays in the menu as the last, destructive item (standing rule:
-						// delete never sits exposed on a row).
+						// Delete stays in the menu as the last, destructive item. It is never exposed on
+						// the row.
 						Button(css.Class("add-item danger"), Type("button"), Role("menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), AriaLabel(uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
 					),
 				),
 			),
 		),
 		detailsNode,
-		// SM-5 / SM-11 / SM-16: the account's OWN findings, stated inline. The dot
-		// above says something is true about this row; these say what, and let it be
-		// acted on. Gated at Standard density and up — at Minimal the row keeps only
-		// the dot it has always had.
+		// The account's own findings, stated inline. The dot above says something is true
+		// about this row; these lines say what, and let it be acted on. They show at
+		// Standard density and up. At Minimal, the row keeps only the dot.
 		smartRowInsightsFor(props.SmartSettings, props.SmartByEntity, a.ID, accountRowSmartCodes),
-		// SM-6: the repeats found on THIS account, each with the one action worth
-		// having on them. Collapsed by default — the row is already dense, and this
-		// is opt-in detail, exactly like the budget card's drivers disclosure.
+		// The repeats found on this account, each with the one action worth having on
+		// them. Collapsed by default: the row is already dense, and this is opt-in detail,
+		// like the budget card's drivers disclosure.
 		ui.CreateElement(accountRecurringPanel, accountRecurProps{Account: a}),
 	)
 }
@@ -787,16 +771,14 @@ func AccountRow(props accountRowProps) ui.Node {
 // reconcileTxnRowProps holds the data and callback for a single uncleared
 // transaction row inside the reconcile-to-statement panel.
 type reconcileTxnRowProps struct {
-	Txn      domain.Transaction
-	Currency string
+	Txn domain.Transaction
 	// OnToggle is a plain func — never an On* hook — so the parent can pass it
 	// into MapKeyed without violating the no-On*-in-loop rule (CLAUDE.md §gotchas).
 	OnToggle func(domain.Transaction)
 }
 
-// ReconcileTxnRow renders a single uncleared transaction for the reconcile
-// panel. It owns its own OnClick hook (satisfying the per-row component rule),
-// and exposes a "Mark cleared" button whose label doubles as a status badge.
+// ReconcileTxnRow renders a single uncleared transaction for the reconcile panel. It
+// owns its click handler, and its "Mark cleared" button label doubles as a status badge.
 func ReconcileTxnRow(props reconcileTxnRowProps) ui.Node {
 	t := props.Txn
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t) }))

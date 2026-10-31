@@ -2,11 +2,11 @@
 
 //go:build js && wasm
 
-// The repeats detected on ONE account (SM-6).
+// The repeats detected on one account.
 //
-// The A7 detector already reports "6 recurring charges on Joint Checking" and
+// The recurring-charge detector already reports "6 recurring charges on Joint Checking" and
 // links to /subscriptions, where the account context is gone and the list is the
-// household's, not this account's. SM-6 is the other half: the repeats found HERE,
+// household's, not this account's. This panel is the other half: the repeats found here,
 // each with the one action worth having on them — start tracking it as a recurring
 // commitment.
 //
@@ -34,7 +34,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// acctRecurCode gates SM-6. A7 is "Recurring-charge detection" — a Free feature,
+// acctRecurCode is the feature code for recurring-charge detection. It is free, so
 // so the panel needs no provider and defaults on.
 const acctRecurCode = "SMART-A7"
 
@@ -47,15 +47,14 @@ type accountRecurProps struct {
 	Account domain.Account
 }
 
-// accountRecurringPanel renders the collapsed "N charges here repeat" disclosure.
-// Its own component: it owns the disclosure state, and the discovery run stays
-// lazy behind it.
-// recurSlot is the empty line a row keeps when it has no recurring charges, so every row is the
-// same height whether or not it has some.
+// recurSlot is the empty line a row keeps when it has no recurring charges, so every row
+// is the same height whether or not it has some.
 func recurSlot() ui.Node {
 	return Div(css.Class("acct-recur acct-recur-empty"), Attr("aria-hidden", "true"))
 }
 
+// accountRecurringPanel renders the collapsed "N charges here repeat" disclosure. It is its
+// own component: it owns the disclosure state, and the discovery run stays lazy behind it.
 func accountRecurringPanel(props accountRecurProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	expanded := ui.UseState(false)

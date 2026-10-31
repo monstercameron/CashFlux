@@ -96,7 +96,7 @@ func registerAcctDetails() {
 		prop("width", "auto"),
 		prop("align-self", "flex-start"),
 	)
-	// The 90-day balance figure: line + caption on one baseline-aligned row.
+	// The 90-day balance sparkline and its figure sit on one row, centred vertically.
 	rule(".acct-spark-fig",
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),

@@ -20,21 +20,22 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// Accounts is the widgetized accounts surface. Like /transactions, the page is a
-// thin SURFACE HOST: it builds one engine RenderCtx over the live account set and
-// renders a fixed set of widget specs through the same spec/render pipeline the
-// dashboard uses (safeRenderSpec). Every visible block is its own engine tile —
+// Accounts is the accounts page. Like /transactions, the page is a thin surface host:
+// it builds one engine RenderCtx over the live account set and renders a list of
+// widget specs through the same spec/render pipeline the dashboard uses
+// (safeRenderSpec). Each visible block is its own engine tile:
 //
 //   - acct-welcome  (Native): first-run load-sample CTA (only when there are no accounts)
 //   - acct-summary  (Native): net-worth hero + assets/liabilities + month-to-date trend
 //   - acct-toolbar  (Native): search, type/archived filters, chips, transfer/mark-all/FX actions
 //   - acct-list     (Native): the owner-scoped, filtered account rows (AccountRow), with an All/Assets/Liabilities toggle
 //   - acct-archived (Native): archived accounts (when "show archived" is on and any exist)
+//   - acct-formula  (Native): account metrics formulas (when the Formulas toggle is on)
 //
 // The page-level "Transfer money" action opens a shell-root flip modal
 // (app.AccountTransferHost) rather than an inline tile, consistent with the account
 // row editors. The tiles share the search/type filter through a uistate atom, so no
-// tile embeds another — the host just decides which specs are present and the engine
+// tile embeds another. The host only decides which specs are present, and the engine
 // renders each.
 func Accounts() ui.Node {
 	app := appstate.Default
@@ -47,10 +48,10 @@ func Accounts() ui.Node {
 	// flow through these atoms.
 	_ = uistate.UseDataRevision().Get()
 
-	// AC17: on entering /accounts, reconcile the document-expiry reminder tasks
-	// against the current document set — creates any newly-due renewal nudge and
-	// auto-resolves any whose document has since been renewed. Runs on mount only
-	// (per-mutation reconciles also happen from accounts_docs.go on attach/remove).
+	// On entering /accounts, reconcile the document-expiry reminder tasks against the
+	// current document set. This creates any newly due renewal nudge and resolves any
+	// whose document has since been renewed. It runs on mount only; per-change
+	// reconciles happen in accounts_docs.go when a document is attached or removed.
 	ui.UseEffect(func() func() {
 		if created, resolved, err := app.ReconcileDocExpiryTasks(time.Now(), docexpiry.DefaultLeadDays); err == nil && (created > 0 || resolved > 0) {
 			uistate.BumpDataRevision()
@@ -72,7 +73,7 @@ func Accounts() ui.Node {
 	activeMemberID := acctActiveMemberID()
 	_, archived := accountview.Assets(accounts, accountSnapshot(app).Balances, rates, base, activeMemberID)
 
-	// The engine render context: the live data every tile body reads from (§6).
+	// The engine render context: the live data every tile body reads from.
 	rctx := widgetrender.RenderCtx{
 		App: app, Accounts: accounts, Txns: txns,
 		ScopedAccounts: accounts, ScopedTxns: txns,
@@ -80,9 +81,9 @@ func Accounts() ui.Node {
 		Start: time.Time{}, End: time.Now(),
 	}
 
-	// The placement set. Welcome appears only on an empty app; the transfer tile
-	// appears with the sub-view open; the archived tile appears when revealed and
-	// non-empty. Summary, toolbar, and list are always present.
+	// The placement set. Welcome appears only on an empty app, and the archived and
+	// formula tiles only when their toggles are on. Summary, toolbar and list are
+	// always present.
 	var specs []domain.WidgetSpec
 	if len(accounts) == 0 {
 		specs = append(specs, acctNativeSpec("acct-welcome"))
@@ -96,11 +97,11 @@ func Accounts() ui.Node {
 		specs = append(specs, acctNativeSpec("acct-formula"))
 	}
 
-	// Render each spec through the engine's per-widget error boundary, keyed on the
-	// spec id so inserting the transfer/archived tiles never shifts another tile's
-	// identity (its hooks stay aligned across renders). AC7 sweep-proposal cards
-	// sit above the bento (like the GL1 waterfall card on /goals) — a quiet
-	// preview-approve moment, present only when a sweep rule is due.
+	// Each spec renders through the engine's per-widget error boundary, keyed on the
+	// spec id so inserting the transfer or archived tile never shifts another tile's
+	// identity (its hooks stay aligned across renders). The sweep proposal cards sit
+	// above the bento, like the payday-waterfall card on /goals. They appear only when
+	// a sweep rule is due.
 	return Div(
 		ui.CreateElement(accountsSweepCards),
 		ui.CreateElement(surfaceTiles, surfaceTilesProps{Class: "bento-accounts", Specs: specs, Context: rctx}),

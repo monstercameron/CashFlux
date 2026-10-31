@@ -168,10 +168,13 @@ func globalEnterShortcutTargetIgnored(target js.Value) bool {
 	if tag.Type() == js.TypeString {
 		tagName = tag.String()
 	}
-	role := target.Call("getAttribute", "role")
 	roleName := ""
-	if role.Type() == js.TypeString {
-		roleName = role.String()
+	// The document itself is a legitimate key target (a synthetic keydown, or one before any
+	// element has focus) and has no getAttribute, so check before calling it.
+	if target.Get("getAttribute").Type() == js.TypeFunction {
+		if role := target.Call("getAttribute", "role"); role.Type() == js.TypeString {
+			roleName = role.String()
+		}
 	}
 	inMenuOrDialog := false
 	if target.Get("closest").Type() == js.TypeFunction {

@@ -17,16 +17,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// accounts_sweep_card.go is the UI shell for AC7 sweep-rule proposals. It mirrors
-// the GL1 payday-waterfall card exactly (goals_waterfall.go): a quiet,
-// preview-approve moment that appears on /accounts when a sweep rule's source
-// account is over its keep amount. All computation lives in the tested
-// internal/sweep + appstate.SweepProposals; approving runs the existing transfer
-// flow (CreateTransferPair) and stamps the rule handled — never auto-committed.
+// The sweep cards are the UI for sweep-rule proposals. A proposal appears on
+// /accounts when a rule's source account holds more than its keep amount. The card
+// follows the same pattern as the payday-waterfall card on /goals (goals_waterfall.go):
+// a quiet preview-and-approve moment. The math lives in internal/sweep and
+// appstate.SweepProposals. Approving runs the usual transfer flow
+// (CreateTransferPair) and marks the rule handled. Nothing moves without approval.
 
-// accountsSweepCards renders one preview-approve card per due sweep proposal, or
-// Fragment() when none is due. Each card is its own component so its
-// approve/dismiss hooks stay at stable render positions.
+// accountsSweepCards renders one card per due sweep proposal, or Fragment() when none
+// is due. Each card is its own component so its approve and dismiss hooks keep stable
+// positions.
 func accountsSweepCards() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -44,7 +44,6 @@ func accountsSweepCards() ui.Node {
 	}
 	cards := make([]ui.Node, 0, len(proposals))
 	for _, p := range proposals {
-		p := p
 		cards = append(cards, ui.CreateElement(accountsSweepCard, accountsSweepCardProps{
 			Proposal: p,
 			FromName: nameOf[p.SourceAccountID],
@@ -60,8 +59,8 @@ type accountsSweepCardProps struct {
 	ToName   string
 }
 
-// accountsSweepCard renders one sweep proposal. Approve runs the transfer;
-// dismiss stamps the rule so it won't re-propose until the next cadence.
+// accountsSweepCard renders one sweep proposal. Approve runs the transfer; dismiss
+// marks the rule handled so it does not propose again until its next cadence.
 func accountsSweepCard(props accountsSweepCardProps) ui.Node {
 	p := props.Proposal
 	hidden := ui.UseState(false)

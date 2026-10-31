@@ -13,8 +13,8 @@ import (
 )
 
 // acctHeadline is the accounts page summary, built on the shared PageHeadline. Net
-// worth leads, with its change this month; assets and liabilities follow as facts.
-// Liabilities still link through to /debt.
+// worth leads, with its change this month. Assets and liabilities follow as facts,
+// and the liabilities figure links to /debt.
 func acctHeadline(netText, assetsText, liabilitiesText, tone string, delta money.Money, haveDelta bool, netTip, visual, footer ui.Node) ui.Node {
 	return uiw.PageHeadline(uiw.PageHeadlineProps{
 		Visual: visual,

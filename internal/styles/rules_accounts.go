@@ -2,11 +2,12 @@
 
 package styles
 
-// registerAccountsSurface emits the accounts-page refinements: the merged editor's
-// "update value" group and the readable, expandable notes line on each account row.
-// Registered from Register().
+// registerAccountsSurface emits the accounts-page rules: the account editor's value section,
+// the account row and its notes line, the account groups, the balance sparkline and the
+// sweep-rules add form. It also chains the reconcile-flow and stale-account rules.
+// Called from Register in install.go.
 func registerAccountsSurface() {
-	// --- merged editor: the "update value / balance" group at the top of the form ---
+	// --- account editor: the value group at the top of the form ---
 	// A subtly framed panel so the marquee account action (record a new value) reads as
 	// its own section, distinct from the account-detail fields below it.
 	rule(".acct-value-section",
@@ -77,7 +78,7 @@ func registerAccountsSurface() {
 		prop("overflow", "visible"),
 	)
 
-	// --- AC1: account groups (sections + subtotal header) ---
+	// --- account groups: sections with a subtotal header ---
 	rule(".acct-group",
 		prop("margin-bottom", "0.6rem"),
 	)
@@ -96,8 +97,9 @@ func registerAccountsSurface() {
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 
-	// --- AC2: balance sparkline ---
-	// A compact trend line under the account meta; muted so it supports, not competes.
+	// --- balance sparkline ---
+	// A compact trend line for the balance history, muted so it supports the figure rather
+	// than competing with it.
 	rule(".acct-spark",
 		prop("display", "block"),
 		prop("width", "120px"),
@@ -107,11 +109,11 @@ func registerAccountsSurface() {
 		prop("overflow", "visible"),
 	)
 
-	// --- account row redesign: calm, scannable hierarchy -----------------------------
-	// The row is now vertical: a strong PRIMARY line (name + balance + actions) over a
-	// quiet SECONDARY line (meta + a "Details" disclosure). Everything else folds into
-	// the details block, so the resting list reads name → balance and nothing competes.
-	// Override .row's horizontal flex — the account row stacks its head and details.
+	// --- account row: calm, scannable hierarchy ---
+	// The row stacks two lines. The primary line holds the name, the balance and the actions.
+	// The quiet secondary line holds the type and currency meta and the Details toggle.
+	// Everything else sits in the details panel, so the resting list reads name then balance.
+	// This overrides .row's horizontal flex, since the row stacks its head and details.
 	rule(".acct-row",
 		prop("flex-direction", "column"),
 		prop("align-items", "stretch"),
@@ -138,8 +140,8 @@ func registerAccountsSurface() {
 		prop("min-width", "0"),
 		prop("flex", "1"),
 	)
-	// Name line: the account name plus its status badges / institution chip, wrapping
-	// gracefully. The 0.5rem gap replaces the old per-badge inline margins.
+	// Name line: the account name with its status badges and institution chip. Items wrap
+	// when the row is narrow.
 	rule(".acct-row-name",
 		prop("display", "flex"),
 		prop("align-items", "center"),
@@ -155,7 +157,6 @@ func registerAccountsSurface() {
 		prop("gap", "0.6rem"),
 		prop("min-width", "0"),
 	)
-	// The Details toggle is a quiet link — small, dim, never louder than the meta.
 	// Every row reserves the recurring-charges line, so rows with and without charges match in height.
 	rule(".acct-recur",
 		prop("min-height", "calc(var(--type-14) * 1.6)"),
@@ -179,6 +180,7 @@ func registerAccountsSurface() {
 	rule(".acct-details-toggle[aria-expanded=\"true\"] .acct-details-chev",
 		prop("transform", "rotate(180deg)"),
 	)
+	// The Details toggle stays on one line.
 	rule(".acct-details-toggle",
 		prop("font-size", "var(--type-13)"),
 		prop("white-space", "nowrap"),
@@ -209,15 +211,10 @@ func registerAccountsSurface() {
 	ruleContentMax(contentGrid4, ".acct-row-actions",
 		prop("margin-left", "auto"),
 	)
-	// The revealed detail block's layout lives in rules_acctdetails.go; this file only sets its width.
-	rule(".acct-row-details",
-		prop("width", "100%"),
-	)
 
-	// --- sweep-rules add form: one field per line ------------------------------------
-	// A subtly framed section so the "add a rule" controls read as their own group,
-	// stacked label-over-control with standard field spacing (fixing the old cramped,
-	// wrapping horizontal row and the tall empty modal void).
+	// --- sweep-rules add form: one field per line ---
+	// A framed section that groups the add-a-rule controls. Each control stacks its label
+	// over the control, with standard field spacing.
 	rule(".sweep-add",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
@@ -227,23 +224,15 @@ func registerAccountsSurface() {
 		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "var(--bg-elev)"),
 	)
-	rule(".sweep-add-btn",
-		prop("width", "100%"),
-		prop("margin-top", "0.15rem"),
-	)
-	// Soften the autofocus ring: the modal moves focus to the first <select> on open,
-	// which fired the bright accent border/box-shadow even for a mouse user who never
-	// tabbed there. Drop the loud treatment for programmatic/mouse focus while keeping
-	// the strong keyboard ring (:focus-visible) untouched for accessibility.
+	// Mouse and programmatic focus on a select or field in the sweep-rules form gets a plain
+	// border and no glow. Keyboard focus (:focus-visible) keeps the strong accent ring.
 	rule("#sweep-rules-form select:focus:not(:focus-visible), #sweep-rules-form .field:focus:not(:focus-visible)",
 		prop("border-color", "var(--border)"),
 		prop("box-shadow", "none"),
 	)
 
-	// Guided reconcile-to-statement workflow refinements (sticky math header,
-	// standing explanation, "Mark all cleared" bulk row). Chained here so the
-	// shared install.go Register() list is untouched by this lane.
+	// The reconcile-to-statement flow rules (sticky math header, standing explanation,
+	// Mark all cleared row) and the stale-account rules (dot and summary line).
 	registerReconcileFlow()
-	// 2026-07-19 detail-polish lane 1: subdued stale dot + stale-summary line.
 	registerDetail1Accounts()
 }

@@ -23,17 +23,17 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// accounts_docs.go is the AC8 account-documents drawer (statements, contracts,
-// titles, payoff letters) plus AC17's expiry-reminder date on attach. A document
-// references a stored domain.Artifact (the same blob store receipts and goal images
-// use) via domain.AccountDocRef; the drawer only ever holds the metadata + join, the
-// bytes live once in the artifact store.
+// This file holds the account-documents drawer (statements, contracts, titles and
+// payoff letters) and the expiry-reminder date taken on attach. A document references a
+// stored domain.Artifact, the same blob store receipts and goal images use, through
+// domain.AccountDocRef. The drawer holds only the metadata and the join; the bytes live
+// once in the artifact store.
 
 // attachAccountDoc opens the file picker (PDF or image), stores the chosen file as an
-// Artifact, and appends a new AccountDocRef to the account (label + optional expiry).
-// It operates on the stored account so it survives independently of unsaved edits in
-// the row's other editors, then reconciles AC17's renewal-reminder tasks so a dated
-// attach immediately schedules (or the removal of a date clears) its nudge.
+// Artifact, and appends a new AccountDocRef to the account, with a label and an optional
+// expiry. It works on the stored account, so it is independent of unsaved edits in the
+// row's other editors. It then reconciles the renewal-reminder tasks, so a dated attach
+// schedules its nudge straight away, and removing a date clears it.
 func attachAccountDoc(accountID, label, expiryISO string, onErr func(string)) {
 	app := appstate.Default
 	if app == nil {
@@ -78,8 +78,8 @@ func attachAccountDoc(accountID, label, expiryISO string, onErr func(string)) {
 }
 
 // removeAccountDoc deletes one document reference (by artifact id) from an account
-// and reconciles the AC17 renewal-reminder tasks so a cleared document's nudge (if
-// any) resolves itself. The underlying artifact bytes are left to the blob GC.
+// and reconciles the renewal-reminder tasks, so a cleared document's nudge (if any)
+// resolves itself. The stored file bytes stay in the artifact store.
 func removeAccountDoc(accountID, artifactID string) {
 	app := appstate.Default
 	if app == nil {
@@ -108,12 +108,9 @@ func removeAccountDoc(accountID, artifactID string) {
 	uistate.PostNotice(uistate.T("accounts.documentRemoved"), false)
 }
 
-// reconcileDocExpiry brings the AC17 renewal-reminder tasks in line with the current
-// document set. Safe to call on every document mutation — it never spawns duplicates.
+// reconcileDocExpiry brings the renewal-reminder tasks in line with the current document
+// set. It is safe to call on every document change: it never spawns duplicates.
 func reconcileDocExpiry(app *appstate.App) {
-	if app == nil {
-		return
-	}
 	if _, _, err := app.ReconcileDocExpiryTasks(time.Now(), docexpiry.DefaultLeadDays); err != nil {
 		uistate.PostNotice(err.Error(), true)
 	}
@@ -124,10 +121,10 @@ type accountDocsDrawerProps struct {
 	Account domain.Account
 }
 
-// accountDocsDrawer renders the AC8 documents disclosure for one account row: a
+// accountDocsDrawer renders the documents disclosure for one account row: a
 // toggle naming how many documents are filed, and — expanded — the dated list (open /
 // remove each) plus an "Attach a document" mini-form with an optional label and an
-// optional AC17 expiry date. Its own component (its own hooks) so it slots into
+// optional expiry date. It is its own component with its own hooks, so it slots into
 // AccountRow at a stable position without disturbing the row's other toggles.
 func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 	a := props.Account

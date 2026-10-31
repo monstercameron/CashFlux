@@ -6,19 +6,17 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/ui"
-	"syscall/js"
-
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
 	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// In-app modal dialogs that replace the native window.prompt/confirm/alert (C42):
-// accessible, themed, keyboard-operable (Enter confirms, Esc/backdrop cancels).
-// The DialogHost (mounted once in the shell) renders the pending request and
-// captures its atom into uistate; the helpers below (and uistate.Prompt/ConfirmModal
-// for the screens package) open one.
+// In-app dialogs that replace the native window.prompt and window.confirm. Each is a titled
+// FlipPanel whose body scrolls in a modal-scroll region, with Cancel and the confirm action
+// pinned in a modal-foot bar. Escape and a click on the backdrop cancel. The uistate helpers
+// (ConfirmModal, PromptModal, PromptSecret) open a request; DialogHost, mounted once in the
+// shell, renders it.
 
 const dialogInputID = "cf-dialog-input"
 
@@ -30,19 +28,11 @@ func promptModal(message, def string, onResult func(string)) {
 	uistate.PromptModal(message, def, onResult)
 }
 
-func dialogInputValue() string {
-	el := js.Global().Get("document").Call("getElementById", dialogInputID)
-	if !el.Truthy() {
-		return ""
-	}
-	return el.Get("value").String()
-}
-
-// DialogHost renders the pending modal dialog. It always returns a stable root
-// element (empty when no dialog is open) so the framework has an anchor to update,
-// and calls its hooks unconditionally (hook order must be stable across renders).
-// It also captures the rule-draft atom so that SetRuleDraft (called before
-// navigation) notifies the correct subscriber.
+// DialogHost renders the pending dialog as a FlipPanel. It always returns a stable root
+// element (empty when no dialog is open) so the framework has an anchor to update, and calls
+// its hooks unconditionally (hook order must be stable across renders). It also captures the
+// rule-draft atom so that SetRuleDraft, which runs before navigation, notifies the right
+// subscriber.
 func DialogHost() uic.Node {
 	d := uistate.UseDialog()
 	uistate.CaptureDialog(d)
@@ -51,13 +41,21 @@ func DialogHost() uic.Node {
 	req := d.Get()
 	open := req != nil
 
+	// entry holds the prompt's text as the person types it. It is a ref rather than state,
+	// so typing does not re-render the dialog.
+	entry := uic.UseRef("")
+	// settled stops a request from being answered twice, so only the first answer counts.
+	settled := uic.UseRef(false)
+	onInput := uic.UseEvent(func(e uic.Event) { entry.Set(e.GetValue()) })
+
 	finish := func(ok bool) {
-		if req == nil {
+		if req == nil || settled.Get() {
 			return
 		}
+		settled.Set(true)
 		val := ""
 		if ok && req.Kind == uistate.DialogPrompt {
-			val = dialogInputValue()
+			val = entry.Get()
 		}
 		d.Set(nil)
 		if req.OnResult != nil {
@@ -65,73 +63,19 @@ func DialogHost() uic.Node {
 		}
 	}
 
-	// While a dialog is open: Enter confirms, Escape cancels, and focus moves in.
-	// Re-runs when the open state or request changes; a no-op while closed.
+	// Re-seed the entry and the answer guard whenever a new request opens, so a previous
+	// prompt's text or answer never carries over.
 	openSig := "closed"
 	if open {
 		openSig = string(req.Kind) + ":" + req.Message
 	}
-	uic.UseEffect(func() func() {
-		if !open {
-			return nil
+	uic.UseLayoutEffect(func() func() {
+		settled.Set(false)
+		entry.Set("")
+		if req != nil {
+			entry.Set(req.Default)
 		}
-		doc := js.Global().Get("document")
-		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
-			e := args[0]
-			switch e.Get("key").String() {
-			case "Enter":
-				if req.Kind == uistate.DialogPrompt {
-					e.Call("preventDefault")
-				}
-				finish(true)
-			case "Escape":
-				finish(false)
-			case "Tab":
-				// Focus trap (WCAG 2.4.3): cycle focus among the dialog's controls so
-				// Tab/Shift+Tab can't escape the modal.
-				focusables := js.Global().Get("document").Call("querySelectorAll",
-					".cf-dialog button, .cf-dialog input, .cf-dialog [tabindex]")
-				n := focusables.Get("length").Int()
-				if n == 0 {
-					return nil
-				}
-				first := focusables.Index(0)
-				last := focusables.Index(n - 1)
-				activeEl := js.Global().Get("document").Get("activeElement")
-				if e.Get("shiftKey").Bool() {
-					if activeEl.Equal(first) {
-						e.Call("preventDefault")
-						last.Call("focus")
-					}
-				} else if activeEl.Equal(last) {
-					e.Call("preventDefault")
-					first.Call("focus")
-				}
-			}
-			return nil
-		})
-		doc.Call("addEventListener", "keydown", cb)
-		focusID := "cf-dialog-confirm"
-		if req.Kind == uistate.DialogPrompt {
-			focusID = dialogInputID
-		} else if req.Destructive {
-			// Default focus to Cancel for destructive confirms so Enter can't
-			// accidentally trigger the danger action (WCAG SC 3.2.4).
-			focusID = "cf-dialog-cancel"
-		}
-		var fcb js.Func
-		fcb = js.FuncOf(func(js.Value, []js.Value) any {
-			fcb.Release()
-			if el := doc.Call("getElementById", focusID); el.Truthy() {
-				el.Call("focus")
-				if req.Kind == uistate.DialogPrompt {
-					el.Call("select")
-				}
-			}
-			return nil
-		})
-		js.Global().Call("setTimeout", fcb, 30)
-		return func() { doc.Call("removeEventListener", "keydown", cb); cb.Release() }
+		return nil
 	}, openSig)
 
 	if !open {
@@ -147,39 +91,57 @@ func DialogHost() uic.Node {
 		}
 	}
 	confirmCls := "btn btn-primary"
-	dialogRole := "dialog"
+	title := req.Title
 	if req.Destructive {
 		confirmCls = "btn btn-danger"
-		// alertdialog is announced with urgency by screen readers (ARIA APG).
-		dialogRole = "alertdialog"
-		// Auto-derive a title for destructive confirms that didn't supply one,
-		// so the heading is always present for aria-labelledby.
-		if req.Title == "" {
-			req.Title = uistate.T("dialog.deleteTitle")
+		// A destructive confirm with no title of its own is headed "Are you sure?".
+		if title == "" {
+			title = uistate.T("dialog.deleteTitle")
 		}
 	}
+	if title == "" {
+		// A prompt is headed by its question, so the question is not repeated in the body.
+		if req.Kind == uistate.DialogPrompt {
+			title = req.Message
+		} else {
+			title = uistate.T("action.confirm")
+		}
+	}
+	// The scrolling body holds the message, unless the title already says it, and the entry for
+	// a prompt.
+	fields := []any{}
+	if title != req.Message {
+		fields = append(fields, P(css.Class("cf-dialog-msg"), Attr("id", "cf-dialog-msg"), req.Message))
+	}
+	if req.Kind == uistate.DialogPrompt {
+		inputType := "text"
+		if req.Secret {
+			inputType = "password"
+		}
+		// FieldValue, not Value: the entry is read on confirm rather than bound to state, so a
+		// re-render of the host must not rewrite what has been typed.
+		fields = append(fields, Input(css.Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type(inputType),
+			Attr("aria-label", req.Message), Attr("autocomplete", "off"), ui.FieldValue(req.Default),
+			OnInputHandler(onInput)))
+	}
 
-	panel := Div(css.Class("cf-dialog"),
-		If(req.Title != "", H3(css.Class("cf-dialog-title"), Attr("id", "cf-dialog-title"), req.Title)),
-		P(css.Class("cf-dialog-msg"), req.Message),
-		If(req.Kind == uistate.DialogPrompt,
-			// FieldValue, not Value: this box is read on confirm rather than bound to
-			// state, but the dialog still re-renders around it (the host re-renders on
-			// any dialog-state change), and a Value option is rewritten on every one of
-			// those — over whatever has been typed since.
-			Input(css.Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
-				Attr("aria-label", req.Message), ui.FieldValue(req.Default))),
-		Div(css.Class("cf-dialog-actions"),
-			Button(css.Class("btn"), Type("button"), Attr("id", "cf-dialog-cancel"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
-			Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
+	// Cancel comes first in the pinned bar, so on a destructive confirm the safe choice is the
+	// first button in tab order.
+	return ui.FlipPanel(ui.FlipPanelProps{
+		Title:     title,
+		Width:     ui.FlipSmallW,
+		Height:    ui.FlipSmallH,
+		NoFooter:  true,
+		FlushBody: true,
+		// Escape and a click on the backdrop close the panel, which counts as a cancel.
+		OnSave:  func() { finish(true) },
+		OnClose: func() { finish(false) },
+		Back: Div(css.Class("cf-dialog-body"),
+			Div(append([]any{css.Class("modal-scroll")}, fields...)...),
+			Div(css.Class("modal-foot"),
+				Button(css.Class("btn"), Type("button"), Attr("id", "cf-dialog-cancel"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
+				Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
+			),
 		),
-	)
-	// Scrim is a sibling of the panel so clicking the panel never bubbles a cancel.
-	return Div(css.Class("cf-dialog-root"),
-		Div(css.Class("cf-dialog-backdrop"), Attr("role", dialogRole), Attr("aria-modal", "true"),
-			Attr("aria-labelledby", "cf-dialog-title"),
-			Div(css.Class("cf-dialog-scrim"), OnClick(func() { finish(false) })),
-			panel,
-		),
-	)
+	})
 }

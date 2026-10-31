@@ -23,8 +23,13 @@ import (
 // defensible assumption rather than a guess dressed as a forecast.
 const forwardHorizonDays = 90
 
+// forwardUnavailable is the status line shown when the forward projection cannot be computed.
+func forwardUnavailable(a domain.Account) ui.Node {
+	return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+}
+
 // accountForwardLine renders the next 90 days of an account's balance under the
-// history chart (C381): a dashed continuation of the curve, and — the part that
+// history chart: a dashed continuation of the curve, and, the part that
 // actually matters — the trough and the first day the balance would go negative.
 //
 // The history chart answers where the account has been. The question people
@@ -43,14 +48,14 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 		return Fragment()
 	}
 	if projectionErr != nil {
-		return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		return forwardUnavailable(a)
 	}
 	if !p.Known() {
 		return Fragment()
 	}
 	pts, err := p.Series(now, forwardHorizonDays)
 	if err != nil {
-		return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		return forwardUnavailable(a)
 	}
 	if len(pts) < 2 {
 		return Fragment()
@@ -64,7 +69,7 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 	end := money.New(p.End, a.Currency)
 	negAt, goesNegative, err := p.FirstNegative(now)
 	if err != nil {
-		return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		return forwardUnavailable(a)
 	}
 
 	// The reading comes first and the chart supports it. A shape alone leaves the

@@ -20,11 +20,14 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// accounts_institutions.go is the AC10 institution directory: a lightweight CRM for
-// "who do I bank with" that grounds the ★★ Multi-Institution Analytics feature with a
-// real entity (domain.Institution) instead of matching on the free-text
-// Account.Institution string. It also colors account rows by their institution and
-// feeds the AC16 emergency pack's support-contact roll-up.
+// This file is the institution directory: a small contact list answering "who do I
+// bank with". Each institution is a real entity (domain.Institution), so multi-
+// institution analysis does not depend on matching the free-text Account.Institution
+// string. Account rows are colored by their institution, and the emergency pack
+// lists the institutions' support contacts.
+
+// defaultSwatchColor is the color used when an institution has none set.
+const defaultSwatchColor = "#7c83ff"
 
 // sortedInstitutions returns the household's institutions sorted by display name, so
 // the manager list and the edit-form picker present a stable, predictable order.
@@ -39,19 +42,17 @@ func sortedInstitutions(app *appstate.App) []domain.Institution {
 	return insts
 }
 
-// institutionSwatchColor returns the color to render for an institution chip/stripe,
-// falling back to a calm neutral accent when the institution has none set.
-// institutionSwatchColor is the colour an institution is drawn in. The colour is stored
-// data, and it reaches a generated stylesheet class, so only a plain #rgb or #rrggbb value is
-// used; anything else falls back to the default colour rather than reaching the CSS.
+// institutionSwatchColor returns the color an institution's chip or stripe is drawn
+// in. The color is stored data that ends up in a generated style, so only a plain
+// #rgb or #rrggbb value is used; anything else falls back to defaultSwatchColor.
 func institutionSwatchColor(in domain.Institution) string {
 	if c := strings.TrimSpace(in.Color); isSwatchHex(c) {
 		return c
 	}
-	return "#7c83ff"
+	return defaultSwatchColor
 }
 
-// isSwatchHex reports whether s is a #rgb or #rrggbb colour.
+// isSwatchHex reports whether s is a #rgb or #rrggbb color.
 func isSwatchHex(s string) bool {
 	if len(s) != 4 && len(s) != 7 || s[0] != '#' {
 		return false
@@ -66,9 +67,9 @@ func isSwatchHex(s string) bool {
 	return true
 }
 
-// institutionChip renders a small colored tag with the institution's name — used on
-// the account row (AC10) so an account's institution reads at a glance without
-// opening the editor. Returns Fragment() when instID does not resolve.
+// institutionChip renders a small colored tag with the institution's name, shown on
+// an account row so its institution reads at a glance without opening the editor.
+// Returns Fragment() when instID does not resolve.
 func institutionChip(instByID map[string]domain.Institution, instID string) ui.Node {
 	in, ok := instByID[instID]
 	if !ok {
@@ -89,12 +90,12 @@ type InstitutionsManagerFormProps struct {
 	OnDone func()
 }
 
-// InstitutionsManagerForm is the AC10 institution-directory modal body: a list of
-// every institution (name, color, account count) with Edit/Delete, plus "Add
-// institution". Editing/adding swaps in institutionEditForm, keyed on the target id
-// so it remounts fresh (its useState seeds from the target) each time the selection
-// changes — this component itself never unmounts while the modal is open, so its own
-// editingID toggle state is the only thing that needs to persist across that swap.
+// InstitutionsManagerForm is the institution-directory modal body: a list of every
+// institution (name, color, account count) with an Edit button, plus "Add
+// institution". Editing or adding swaps in institutionEditForm, keyed on the target
+// id so it remounts fresh (its state seeds from the target). This component stays
+// mounted while the modal is open, so editingID is the only state that carries
+// across the swap.
 func InstitutionsManagerForm(props InstitutionsManagerFormProps) ui.Node {
 	editingID := ui.UseState("") // "" = list view; "new" or an institution id = edit sub-form
 
@@ -147,9 +148,8 @@ type institutionListRowProps struct {
 	OnEdit       func(string) // plain func — never an On* hook — safe inside MapKeyed
 }
 
-// institutionListRow is one institution row in the directory list. Its own component
-// so the Edit click hook stays stable across a variable-length institution list
-// (CLAUDE.md §gotchas — never an On* hook inside a loop).
+// institutionListRow is one institution row in the directory list. It is its own
+// component so the Edit click hook keeps a stable position in a variable-length list.
 func institutionListRow(props institutionListRowProps) ui.Node {
 	in := props.Inst
 	edit := ui.UseEvent(Prevent(func() { props.OnEdit(in.ID) }))
@@ -266,7 +266,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 
 	swatch := colorS.Get()
 	if swatch == "" {
-		swatch = "#7c83ff"
+		swatch = defaultSwatchColor
 	}
 
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "institution-edit-form"), OnSubmit(save),

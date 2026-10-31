@@ -23,19 +23,20 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// --- grouping model (AC1) --------------------------------------------------------
+// --- grouping ---------------------------------------------------------------------
 
 // acctGroupSection is one rendered section on the /accounts list: a group header
 // (empty ID = the default "Ungrouped" section) plus the member accounts, already
 // filtered to the visible set, with the group's net subtotal in the base currency.
 type acctGroupSection = accountview.GroupSection
 
-// groupSections uses the shared account snapshot so grouping adds no ledger scans.
+// groupSections splits the visible accounts into group sections. It reuses the shared
+// account snapshot, so grouping adds no ledger scans.
 func groupSections(shown []domain.Account, groups []domain.AccountGroup, balances map[string]money.Money, rates currency.Rates, base string) []acctGroupSection {
 	return accountview.Groups(shown, groups, balances, rates, base)
 }
 
-// --- collapsible group sections (C412) -------------------------------------------
+// --- collapsible group sections ---------------------------------------------------
 
 // ungroupedCollapseID is the stable sentinel key for the "Ungrouped" catch-all,
 // whose group ID is the empty string; used so its collapsed state persists too.
@@ -70,12 +71,11 @@ func toggleAcctGroupCollapsed(groupID string) {
 	uistate.BumpDataRevision()
 }
 
-// acctGroupHeader renders a group's header row: a collapse/expand toggle (C412)
-// wrapping its name + member count, a net subtotal, and — for a real group
-// (non-empty ID) — an edit affordance that opens the group flip modal. Its own
-// component so the toggle/edit click hooks are stable across a variable list of
-// groups; the Collapsed prop is threaded so the memoized header re-renders when
-// the section's collapsed state changes.
+// acctGroupHeader renders a group's header row: a collapse/expand toggle wrapping
+// its name and member count, a net subtotal, and, for a real group (non-empty ID),
+// an edit button that opens the group editor. It is its own component so the click
+// hooks stay stable across a variable list of groups. The Collapsed prop is passed
+// through so the memoized header re-renders when the collapsed state changes.
 type acctGroupHeaderProps struct {
 	Section   acctGroupSection
 	Collapsed bool
@@ -119,10 +119,10 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	return Div(css.Class("acct-group-header", tw.Flex, tw.ItemsCenter, tw.Gap2),
 		Role("heading"), Attr("aria-level", "3"),
 		AriaLabel(uistate.T("accounts.groupRowAria", name)),
-		// The name is the collapse toggle: a wide, keyboard-reachable target that
-		// discloses/hides the section's rows. aria-expanded reflects the open state.
-		// Styled inline as bare text-with-a-chevron (no stylesheet dependency) so it
-		// reads as a section header rather than a default UA button.
+		// The whole label (chevron, name and count) is the collapse toggle: a wide,
+		// keyboard-reachable target that shows or hides the section's rows.
+		// aria-expanded reflects the open state. It is styled inline as bare text with a
+		// chevron so it reads as a section header rather than a default button.
 		Button(css.Class("acct-group-toggle", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			css.Class(css.New(css.Bg(css.Color("transparent")), css.BorderStyle(css.LineNone), css.Padding(css.Length("0")), css.Margin(css.Length("0")), tw.CursorPointer, css.TextColor(css.Color("var(--text)")), tw.TextLeft)),
 			Attr("data-testid", toggleTestID), Title(toggleTitle),
@@ -142,7 +142,7 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	)
 }
 
-// --- balance sparkline (AC2) + flow figures (AC9) --------------------------------
+// --- balance sparkline and flow figures -------------------------------------------
 
 // sparklineW / sparklineH are the fixed inline-SVG geometry for a row sparkline.
 const sparklineW, sparklineH = 120.0, 24.0
@@ -158,10 +158,10 @@ func seriesFlat(series []int64) bool {
 	return true
 }
 
-// sparklineFigure renders a balance series as a captioned inline-SVG polyline
-// (AC2) — no chart library. ariaLabel names the series for screen readers and
-// caption names the line beneath it, so the 120×24 polyline reads as a designed
-// figure rather than a rendering glitch. Fewer than two points renders nothing.
+// sparklineFigure renders a balance series as a captioned inline-SVG polyline, with no
+// chart library. ariaLabel names the series for screen readers, and caption is shown
+// beneath it so the small line reads as a designed figure. Fewer than two points
+// renders nothing.
 func sparklineFigure(a domain.Account, series []int64, ariaLabel, caption string) ui.Node {
 	if len(series) < 2 {
 		return Fragment()
@@ -182,9 +182,8 @@ func sparklineFigure(a domain.Account, series []int64, ariaLabel, caption string
 	)
 }
 
-// accountSparkline renders the account's 90-day balance series as a captioned
-// inline-SVG polyline (AC2). Kept for the default (no-range) case so its output
-// is byte-identical to before the range picker existed.
+// accountSparkline renders the account's 90-day balance series as a captioned sparkline.
+// It is the plain figure used when the account has no range picker.
 func accountSparkline(a domain.Account, series []int64) ui.Node {
 	label := uistate.T("accounts.sparklineAria", a.Name)
 	if seriesFlat(series) {
@@ -194,11 +193,11 @@ func accountSparkline(a domain.Account, series []int64) ui.Node {
 }
 
 // accountBalanceChart is the account-detail balance chart with an optional range
-// picker (C413): 90 days / 12 months / all. When hasRange is false (an account
-// with no history beyond 90 days) it renders exactly the plain 90-day sparkline
-// so nothing regresses. Otherwise a small segmented picker sits above the figure
-// and switches the drawn window; sel is the selected range key ("90d"/"12m"/"all")
-// and onSelect (a plain func, safe here) updates the row's per-row range state.
+// picker: 90 days, 12 months, or all. When hasRange is false (an account with no
+// history beyond 90 days) it renders the plain 90-day sparkline. Otherwise a small
+// segmented picker sits above the figure and switches the drawn window. sel is the
+// selected range key ("90d", "12m" or "all"), and onSelect (a plain func, safe here)
+// updates the row's range state.
 func accountBalanceChart(a domain.Account, s90, s12m, sall []int64, hasRange bool, sel string, onSelect func(string)) ui.Node {
 	if !hasRange {
 		return accountSparkline(a, s90)
@@ -224,19 +223,16 @@ func accountBalanceChart(a domain.Account, s90, s12m, sall []int64, hasRange boo
 			{Value: "all", Label: uistate.T("accountsRange.all"), TestID: "acct-range-all-" + a.ID},
 		},
 	})
-	// TODO(C381): overlay the forward balance projection on this chart (a dashed
-	// continuation past today, using acctproject.Projection). Deliberately out of this
-	// batch — this ranged figure is the clean seam it will hang off of.
 	return Div(css.Class("acct-spark-ranged"), Attr("data-testid", "acct-spark-ranged-"+a.ID),
 		Div(css.Class("acct-spark-range-picker"), picker),
 		sparklineFigure(a, series, aria, uistate.T(captionKey)),
 	)
 }
 
-// accountFlowFigures renders the account's this-period money-in / money-out / net as
-// a compact row line (AC9). Transfers are excluded from these figures (counted
-// separately), so no self-transfer masquerades as income or spending. Rendered only
-// when show is set and there was any activity this period.
+// accountFlowFigures renders the account's money in, money out and net for this period
+// as a compact row line. Transfers are left out, so a move between your own accounts
+// never looks like income or spending. It renders only when show is set and there was
+// activity this period.
 func accountFlowFigures(a domain.Account, f accountflow.Flow, show bool) ui.Node {
 	if !show || (f.In.Amount == 0 && f.Out.Amount == 0) {
 		return Fragment()
@@ -268,7 +264,7 @@ func flowFigure(class, label, amount, tone string) ui.Node {
 	)
 }
 
-// --- group editor flip modal (AC1) -----------------------------------------------
+// --- group editor -----------------------------------------------------------------
 
 type groupAccountToggleProps struct {
 	Account  domain.Account
@@ -298,10 +294,10 @@ type AccountGroupsFormProps struct {
 	OnDone func()
 }
 
-// AccountGroupsForm is the create/edit account-group flip-modal body (AC1): a name
-// field and a checkable list of accounts to include, plus a Delete action when
-// editing. Saving upserts the group (an account belongs to one group, so selecting
-// it here moves it out of any other) and closes; deleting just ungroups its accounts.
+// AccountGroupsForm is the create/edit account-group modal body: a name field and a
+// checkable list of accounts to include, plus a Delete action when editing. Saving
+// upserts the group. An account belongs to one group, so selecting it here moves it
+// out of any other group. Deleting a group only ungroups its accounts.
 func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 	app := appstate.Default
 	var accounts []domain.Account
