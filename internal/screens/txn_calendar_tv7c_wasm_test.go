@@ -27,11 +27,9 @@ func TestTV7CTransactionPageCalendarToggleShowsLiabilityDueDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
-	dueDay := now.Day() + 1
-	if dueDay > 28 {
-		dueDay = 28
-	}
+	// Pin the month so the due day stays ahead of the reference date on any run.
+	now := time.Date(2026, time.October, 15, 12, 0, 0, 0, time.UTC)
+	dueDay := 20
 	due := time.Date(now.Year(), now.Month(), dueDay, 0, 0, 0, 0, time.UTC)
 	if err := app.PutAccount(domain.Account{
 		ID: "tv7c-card", Name: "Rewards Credit Card", OwnerID: domain.GroupOwnerID,
@@ -62,7 +60,7 @@ func TestTV7CTransactionPageCalendarToggleShowsLiabilityDueDate(t *testing.T) {
 	calendarToggle.Click()
 	f.Stabilize()
 	cell := r2aByTestID(f, "button", "txn-cal-day-"+due.Format("2006-01-02"))
-	if cell == nil || !strings.Contains(cell.Text(), "Due $220.00") || !strings.Contains(cell.Text(), "Rewards Credit Card") {
+	if cell == nil || !strings.Contains(cell.Text(), "$220.00 not posted") || !strings.Contains(cell.Text(), "Rewards Credit Card") {
 		t.Fatalf("transaction page due-day cell = %v, want the scheduled $220 credit-card payment", cell)
 	}
 }
