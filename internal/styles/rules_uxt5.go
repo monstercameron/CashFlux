@@ -27,12 +27,10 @@ func registerUXT5() {
 	rule(".txn-row-info:hover, .txn-row-info:focus-visible",
 		background("var(--hover)"), color("var(--text)"),
 	)
+	// The popover's card is the shared overlay surface, so this only lays out its contents in flow.
 	rule(".txn-row-info-popover",
-		position("absolute"), right("0"), top("calc(100% + 4px)"), zIndex("var(--z-cell)"),
 		display("flex"), flexDirection("column"), gap(".35rem"),
-		width("max-content"), padding(".5rem"), border("1px solid var(--border)"),
-		borderRadius("var(--radius-lg)"), background("var(--bg-elev)"),
-		boxShadow("0 8px 24px rgba(0,0,0,.22)"),
+		width("max-content"), maxWidth("22rem"), padding(".5rem"),
 	)
 	rule(".txn-transfer-category",
 		display("block"), maxWidth("100%"), overflow("hidden"),
