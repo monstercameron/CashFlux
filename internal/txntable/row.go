@@ -206,18 +206,18 @@ func DeriveRow(c RowContext, in RowInput) Row {
 func rowInfo(t Translator, r Row, splitTooltip string) string {
 	info := ""
 	if r.FollowUpTotal > 0 {
-		key := "uxt5.openFollowUps"
 		if r.FollowUpOpen == 1 {
-			key = "uxt5.openFollowUp"
+			info = Info(info, t("uxt5.openFollowUp"))
+		} else {
+			info = Info(info, t("uxt5.openFollowUps", r.FollowUpOpen))
 		}
-		info = Info(info, t(key, r.FollowUpOpen))
 	}
 	if r.Receipts > 0 {
-		key := "uxt5.receipts"
 		if r.Receipts == 1 {
-			key = "uxt5.receipt"
+			info = Info(info, t("uxt5.receipt"))
+		} else {
+			info = Info(info, t("uxt5.receipts", r.Receipts))
 		}
-		info = Info(info, t(key, r.Receipts))
 	}
 	if r.AutoCategory {
 		key := "uxt5.autoAdded"

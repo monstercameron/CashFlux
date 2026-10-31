@@ -156,6 +156,9 @@ func Info(current, item string) string {
 	if current == "" {
 		return item
 	}
+	if strings.HasSuffix(strings.TrimSpace(current), ".") {
+		return current + " " + item
+	}
 	return current + ". " + item
 }
 
