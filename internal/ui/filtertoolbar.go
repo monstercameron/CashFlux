@@ -24,9 +24,9 @@ import (
 type Chip struct {
 	Key   string
 	Label string
-	// Class is an optional extra class on the chip. The transactions ledger uses it to mark the top
-	// bar's member perspective, which is not a page filter. Its ✕ clears the top bar, so the chip must
-	// look different from the page's own filter chips, or the reader cannot predict what each ✕ removes.
+	// Class is an optional extra class on the chip. The transactions ledger uses it for its lens
+	// chips (the member perspective and a budget drill-down). Their ✕ clears the top bar, not the
+	// page filters, so the chip must look different or the reader cannot predict what each ✕ removes.
 	Class string
 	// RemoveLabel overrides the toolbar's generic "Remove this filter: …" wording
 	// for this chip's ✕. A chip that is not a filter must not describe itself as
@@ -35,9 +35,9 @@ type Chip struct {
 }
 
 // FilterToolbarProps configures a FilterToolbar. The component is screen-agnostic:
-// callers supply the search wiring, the popover field controls, the active-filter
-// chips, and the handlers. Filters are expected to apply live (the popover is
-// close-only), so there is no Save.
+// callers supply the search wiring, the panel's field controls, the active-filter
+// chips, and the handlers. Filters apply live and the panel only closes, so there is
+// no Save.
 type FilterToolbarProps struct {
 	Search      string       // current search text
 	SearchLabel string       // aria-label + placeholder for the search box
@@ -54,13 +54,13 @@ type FilterToolbarProps struct {
 	// OnClearSearch clears the query at once, bypassing the debounce that typing uses. When it is nil
 	// the toolbar calls OnSearch("") instead, which is also immediate.
 	OnClearSearch func()
-	// FilterSheet presents this toolbar's fields in a fixed right-side overlay.
-	// It is opt-in so existing pages keep their inline disclosure layout.
+	// FilterSheet shows the panel as a sheet (the .filter-sheet styling) instead of an inline
+	// disclosure. It is opt-in, so existing pages keep the inline layout.
 	FilterSheet bool
 
 	FiltersLabel string   // trigger button text, e.g. "Filters"
 	FiltersTitle string   // popover title + trigger tooltip
-	FilterFields uic.Node // popover body: the labelled field controls
+	FilterFields uic.Node // panel body: the labelled field controls
 	// ActiveAriaLabel builds the trigger's accessible name from the active-filter count. The visible
 	// badge is aria-hidden, so without this a screen reader hears only "Filters" and never the count.
 	// The caller supplies a translated string such as "Filters — 3 active". Falls back to FiltersLabel
@@ -75,11 +75,10 @@ type FilterToolbarProps struct {
 	PreChips     []Chip
 	OnRemoveChip func(key string) // a chip's ✕
 	OnClearAll   func()           // the "clear all" link
-	// ClearAllLabel is the text for the clear-all link. An EMPTY label hides the
-	// link entirely — for when chips are showing but none of them is something this
-	// reset would remove (the transactions ledger's member-lens chip is cleared from
-	// the top bar, so a reset beside it would otherwise advertise "clear all 0
-	// filters" and do nothing).
+	// ClearAllLabel is the text for the clear-all link. An EMPTY label hides the link. Use that
+	// when chips are showing but none of them is something this reset would remove. The
+	// transactions ledger's lens chips are cleared from the top bar, so a reset beside them
+	// would advertise "clear all 0 filters" and do nothing.
 	ClearAllLabel string
 	RemoveLabel   string // aria-label prefix for a chip's ✕
 
@@ -105,8 +104,8 @@ func FilterToolbar(props FilterToolbarProps) uic.Node {
 const filterSearchDebounce = 250 * time.Millisecond
 
 // markSearchPending reveals the searching note, marks the search box busy and dims the results, all
-// within the keystroke. It works on the DOM directly, because the app's SearchPending flag is often
-// never rendered: raising it costs a re-render slower than the debounce it describes.
+// within the keystroke. It writes the DOM directly. Raising the SearchPending prop would cost
+// a full re-render, which is slower than the debounce the note describes.
 func markSearchPending(searchID, pendingID, resultsSelector string) {
 	doc := domDocument()
 	if !doc.Truthy() {
@@ -121,7 +120,7 @@ func markSearchPending(searchID, pendingID, resultsSelector string) {
 	setSearchStale(resultsSelector, true)
 }
 
-// clearSearchPending undoes markSearchPending. A render cannot do this itself. The vdom's last render
+// clearSearchPending undoes markSearchPending. A render cannot do this itself: its last output
 // already says idle, so it sees no change to write.
 func clearSearchPending(searchID, pendingID, resultsSelector string) {
 	doc := domDocument()
@@ -163,12 +162,9 @@ func setSearchStale(selector string, stale bool) {
 func filterToolbar(props FilterToolbarProps) uic.Node {
 	open := uic.UseState(false)
 	uid := uic.UseId()
-	// Escape closes the filter panel. The hook is registered unconditionally, never inside the If that
-	// renders the panel, so its position stays stable.
-	//
-	// The panel is an inline disclosure, not a modal, so the table stays visible beneath it. The
-	// trigger therefore says aria-expanded and aria-controls, not aria-haspopup="dialog", which would
-	// promise a modal. Escape dismisses the panel the way it dismisses any other popover.
+	// Escape closes the filter panel, from the trigger or from inside the panel. The hook is
+	// registered unconditionally, never inside the If that renders the panel, so its position
+	// stays stable.
 	onPanelKey := uic.UseEvent(func(e uic.KeyboardEvent) {
 		if e.GetKey() == "Escape" && open.Get() {
 			e.PreventDefault()
@@ -199,10 +195,9 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	uic.UseEffect(func() func() {
 		return func() { debounce.Flush(searchKey) }
 	}, searchKey)
-	// Unconditional handler for the search box's clear (×) so its hook sits at a stable
-	// position even though the button itself only renders when there's a query.
+	// clearSearchNow clears the query at once. It drops any pending debounced search first, so
+	// the old query cannot land after the clear.
 	clearSearchNow := func() {
-		// Drop the pending query first, so a debounced search does not land after the clear.
 		debounce.Flush(searchKey)
 		if props.OnClearSearch != nil {
 			props.OnClearSearch()
@@ -212,9 +207,11 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 			props.OnSearch("")
 		}
 	}
+	// onClear is registered here, not inside the If that renders the clear button, so its hook
+	// keeps a stable position.
 	onClear := uic.UseEvent(clearSearchNow)
-	// Escape is the keyboard equivalent of the clear button. It bypasses the debounce, so the old
-	// query cannot stay active after the field has been cleared.
+	// Escape clears the query, the keyboard equivalent of the clear button. It skips the debounce,
+	// so a pending typed query cannot apply after the clear.
 	onSearchKey := uic.UseEvent(func(e uic.KeyboardEvent) {
 		if e.GetKey() == "Escape" {
 			e.PreventDefault()
@@ -256,22 +253,20 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if props.ActiveAriaLabel != nil {
 		ariaLabel = props.ActiveAriaLabel(n)
 	}
-	// The Filters button is the reference ToolButton: a filter glyph, the label, and the active
-	// count as an accent badge. It stays highlighted while the panel is open.
+	// The Filters button is a ToolButton: a filter glyph, the label, and the active count as an
+	// accent badge. It stays highlighted while the panel is open.
 	badge := ""
 	if n > 0 {
 		badge = strconv.Itoa(n)
 	}
-	// The search region's busy state mirrors SearchPending, in the same string form used for
-	// aria-expanded.
-	searchBusy := "false"
+	// aria-busy mirrors SearchPending. The note's class carries the same state.
+	searchBusy := boolAttr(props.SearchPending)
 	pendingCls := "fctrl-pending is-idle"
 	if props.SearchPending {
-		searchBusy = "true"
 		pendingCls = "fctrl-pending"
 	}
-	// A disclosure, not a dialog: aria-expanded and aria-controls describe what this button does.
-	// aria-haspopup="dialog" would promise a modal that the inline panel never was.
+	// The panel is an inline disclosure, not a modal, so the table stays visible beneath it.
+	// aria-expanded and aria-controls describe that. aria-haspopup="dialog" would promise a modal.
 	trigger := ToolButton(ToolButtonProps{
 		Label: props.FiltersLabel, Icon: icon.Filter, Badge: badge, Active: n > 0, Open: open.Get(),
 		Title: ariaLabel, AriaLabel: ariaLabel,
@@ -308,23 +303,18 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		panelTitle = props.FiltersLabel
 	}
 	return Div(
-		// Standard two-row toolbar (every page): row 1 is the search field filling the
-		// line with the Filters trigger at its end; row 2 holds the remaining actions.
-		// Pages accrued many buttons, so a single wrapping row read as a ragged pile —
-		// this keeps search prominent and the actions on their own tidy line.
+		// Two rows. Row 1 holds the search field, the Filters trigger and the primary actions.
+		// Row 2 holds the remaining actions, so the buttons never wrap into a ragged line.
 		Div(css.Class("filter-toolbar"),
 			Div(css.Class("filter-toolbar-primary"),
-				// Unified search control: the shared .fctrl "control pill" (identical markup to
-				// the to-do page) — a leading magnifier, a borderless input, and a clear (×)
-				// that appears only when it holds a query — so every toolbar's search reads the
-				// same instead of a bare full-width field.
+				// The search box uses the shared .fctrl control style: a magnifier, a borderless input,
+				// and a clear button that shows only while a query is set.
 				Label(css.Class(searchCls),
 					Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-					// Field, not Input: the query this box is bound to is DEBOUNCED, so
-					// props.Search is deliberately several keystrokes behind the box. Letting
-					// the reconciler write it back meant the shared search — every list screen
-					// in the app — deleted characters mid-word, and the more the user typed
-					// the further behind the written-back value was.
+					// FieldValue, not Value: props.Search trails the typed text by several keystrokes,
+					// because the search is debounced. FieldValue carries the value as an attribute,
+					// so the reconciler never writes that trailing value back over the box. A
+					// write-back used to delete characters mid-word.
 					Input(css.Class("fctrl-input"), Type("text"), FieldValue(props.Search),
 						Attr("id", searchID), Attr("data-testid", "filter-toolbar-search"), Attr("aria-controls", pendingID),
 						Attr("role", "searchbox"), Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
@@ -456,8 +446,8 @@ func filterChip(props filterChipProps) uic.Node {
 	if props.Class != "" {
 		cls += " " + props.Class
 	}
-	// The ✕'s accessible name names the chip it removes ("Remove filter: Groceries"),
-	// so a screen-reader user hears which of several ✕s they are on.
+	// The ✕'s accessible name names the chip it removes, so a screen-reader user can tell
+	// several ✕s apart.
 	removeLabel := props.RemoveLabel
 	if props.Named && removeLabel != "" && props.Label != "" {
 		removeLabel = removeLabel + ": " + props.Label

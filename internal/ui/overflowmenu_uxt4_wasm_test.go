@@ -5,6 +5,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/monstercameron/GoWebComponents/v7/interop"
@@ -39,6 +40,7 @@ func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) 
 	order := func() []string {
 		var labels []string
 		for _, button := range f.AllByTag("button") {
+			// The linked submenu's item is also a menuitem. It is left out of the parent order.
 			if button.Attr("role") == "menuitem" && button.Attr("data-testid") != "uxt4-bill" {
 				labels = append(labels, button.Text())
 			}
@@ -48,13 +50,8 @@ func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) 
 	want := []string{"Split…", "Link to…", "Exclude", "Delete"}
 	assertLabels := func(got []string) {
 		t.Helper()
-		if len(got) != len(want) {
+		if !slices.Equal(got, want) {
 			t.Fatalf("parent menu items = %#v, want %#v", got, want)
-		}
-		for i := range want {
-			if got[i] != want[i] {
-				t.Fatalf("parent menu items = %#v, want %#v", got, want)
-			}
 		}
 	}
 	assertLabels(order())
@@ -73,22 +70,24 @@ func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) 
 	if got := buttonByTestID(f, "uxt4-delete").Attr("aria-label"); got != "" {
 		t.Fatalf("Delete accessible label = %q, want visible text only", got)
 	}
-	removeHeading, deleteButton := -1, -1
-	for i, node := range f.AllByTag("div") {
+	// The Remove section heading and the Delete button must both render.
+	removeHeading, deleteButton := false, false
+	for _, node := range f.AllByTag("div") {
 		if node.Text() == "Remove" && node.Attr("class") == "add-menu-section" {
-			removeHeading = i
+			removeHeading = true
 		}
 	}
-	for i, node := range f.AllByTag("button") {
+	for _, node := range f.AllByTag("button") {
 		if node.Attr("data-testid") == "uxt4-delete" {
-			deleteButton = i
+			deleteButton = true
 		}
 	}
-	if removeHeading < 0 || deleteButton < 0 {
+	if !removeHeading || !deleteButton {
 		t.Fatal("Delete's Remove separator or button is missing")
 	}
 }
 
+// buttonByTestID returns the first button with the given data-testid, or nil when there is none.
 func buttonByTestID(f *render.Fixture, id string) *render.QueryNode {
 	for _, node := range f.AllByTag("button") {
 		if node.Attr("data-testid") == id {

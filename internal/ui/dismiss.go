@@ -19,17 +19,21 @@ import (
 //     They do this only when focus is already inside the wrapper, so arrow keys are never
 //     taken from the page while the menu is merely open.
 //
-// A press inside the wrapper is recorded by the wrapper's own pointerdown listener, which is
-// attached only while the menu is open. The document listener runs after it, reads the
-// record and closes the menu only for a press that started outside. Targets are never
-// compared. Because the wrapper listener attaches after the opening click, that click cannot
-// close the menu it opened. The document listeners stay mounted and return early while the
-// menu is closed. They listen on the document rather than on a backdrop element, since a
-// backdrop would sit under the topbar's sticky header.
+// The wrapper has its own pointerdown listener, attached only while the menu is open, which
+// records that the press began inside. The document's pointerdown listener runs after it, reads
+// that record and closes the menu only for a press that began outside. Targets are never
+// compared. The menu opens on the click that follows a press, so the opening press has already
+// happened when the wrapper listener attaches, and it cannot close the menu it opened.
+//
+// The document listeners stay mounted for the life of the component and do nothing while the
+// menu is closed. They listen on the whole document, so a press anywhere on the page counts as
+// outside.
 //
 // DismissPopover is a custom hook: it calls UseLayoutEffect and UseDocumentEvent, so call it
 // unconditionally at a stable render position, like any hook.
 func DismissPopover(isOpen bool, wrapID string, onClose func()) {
+	// pressedInside is set by a press inside the wrapper. The document listener clears it on
+	// every press.
 	pressedInside := uic.UseRef(false)
 	uic.UseLayoutEffect(func() func() {
 		if !isOpen || wrapID == "" {
@@ -73,8 +77,8 @@ func DismissPopover(isOpen bool, wrapID string, onClose func()) {
 	})
 }
 
-// rovePopoverFocus moves focus among a popover's menu items for the arrow and Home/End keys,
-// when focus is already inside the popover.
+// rovePopoverFocus moves focus among a popover's menu items for the arrow and Home/End keys.
+// It does nothing unless focus is already inside the popover.
 func rovePopoverFocus(e uic.Event, wrapID string) {
 	wrap := domNode(wrapID)
 	if !wrap.Truthy() {

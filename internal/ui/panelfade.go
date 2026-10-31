@@ -14,13 +14,14 @@ import (
 // .fade-panel timing in the styles.
 const panelFadeDuration = 250 * time.Millisecond
 
-// UsePanelFade reports whether a panel should stay in the DOM. It is true while the
-// panel is open and for the fade-out after it closes, so closing can animate rather than
-// vanish. Reduced motion skips the fade, and the panel leaves at once. Call it
+// UsePanelFade reports whether a panel should stay in the DOM. It is true while the panel is
+// open and for the fade-out after it closes, so closing can animate rather than vanish. With
+// reduced motion there is no fade, so the panel is removed on the next timer tick. Call it
 // unconditionally at a stable render position.
 func UsePanelFade(open bool) bool {
 	mounted := uic.UseState(false)
 	reduced := uic.UsePrefersReducedMotion()
+	// Mark the panel as mounted as soon as it opens, so it is still in the DOM when it closes.
 	uic.UseEffect(func() func() {
 		if open {
 			mounted.Set(true)
@@ -41,8 +42,8 @@ func UsePanelFade(open bool) bool {
 	return open || mounted.Get()
 }
 
-// FadeClass is a class for content that fades and grows in when it opens, and fades out
-// when it closes. Pair it with UsePanelFade, which keeps the content mounted for the fade-out.
+// FadeClass returns the class list for content that fades in when it opens and fades out when
+// it closes. Pair it with UsePanelFade, which keeps the content mounted through the fade-out.
 func FadeClass(base string, open bool) string {
 	if open {
 		return base + " fade-panel"

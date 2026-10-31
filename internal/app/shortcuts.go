@@ -44,6 +44,8 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		key := e.Get("key").String()
+		// Enter is a page shortcut for the review surface and the transactions list. When focus is on
+		// a control that already uses Enter, the key is left to that control.
 		if key == "Enter" && globalEnterShortcutTargetIgnored(e.Get("target")) {
 			return nil
 		}
@@ -157,24 +159,19 @@ func wireKeyboardShortcuts() {
 	doc.Call("addEventListener", "keydown", onKeyDown)
 }
 
-// globalEnterShortcutTargetIgnored keeps Enter's transaction-edit shortcut out
-// of controls that already own Enter, including Import menu items and dialogs.
+// globalEnterShortcutTargetIgnored reports whether an Enter keydown on target is left to that
+// target. Enter is a page shortcut, so controls that already use Enter keep it: buttons, fields,
+// selects, links, menu items, and anything inside a menu or dialog.
 func globalEnterShortcutTargetIgnored(target js.Value) bool {
 	if target.IsNull() || target.IsUndefined() {
 		return false
 	}
-	tag := target.Get("tagName")
-	tagName := ""
-	if tag.Type() == js.TypeString {
-		tagName = tag.String()
-	}
+	tagName := jsString(target.Get("tagName"))
+	// The document is a valid key target (a synthetic keydown, or one before anything has focus).
+	// It has no getAttribute or closest, so each call is guarded.
 	roleName := ""
-	// The document itself is a legitimate key target (a synthetic keydown, or one before any
-	// element has focus) and has no getAttribute, so check before calling it.
 	if target.Get("getAttribute").Type() == js.TypeFunction {
-		if role := target.Call("getAttribute", "role"); role.Type() == js.TypeString {
-			roleName = role.String()
-		}
+		roleName = jsString(target.Call("getAttribute", "role"))
 	}
 	inMenuOrDialog := false
 	if target.Get("closest").Type() == js.TypeFunction {

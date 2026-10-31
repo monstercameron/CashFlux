@@ -12,15 +12,16 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// In-app dialogs that replace the native window.prompt and window.confirm. Each is a titled
-// FlipPanel whose body scrolls in a modal-scroll region, with Cancel and the confirm action
-// pinned in a modal-foot bar. Escape and a click on the backdrop cancel. The uistate helpers
-// (ConfirmModal, PromptModal, PromptSecret) open a request; DialogHost, mounted once in the
-// shell, renders it.
+// The in-app replacements for window.prompt and window.confirm. Each request is a FlipPanel
+// with a titled header, a scrolling modal-scroll body and a modal-foot bar holding Cancel and
+// the confirm button. Escape and a backdrop click cancel. The uistate helpers (ConfirmModal,
+// PromptModal, PromptSecret and their variants) queue a request, and DialogHost, mounted once
+// in the shell, renders the pending one.
 
+// dialogInputID is the DOM id of a prompt's text field.
 const dialogInputID = "cf-dialog-input"
 
-// confirmModal / promptModal are app-package aliases for the shared uistate helpers.
+// confirmModal and promptModal are the short names the app package uses for the uistate helpers.
 func confirmModal(message string, destructive bool, onResult func(bool)) {
 	uistate.ConfirmModal(message, destructive, onResult)
 }
@@ -28,11 +29,10 @@ func promptModal(message, def string, onResult func(string)) {
 	uistate.PromptModal(message, def, onResult)
 }
 
-// DialogHost renders the pending dialog as a FlipPanel. It always returns a stable root
-// element (empty when no dialog is open) so the framework has an anchor to update, and calls
-// its hooks unconditionally (hook order must be stable across renders). It also captures the
-// rule-draft atom so that SetRuleDraft, which runs before navigation, notifies the right
-// subscriber.
+// DialogHost renders the pending dialog as a FlipPanel, or an empty placeholder div when none
+// is open, so the shell always has a node to update. Its hooks run before that early return,
+// so the hook order is the same in every render. It also captures the rule-draft atom so that
+// SetRuleDraft can notify its subscriber.
 func DialogHost() uic.Node {
 	d := uistate.UseDialog()
 	uistate.CaptureDialog(d)
@@ -107,9 +107,9 @@ func DialogHost() uic.Node {
 			title = uistate.T("action.confirm")
 		}
 	}
-	// The scrolling body holds the message, unless the title already says it, and the entry for
-	// a prompt.
-	fields := []any{}
+	// The body shows the message unless the heading already is the message. It holds the
+	// text field for a prompt.
+	fields := []any{css.Class("modal-scroll")}
 	if title != req.Message {
 		fields = append(fields, P(css.Class("cf-dialog-msg"), Attr("id", "cf-dialog-msg"), req.Message))
 	}
@@ -118,26 +118,27 @@ func DialogHost() uic.Node {
 		if req.Secret {
 			inputType = "password"
 		}
-		// FieldValue, not Value: the entry is read on confirm rather than bound to state, so a
-		// re-render of the host must not rewrite what has been typed.
+		// FieldValue sets the starting text without binding it to state. The entry is read on
+		// confirm, so a re-render must not overwrite what the person has typed.
 		fields = append(fields, Input(css.Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type(inputType),
 			Attr("aria-label", req.Message), Attr("autocomplete", "off"), ui.FieldValue(req.Default),
 			OnInputHandler(onInput)))
 	}
 
-	// Cancel comes first in the pinned bar, so on a destructive confirm the safe choice is the
-	// first button in tab order.
+	// Cancel is first in the bar and in tab order, so on a destructive confirm the safe choice
+	// comes first.
 	return ui.FlipPanel(ui.FlipPanelProps{
 		Title:     title,
 		Width:     ui.FlipSmallW,
 		Height:    ui.FlipSmallH,
 		NoFooter:  true,
 		FlushBody: true,
-		// Escape and a click on the backdrop close the panel, which counts as a cancel.
+		// Enter reaches OnSave. Escape, a backdrop click and the header close button reach
+		// OnClose, which is a cancel. finish ignores every answer after the first.
 		OnSave:  func() { finish(true) },
 		OnClose: func() { finish(false) },
 		Back: Div(css.Class("cf-dialog-body"),
-			Div(append([]any{css.Class("modal-scroll")}, fields...)...),
+			Div(fields...),
 			Div(css.Class("modal-foot"),
 				Button(css.Class("btn"), Type("button"), Attr("id", "cf-dialog-cancel"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
 				Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),

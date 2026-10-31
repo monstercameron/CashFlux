@@ -6,9 +6,9 @@ package ui
 
 import uic "github.com/monstercameron/GoWebComponents/v7/ui"
 
-// MenuControl is what a popover menu renders from: whether it is open, whether it is still
-// on screen while it fades out, the flip classes the anchor picked for it, and the means to
-// open, close and toggle it.
+// MenuControl is what a popover menu renders from: whether it is open, whether it is on screen
+// (which includes the fade-out after it closes), the flip classes the anchor picked for it, and
+// the means to open, close and toggle it.
 type MenuControl struct {
 	Open      bool
 	Shown     bool
@@ -17,27 +17,27 @@ type MenuControl struct {
 	Set       func(bool)
 }
 
-// UseMenu owns a popover menu's state. It keeps the menu mounted for its fade-out, places it
-// beside its trigger, and closes it on Escape or on a press outside it. The overflow and
-// kebab menus are built on it, so they all open, close, place and stack the same way. Call it
+// UseMenu owns the state of a popover menu. The menu stays mounted through its fade-out, is
+// placed beside its trigger, and closes on Escape or on a press outside it. The overflow and
+// kebab menus both use it, so they open, close, place and stack the same way. Call it
 // unconditionally at a stable render position, with the id of the menu's wrapper.
 func UseMenu(id string) MenuControl {
 	open := uic.UseState(false)
-	mounted := UsePanelFade(open.Get())
+	shown := UsePanelFade(open.Get())
 	placement := uic.UseState("")
 	DismissPopover(open.Get(), id, func() { open.Set(false) })
 	anchorOverflowMenu(open.Get(), id, placement.Set)
 	return MenuControl{
 		Open:      open.Get(),
-		Shown:     open.Get() || mounted,
+		Shown:     shown,
 		Placement: placement.Get(),
 		Toggle:    func() { open.Set(!open.Get()) },
 		Set:       open.Set,
 	}
 }
 
-// PanelClass is the class of a menu's panel: the shared fade style and placement, plus
-// is-leaving while it fades out, or hidden-menu once it is off screen.
+// PanelClass returns the class list for a menu's panel: the shared fade style and the placement,
+// plus is-leaving while the panel fades out, or hidden-menu once it is off screen.
 func (m MenuControl) PanelClass() string {
 	class := "add-menu fade-panel" + m.Placement
 	switch {
@@ -50,8 +50,8 @@ func (m MenuControl) PanelClass() string {
 	return class
 }
 
-// WrapClass adds the class that lifts a row or tile above its neighbours while its menu is
-// on screen, so the menu is never painted under the next row.
+// WrapClass adds overflow-menu-open to base while the menu is on screen. That class lifts the
+// row or tile above its neighbours, so the menu is not painted under the next row.
 func (m MenuControl) WrapClass(base string) string {
 	if m.Shown {
 		return base + " overflow-menu-open"

@@ -5,6 +5,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/monstercameron/GoWebComponents/v7/interop"
@@ -42,12 +43,7 @@ func TestOverflowSubmenuFocusUsesWrapper(t *testing.T) {
 		t.Fatal("opening a submenu did not focus its first item")
 	}
 	want := []string{"parent-wrap", ".add-submenu", `[role="menuitem"]`}
-	if len(lookups) != len(want) {
+	if !slices.Equal(lookups, want) {
 		t.Fatalf("submenu lookup path = %#v, want %#v", lookups, want)
-	}
-	for i := range want {
-		if lookups[i] != want[i] {
-			t.Fatalf("submenu lookup path = %#v, want %#v", lookups, want)
-		}
 	}
 }

@@ -21,14 +21,14 @@ import (
 )
 
 // CredentialVaultHost is mounted at the shell root, beside AccountEditHost. It reads the
-// account-credentials atom and renders the encrypted credential vault for that account. It
-// lives in the app package because the encryption it relies on (encryptDataset, loadCredVault
-// and saveCredVault) lives there, not in screens. The vault has not had a security review yet,
-// so every credential modal shows a warning (see credWarningBanner).
+// account-credentials atom and shows the credential form for that account, or a gate when no
+// passcode is set. The encryption helpers (encryptDataset, loadCredVault, saveCredVault) live in
+// this package, so the host does too. Every credential modal shows a warning banner because the
+// vault has not been security-reviewed.
 func CredentialVaultHost() uic.Node {
 	idAtom := uistate.UseAccountCredentials()
-	// Every hook is declared before the first branch, so the hook count is the same in every
-	// state (closed, gated, open). Hooks must never run inside an event handler, which panics
+	// Every hook is declared before the first branch, so the hook count is the same in the
+	// closed, gated and open states. Hooks must never run inside an event handler, which panics
 	// the wasm app.
 	closeModal := func() { uistate.SetAccountCredentials("") }
 	gateCancel := uic.UseEvent(Prevent(closeModal))
@@ -42,8 +42,8 @@ func CredentialVaultHost() uic.Node {
 		return Fragment()
 	}
 
-	// Without an unlocked passcode nothing can be encrypted, so show a gate that sends the
-	// person to set one instead of the vault form.
+	// Without an unlocked passcode the vault cannot encrypt or decrypt anything, so show a gate
+	// that sends the person to set one instead of the form.
 	if !credVaultAvailable() {
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title: uistate.T("creds.title"), Width: uiw.FlipSmallW, Height: uiw.FlipSmallH, NoFooter: true, FlushBody: true, OnClose: closeModal,
@@ -76,8 +76,8 @@ func CredentialVaultHost() uic.Node {
 	})
 }
 
-// credWarningBanner is the prominent "not yet security-reviewed" notice shown at the
-// top of every credential modal.
+// credWarningBanner is the "not yet security-reviewed" warning at the top of every credential
+// modal.
 func credWarningBanner() uic.Node {
 	return Div(
 		Style(map[string]string{
@@ -90,7 +90,7 @@ func credWarningBanner() uic.Node {
 	)
 }
 
-// credField wraps a control in the shared .labeled-field shell (label over control).
+// credField puts a label over a control, in the shared .labeled-field shell.
 func credField(label string, control uic.Node) uic.Node {
 	return Label(css.Class("labeled-field"),
 		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
@@ -104,11 +104,11 @@ type credentialFormProps struct {
 	OnDone    func()
 }
 
-// credentialForm loads the account's decrypted credential on mount and lets the user
-// edit username / URL / notes and set-or-replace the password. The stored PASSWORD is
-// never placed in the DOM: it isn't loaded into the input, there is no reveal, and it
-// is only ever retrieved through the "Copy password" button, which re-auths against
-// the app passcode and writes it straight to the clipboard (never rendered).
+// credentialForm loads the account's decrypted credential on mount and lets the person edit the
+// username, login URL and notes, and set or replace the password. The stored password never
+// enters the DOM. The password input is only for a new password and is never pre-filled, and
+// there is no reveal. The stored password is copied only through the Copy password button, which
+// asks for the app passcode and then writes straight to the clipboard.
 func credentialForm(props credentialFormProps) uic.Node {
 	loading := uic.UseState(true)
 	errMsg := uic.UseState("")
@@ -119,8 +119,7 @@ func credentialForm(props credentialFormProps) uic.Node {
 	urlS := uic.UseState("")
 	notesS := uic.UseState("")
 	// storedPw holds the decrypted password in wasm memory only, never in a DOM node. Copy
-	// password writes it to the clipboard inside the passcode dialog's OK click, so it must
-	// already be in memory at that point.
+	// password needs it already in memory when the passcode dialog's OK click writes it.
 	storedPw := uic.UseState("")
 
 	onUser := uic.UseEvent(func(v string) { userS.Set(v) })
@@ -143,8 +142,8 @@ func credentialForm(props credentialFormProps) uic.Node {
 				LoginURL: strings.TrimSpace(urlS.Get()), Notes: notesS.Get(),
 				UpdatedAt: time.Now().Format(time.RFC3339),
 			}
-			// Keep the existing password unless the user typed a replacement — the stored
-			// password never has to surface in the UI to be preserved.
+			// Keep the existing password unless the person typed a replacement. The stored
+			// password never has to reach the UI to be kept.
 			if typed := newPassS.Get(); typed != "" {
 				c.Password = typed
 			} else if old, ok := v[props.AccountID]; ok {
@@ -187,8 +186,8 @@ func credentialForm(props credentialFormProps) uic.Node {
 			})
 		})
 	}))
-	// Copy password: re-authenticate with the app passcode, then write the stored
-	// password straight to the clipboard. Never shown, never put in the DOM.
+	// Copy password: re-authenticate with the app passcode, then write the stored password
+	// straight to the clipboard. It is never shown or put in the DOM.
 	copyPass := uic.UseEvent(Prevent(func() {
 		pw := storedPw.Get()
 		if pw == "" {
@@ -198,7 +197,7 @@ func credentialForm(props credentialFormProps) uic.Node {
 		promptReauth(func() { clipboardWriteSecret(pw) }) // write happens inside the re-auth OK gesture
 	}))
 
-	// Load the decrypted credential once on mount (re-runs if the account changes).
+	// Load the decrypted credential on mount, and again when the account changes.
 	uic.UseEffect(func() func() {
 		loadCredVault(func(v credVault, err error) {
 			if err != nil {
@@ -238,8 +237,8 @@ func credentialForm(props credentialFormProps) uic.Node {
 					Placeholder(uistate.T("creds.usernamePh")), OnInput(onUser), uiw.FieldValue(userS.Get()))),
 			credField(uistate.T("creds.password"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-					// This input is ONLY for setting/replacing the password; it is never
-					// pre-filled with the stored value (which stays out of the DOM).
+					// This input is ONLY for setting or replacing the password. It is never
+					// pre-filled with the stored value, which stays out of the DOM.
 					Input(css.Class("field"), Attr("data-testid", "cred-password"), Type("password"),
 						Attr("autocomplete", "new-password"), Attr("spellcheck", "false"), Style(map[string]string{"flex": "1"}),
 						Placeholder(passPh), OnInput(onPass), uiw.FieldValue(newPassS.Get())),
@@ -268,8 +267,8 @@ func credentialForm(props credentialFormProps) uic.Node {
 }
 
 // safeLoginURL returns the URL to link to, or "" when there is nothing safe to link. http and
-// https URLs pass through, and a value with no scheme and no colon is treated as https. Any
-// other value, such as javascript:, data: or a host with a port, gets no link.
+// https URLs pass through, trimmed. A value with no colon gets "https://" added. Any other value
+// with a colon, such as javascript:, data:, mailto: or a host with a port, gets no link.
 func safeLoginURL(raw string) string {
 	u := strings.TrimSpace(raw)
 	if u == "" {
@@ -279,16 +278,16 @@ func safeLoginURL(raw string) string {
 	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
 		return u
 	}
-	if strings.ContainsRune(u, ':') { // some other scheme (javascript:, data:, mailto:, …) — don't link
+	if strings.ContainsRune(u, ':') {
 		return ""
 	}
 	return "https://" + u
 }
 
-// clipboardWriteSecret writes a secret straight to the system clipboard through GWC's clipboard
-// wrapper. The secret passes from wasm memory to the clipboard without touching a DOM node. It
-// must run inside a click: the passcode dialog's OK handler is one. The write is awaited in its
-// own goroutine, so the click returns at once and the outcome arrives as a notice.
+// clipboardWriteSecret copies a secret to the system clipboard through GWC's clipboard wrapper.
+// The secret goes from wasm memory to the clipboard without touching a DOM node. Call it from a
+// click, such as the passcode dialog's OK handler, so the browser allows the write. The write
+// runs in its own goroutine, so the click returns at once and the result arrives as a notice.
 func clipboardWriteSecret(secret string) {
 	clip, err := interop.NavigatorClipboard()
 	if err != nil {
@@ -304,10 +303,10 @@ func clipboardWriteSecret(secret string) {
 	}()
 }
 
-// promptReauth asks for the app passcode before a secret is copied, and calls onOK only after a
-// correct entry. It uses the shared dialog, so the copy runs inside the click that confirms the
-// passcode and keeps the user activation the clipboard needs. A wrong passcode is reported and
-// the prompt is shown again, and cancelling leaves the secret where it is.
+// promptReauth asks for the app passcode and calls onOK only when it is correct. The prompt uses
+// the shared dialog, so onOK runs inside the click that confirms the passcode. That keeps the
+// user activation the clipboard needs. A wrong passcode posts a notice and asks again, and
+// cancelling copies nothing.
 func promptReauth(onOK func()) {
 	uistate.PromptSecret(uistate.T("creds.reauthTitle"), func(ok bool, entered string) {
 		if !ok {

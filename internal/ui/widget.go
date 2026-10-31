@@ -89,7 +89,7 @@ func widgetIcon(id string) icon.Name {
 // periodWindowedWidgets are the tiles whose figures are a window of activity. They follow the
 // period picker, and they always show the selected period as a chip. Without that chip a reader
 // cannot tell a "this month" figure from a "last three months" figure when both sit on one
-// screen. A number that names its window is the cheapest form of data trust in the app.
+// screen.
 var periodWindowedWidgets = map[string]bool{
 	"kpi-income":   true,
 	"kpi-spending": true,
@@ -128,21 +128,20 @@ const gridCols = 4
 
 // Span limits for the resize handles: a tile spans at most all four columns and three rows.
 const (
-	maxColSpan = 4
+	maxColSpan = gridCols
 	maxRowSpan = 3
 )
 
 // WidgetProps configures a bento Widget shell.
 type WidgetProps struct {
 	ID         string   // stable id (drag/reorder/layout key)
-	Title      string   // centered header title
+	Title      string   // header title
 	Body       uic.Node // widget content (rendered inside the padded body)
 	BodyClass  string   // extra classes for the body, e.g. "flex flex-col justify-center" or "kpi"
 	GridColumn string   // CSS grid-column span, e.g. "1" or "1 / span 2"
 	GridRow    string   // CSS grid-row span, e.g. "2" or "3 / span 2"
-	// Style overlays spec-level inline CSS (a declarative WidgetSpec.Style, §7.7) on
-	// the tile, applied on top of the per-tile widgetstyle config. Used by custom
-	// content-layout (compound) widgets that carry their own token-first style.
+	// Style is applied last, after the per-tile widgetstyle settings, so it wins over them. It
+	// carries a domain.WidgetSpec's Style for compound content-layout widgets.
 	Style     map[string]string
 	Draggable bool   // mark the cell draggable (drag-reorder behavior wired separately)
 	Resizable bool   // show the directional resize handles
@@ -150,7 +149,7 @@ type WidgetProps struct {
 	// ChromeHover renders the tile borderless and chromeless (no card surface, grip,
 	// or gear) until it is hovered, when the surface + controls fade in. Used for the
 	// dashboard welcome/hero so it reads as clean content but is still a configurable
-	// widget. CSS: .w.chrome-hover in web/index.html.
+	// widget. Styled by the .w.chrome-hover rules in internal/styles.
 	ChromeHover bool
 	// Preview renders the tile as a non-interactive preview (e.g. the Studio live
 	// preview): no settings gear, drag grip, or resize handles — the surrounding
@@ -161,7 +160,7 @@ type WidgetProps struct {
 
 // Widget is the bento cell shell shared by every dashboard widget: a square outlined cell with the
 // unified header (grip, centered title, gear) and a padded body, plus optional edge resize
-// handles. Callers supply only the title and the body, and the chrome is the same everywhere.
+// handles. Callers supply the title and body, and the chrome is the same for every tile.
 func Widget(props WidgetProps) uic.Node {
 	return uic.CreateElement(widget, props)
 }
@@ -188,8 +187,7 @@ func widget(props WidgetProps) uic.Node {
 	// Grid placement comes from packing the shared item sequence, so drag-reorder and resize
 	// reflow without overlap. The layout mode decides the order before packing: Custom uses the
 	// stored sequence as it is, and the auto modes reorder it. Sizes are not changed by the mode.
-	// Pack returns 1-indexed rows, and the dashboard has no fixed header row, so tiles fill from
-	// row 1.
+	// Pack returns 1-based rows. The dashboard has no header row, so tiles start at row 1.
 	itemsAtom := uistate.UseLayoutItems()
 	items := itemsAtom.Get()
 	modeAtom := uistate.UseLayoutMode()
@@ -219,9 +217,8 @@ func widget(props WidgetProps) uic.Node {
 		items = kept
 	}
 
-	// Every tile is configurable: the settings panel always offers a per-tile color and an
-	// importance rank, so the gear always shows. A preview tile omits it, because a preview has no
-	// settings host to open the panel in.
+	// Every tile except a preview shows the settings gear. A preview has no settings host to
+	// open the panel in.
 	var gear uic.Node = Fragment()
 	if !props.Preview {
 		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear, Title: props.Title, ID: props.ID})
@@ -276,11 +273,12 @@ func widget(props WidgetProps) uic.Node {
 		style["box-shadow"] = "none"
 	}
 	args = append(args, Style(style))
-	dragOptions := func() []any {
+	// Built on every render, because the On* options it returns register hooks that must run in a
+	// fixed order. The attributes are attached only to draggable tiles.
+	dragAttrs := func() []any {
 		id := props.ID
-		// Roving tabindex: the grid is a SINGLE Tab stop — only the "current" tile is
-		// tabbable (tabindex 0), the rest are -1 — so Tab no longer steps through all
-		// 12+ tiles. The current tile defaults to the first in document order.
+		// Roving tabindex: the grid is one Tab stop. Only the current tile has tabindex 0, and it
+		// defaults to the first tile in document order.
 		baked := dashlayout.Arrange(items, mode)
 		firstID := ""
 		if len(baked) > 0 {
@@ -293,14 +291,8 @@ func widget(props WidgetProps) uic.Node {
 		if isTabStop {
 			tabidx = "0"
 		}
-		grabbedAttr := "false"
-		if grabbed {
-			grabbedAttr = "true"
-		}
-		dragAttr := "false"
-		if layoutEditable {
-			dragAttr = "true"
-		}
+		grabbedAttr := boolAttr(grabbed)
+		dragAttr := boolAttr(layoutEditable)
 		return []any{
 			Attr("draggable", dragAttr),
 			Attr("tabindex", tabidx),
@@ -392,15 +384,13 @@ func widget(props WidgetProps) uic.Node {
 				}
 			}),
 			OnDragStart(func() {
-				// A panic in a drag handler is otherwise fatal (the framework re-panics
-				// unhandled event errors → "Go program has already exited" → frozen app),
-				// so contain + log it here. (internal/ui/bentoflip.go recoverBento.)
+				// A panic here would end the Go program and freeze the app. recoverBento contains it
+				// and logs it.
 				defer recoverBento("widget.OnDragStart")
 				bentoDragStart(id) // snapshots geometry + dims the tile directly (no atom)
 			}),
-			// Allow the drop: the coordinator's document dragover listener computes the
-			// stable insertion target continuously, so the per-tile handler only needs to
-			// preventDefault. No dragPreview atom is written, so there is no re-render.
+			// The per-tile handler only allows the drop. The coordinator's document dragover listener
+			// finds the insertion point, and no state is written, so the drag causes no re-render.
 			OnDragOver(Prevent(func(uic.Event) {})),
 			OnDrop(Prevent(func(uic.Event) {})), // preventDefault only; reorder is in OnDragEnd
 			OnDragEnd(func() {
@@ -432,7 +422,7 @@ func widget(props WidgetProps) uic.Node {
 		}
 	}()
 	if props.Draggable {
-		args = append(args, dragOptions...)
+		args = append(args, dragAttrs...)
 	}
 	// The title links to the tile's data screen when there is one, and is a plain heading
 	// otherwise. It is distinct from the grip (drag) and the gear (settings). The title is an H2,
@@ -473,8 +463,8 @@ func widget(props WidgetProps) uic.Node {
 	if !props.Preview {
 		grip = Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))) // six-dot drag grip
 	}
-	// A preview tile with no title, no grip and no leading icon would render an empty header. That
-	// left a gap above surface-page content. Skip the header and give the body its own top padding.
+	// A preview with no title, grip or icon would show an empty header and leave a gap above its
+	// content. Skip the header and give the body its own top padding.
 	if props.Preview && props.Title == "" && !widgetIcon(props.ID).Valid() {
 		args = append(args, Div(ClassStr(bodyClass+" wbody-nohead"), props.Body))
 	} else {
