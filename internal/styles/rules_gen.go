@@ -3150,8 +3150,9 @@ func registerGenerated() {
 	// rendered slightly grayed (like the select-tag icons) so the label leads. Applied to
 	// every page's toolbar action buttons for one consistent control language.
 	rule(".btn-tool",
-		minHeight("38px"),
-		padding("0.35rem 0.75rem"),
+		minHeight("var(--control-h)"),
+		padding("var(--btn-py) var(--btn-px)"),
+		fontSize("var(--fs-body)"),
 		gap("0.4rem"),
 		borderRadius("var(--radius-lg)"),
 	)
