@@ -50,8 +50,12 @@ func registerGenerated() {
 		customProp("--z-base", "0"),       // in-flow content
 		customProp("--z-raised", "5"),     // lifted-in-card fills / figs
 		customProp("--z-sticky", "20"),    // sticky headers / action bars
+		customProp("--z-lift", "30"),      // a card, filter panel or toolbar lifted above its siblings
+		customProp("--z-cell", "40"),      // a table row or cell lifted above its neighbours
+		customProp("--z-row-menu", "51"),  // a row or cell whose menu or editor is open
 		customProp("--z-dropdown", "50"),  // row ⋯ menus, selects
 		customProp("--z-overlay", "60"),   // in-page overlays
+		customProp("--z-row-active", "61"), // the active action row, above an open overlay in the same table
 		customProp("--z-popover", "2000"), // floating explainers / tooltips (over content)
 		customProp("--z-modal", "3000"),   // flip-panel modals + their backdrop
 		customProp("--z-dialog", "3500"),  // confirm/prompt dialogs — above modals so they're answerable from within one
@@ -755,7 +759,7 @@ func registerGenerated() {
 		display("none"),
 		position("fixed"),
 		inset("auto 1rem 1rem 1rem"),
-		zIndex("20"),
+		zIndex("var(--z-sticky)"),
 		background("#3b0d0d"),
 		color("#fecaca"),
 		border("1px solid #7f1d1d"),
@@ -8405,7 +8409,7 @@ func registerGenerated() {
 	// grid (the hover transform makes each card its own stacking context). The card is
 	// position:relative, so z-index applies.
 	rule(".bento-goals .goal-card:has(.add-wrap > .add-menu:not(.hidden-menu))",
-		zIndex("30"),
+		zIndex("var(--z-lift)"),
 	)
 	rule(".bento-goals .goal-card.is-soon",
 		boxShadow("inset 5px 0 0 #f59e0b"),
@@ -10799,7 +10803,7 @@ func registerGenerated() {
 		fontSize("13px"),
 		lineHeight("1"),
 		boxShadow("0 6px 18px rgba(0,0,0,.28)"),
-		zIndex("60"),
+		zIndex("var(--z-overlay)"),
 		pointerEvents("auto"),
 	)
 	ruleMedia("(prefers-reduced-motion: no-preference)", "aside.rail.collapsed .nv:hover > span,\n        aside.rail.collapsed .nv:focus-visible > span,\n        aside.rail.collapsed .nv:focus-within > span",
@@ -11036,11 +11040,11 @@ func registerGenerated() {
 	// it is gone. Closed tiles keep their normal stacking.
 	rule(".w:has(.add-wrap > .add-menu:not(.hidden-menu))",
 		position("relative"),
-		zIndex("40"),
+		zIndex("var(--z-cell)"),
 	)
 	// The open menu itself sits above sibling content within the raised tile.
 	rule(".add-wrap > .add-menu:not(.hidden-menu)",
-		zIndex("41"),
+		zIndex("calc(var(--z-cell) + 1)"),
 	)
 	// Destructive overflow-menu item (e.g. Delete account): red text, red hover.
 	rule(".add-item.danger",
@@ -11053,17 +11057,17 @@ func registerGenerated() {
 	rule(".add-backdrop",
 		position("fixed"),
 		inset("0"),
-		zIndex("40"),
+		zIndex("var(--z-cell)"),
 	)
 	rule(".hidden-menu",
 		display("none"),
 	)
 	rule(".add-wrap:has(> .add-menu:not(.hidden-menu):not(.hidden))",
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 	)
 	rule(".row:has(.add-menu:not(.hidden-menu):not(.hidden)),\n      .budget:has(.add-menu:not(.hidden-menu):not(.hidden)),\n      li:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
 		position("relative"),
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 	)
 	// Table rows (e.g. the transactions DataTable) render as <tr>/<td>, which the
 	// selectors above don't match. When a row ⋯ menu is open the cell holding it must
@@ -11073,7 +11077,7 @@ func registerGenerated() {
 	// underneath (e.g. td-user) swallows the click. Lift + un-clip the open cell.
 	rule("td:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
 		position("relative"),
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 		overflow("visible"),
 	)
 	rule(".menu-btn:hover",
@@ -12180,7 +12184,7 @@ func registerGenerated() {
 		bottom("0"),
 		left("0"),
 		right("0"),
-		zIndex("20"),
+		zIndex("var(--z-sticky)"),
 		background("var(--bg-elev, #1a1a1d)"),
 		borderTop("1px solid var(--border, #2a2a2c)"),
 		paddingBottom("env(safe-area-inset-bottom, 0px)"),
@@ -12585,7 +12589,7 @@ func registerGenerated() {
 	rule(".upsheet-backdrop",
 		position("fixed"),
 		inset("0"),
-		zIndex("60"),
+		zIndex("var(--z-overlay)"),
 		display("flex"),
 		alignItems("flex-end"),
 		justifyContent("center"),

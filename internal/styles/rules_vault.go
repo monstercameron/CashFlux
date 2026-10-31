@@ -17,7 +17,7 @@ func registerVaultSurface() {
 		prop("overflow", "visible"),
 	)
 	rule(".bento.bento-vault > .w:has(.add-menu:not(.hidden-menu))",
-		prop("z-index", "30"),
+		prop("z-index", "var(--z-lift)"),
 	)
 	// The hero's storage meter: wider than the row bars, capped for readability.
 	rule(".vault-meter",

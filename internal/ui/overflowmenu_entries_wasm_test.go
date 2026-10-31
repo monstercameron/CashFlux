@@ -18,30 +18,30 @@ func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) 
 	f := render.New(t)
 	defer f.Cleanup()
 	f.Render(OverflowMenu(OverflowMenuProps{
-		TriggerTestID: "uxt4-trigger",
+		TriggerTestID: "menu-trigger",
 		Items: []OverflowMenuItem{
-			{Label: "Split…", Section: "Organize", TestID: "uxt4-split"},
-			{Label: "Link to…", Section: "Link", TestID: "uxt4-link", Submenu: []OverflowMenuItem{{Label: "Mark as bill payment", TestID: "uxt4-bill"}}},
-			{Label: "Exclude", Section: "Reports", TestID: "uxt4-exclude"},
-			{Label: "Delete", Section: "Remove", Danger: true, TestID: "uxt4-delete"},
+			{Label: "Split…", Section: "Organize", TestID: "menu-split"},
+			{Label: "Link to…", Section: "Link", TestID: "menu-link", Submenu: []OverflowMenuItem{{Label: "Mark as bill payment", TestID: "menu-bill"}}},
+			{Label: "Exclude", Section: "Reports", TestID: "menu-exclude"},
+			{Label: "Delete", Section: "Remove", Danger: true, TestID: "menu-delete"},
 		},
 	}))
-	trigger := buttonByTestID(f, "uxt4-trigger")
+	trigger := buttonByTestID(f, "menu-trigger")
 	trigger.Dispatch("onkeydown", render.Event{Key: "Enter"})
-	if buttonByTestID(f, "uxt4-split") == nil {
+	if buttonByTestID(f, "menu-split") == nil {
 		t.Fatal("Enter on the focused overflow trigger did not open its menu")
 	}
 	trigger.Click()
 	f.Stabilize()
 	trigger.Dispatch("onkeydown", render.Event{Key: " "})
-	if buttonByTestID(f, "uxt4-split") == nil {
+	if buttonByTestID(f, "menu-split") == nil {
 		t.Fatal("Space on the focused overflow trigger did not open its menu")
 	}
 	order := func() []string {
 		var labels []string
 		for _, button := range f.AllByTag("button") {
 			// The linked submenu's item is also a menuitem. It is left out of the parent order.
-			if button.Attr("role") == "menuitem" && button.Attr("data-testid") != "uxt4-bill" {
+			if button.Attr("role") == "menuitem" && button.Attr("data-testid") != "menu-bill" {
 				labels = append(labels, button.Text())
 			}
 		}
@@ -55,19 +55,19 @@ func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) 
 		}
 	}
 	assertLabels(order())
-	link := buttonByTestID(f, "uxt4-link")
+	link := buttonByTestID(f, "menu-link")
 	if got := link.Attr("aria-label"); got != "" {
 		t.Fatalf("Link accessible label = %q, want visible text only", got)
 	}
 	link.Dispatch("onkeydown", render.Event{Key: "ArrowRight"})
-	if buttonByTestID(f, "uxt4-bill") == nil {
+	if buttonByTestID(f, "menu-bill") == nil {
 		t.Fatal("Right did not open the linked submenu")
 	}
 	assertLabels(order())
-	if got := buttonByTestID(f, "uxt4-delete").Text(); got != "Delete" {
+	if got := buttonByTestID(f, "menu-delete").Text(); got != "Delete" {
 		t.Fatalf("last parent action = %q, want Delete", got)
 	}
-	if got := buttonByTestID(f, "uxt4-delete").Attr("aria-label"); got != "" {
+	if got := buttonByTestID(f, "menu-delete").Attr("aria-label"); got != "" {
 		t.Fatalf("Delete accessible label = %q, want visible text only", got)
 	}
 	// The Remove section heading and the Delete button must both render.
@@ -78,7 +78,7 @@ func TestOverflowSubmenuKeepsParentOrderAndVisibleAccessibleNames(t *testing.T) 
 		}
 	}
 	for _, node := range f.AllByTag("button") {
-		if node.Attr("data-testid") == "uxt4-delete" {
+		if node.Attr("data-testid") == "menu-delete" {
 			deleteButton = true
 		}
 	}

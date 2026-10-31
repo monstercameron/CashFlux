@@ -208,14 +208,20 @@ Each was checked by the screens tests; the browser check is still to run.
   could not tell which group an entry was in. Each entry now names its section as its accessible
   description (`aria-describedby`), and each run of entries gets its own heading id. The heading
   stays hidden from the accessibility tree, so it is not read twice.
-- **Ticket-tagged test files and ids** remain: `overflowmenu_tc4n11_wasm_test.go`,
-  `overflowmenu_uxt4_wasm_test.go`, `flippanel_imv2_wasm_test.go`, `flippanel_tv8f_wasm_test.go`
-  and the test id `tv8f-flip-body`. Renaming needs `git mv`.
+- **Ticket-tagged test filenames, outside the four UI files, remain.** The four UI test files are
+  renamed: `overflowmenu_focus_wasm_test.go`, `overflowmenu_entries_wasm_test.go`,
+  `flippanel_closeonly_wasm_test.go` and `flippanel_title_wasm_test.go`, and their test ids are
+  descriptive. About 300 other Go files still carry tags such as `_bc4b2`, `_tv8f`, `_br3dlg` or
+  `_uxt5` in their names, in `internal/app`, `internal/screens`, `internal/styles`, `internal/i18n`,
+  `internal/appstate` and others. Renaming them needs a name for each file, so it is a separate pass.
 - **Raw JS remains** in `internal/ui` (`fieldcore.go`, `anchor.go`, `controls.go`,
   `inlineeditform.go`, `overlay_anchor.go`, `chartd3.go`, `bentoflip.go`, `datatable_virtual.go`,
   `mermaidview.go`), in `internal/app` (`applockgate.go`, `shell.go`), and in other overlays such as
   the command palette, help overlay and app lock gate.
-- **Component-local z-index literals** (1–6, 30–100) remain in the stylesheet, by design.
+- **Z-index literals:** the mid-range layers in the stylesheet now use named tokens with their
+  existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61),
+  alongside the existing `--z-sticky` and `--z-overlay`. Component-local values (0–6, and the
+  popover at 20 in `rules_tv8c.go`) stay literal, since they only order siblings inside one component.
 - **Pre-existing failures outside this work:**
   - `internal/loadgen` does not build (`backendrpc.JSONCallOptions` is undefined).
   - `go vet` on `internal/screens` reports a struct tag in `ag_reports_edit.go:78`.

@@ -13,6 +13,10 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - The set-institution prompt lists the institutions already in the household as quick picks under its entry. Choosing one fills the entry, and the person can still type a new name. The list is empty, and not shown, when the household has no institutions yet.
 
+### Changed
+- Four UI test files are renamed without their ticket tags: `overflowmenu_focus_wasm_test.go`, `overflowmenu_entries_wasm_test.go`, `flippanel_closeonly_wasm_test.go` and `flippanel_title_wasm_test.go`. Their test ids are descriptive (`menu-*`, `flip-title-body`).
+- Mid-range stylesheet z-index values use named tokens with their existing values: `--z-lift` (30), `--z-cell` (40), `--z-row-menu` (51) and `--z-row-active` (61). Stacking is unchanged.
+
 ### Fixed
 - Each overflow menu entry names its section as its accessible description, so a screen reader hears which group an entry is in. Section headings stay hidden from the accessibility tree.
 

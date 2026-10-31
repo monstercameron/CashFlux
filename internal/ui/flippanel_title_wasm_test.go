@@ -13,11 +13,11 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-func TestFlipPanelTV8FTitleUsesUnbalancedLeftTitleSlot(t *testing.T) {
+func TestFlipPanelTitleUsesUnbalancedLeftTitleSlot(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
 	defer unmountFlipPanel(f)
-	f.Render(Body(ID("tv8f-flip-body"), uic.CreateElement(flipPanel, FlipPanelProps{
+	f.Render(Body(ID("flip-title-body"), uic.CreateElement(flipPanel, FlipPanelProps{
 		Title:    "Review transactions",
 		Back:     Button(Type("button"), "Done"),
 		NoFooter: true,
@@ -34,6 +34,6 @@ func TestFlipPanelTV8FTitleUsesUnbalancedLeftTitleSlot(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("flip title balance slot is missing for the TV8F left-aligned title style")
+		t.Fatal("flip title balance slot is missing for the left-aligned title style")
 	}
 }

@@ -241,7 +241,7 @@ func registerLane3Mobile() {
 		borderRadius("16px 16px 0 0"),
 		maxHeight("60vh"),
 		overflowY("auto"),
-		zIndex("60"),
+		zIndex("var(--z-overlay)"),
 		padding("0.5rem 0 calc(env(safe-area-inset-bottom, 0px) + 0.5rem)"),
 		boxShadow("0 -8px 24px rgba(0, 0, 0, 0.4)"),
 		// AnchorPopover positions via inline transform/margins — neutralize so

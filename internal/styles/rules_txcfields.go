@@ -334,7 +334,7 @@ func registerTxcFieldsSurface() {
 	// because the description truncation lives on `.row-desc-text`, not the `td`.
 	rule(".txn-table td.row-desc-cell:has(.add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
 		position("relative"),
-		zIndex("51"),
+		zIndex("var(--z-row-menu)"),
 		overflow("visible"),
 	)
 }

@@ -217,7 +217,7 @@ func registerTxnToolbar() {
 	// open-menu lift), so the tooltip always paints on top.
 	rule(".bento > .w:has(.tbar-btn:hover), .bento > .w:has(.tbar-btn:focus-visible)",
 		position("relative"),
-		zIndex("30"),
+		zIndex("var(--z-lift)"),
 	)
 
 	// Redesigned filter panel: each categorical dimension is a labelled group of toggle
