@@ -18,7 +18,7 @@ func TestR1BWidthsHaveOneStableClassRuleSet(t *testing.T) {
 		".bento-ledger .txn-table th.td-user, .bento-ledger .txn-table td.td-user{width:56px;}",
 		".bento-ledger .txn-table th.td-user{text-align:center;}",
 		".bento-ledger .txn-table th.td-amount, .bento-ledger .txn-table td.td-amount{width:112px;}",
-		".bento-ledger .txn-table th.td-actions, .bento-ledger .txn-table td.td-actions{width:76px;}",
+		".bento-ledger .txn-table th.td-actions, .bento-ledger .txn-table td.td-actions{width:96px;}",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("transaction widths missing %q", want)

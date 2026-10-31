@@ -84,36 +84,6 @@ func registerTxnAudit() {
 	rule(".txn-table .td-actions",
 		whiteSpace("nowrap"),
 	)
-	// The ⋯ trigger is a plain `.btn` and carried full button padding (~44px) — with
-	// the pencil beside it that overran the fixed actions column by a few pixels and
-	// clipped the menu trigger's right edge. Match the icon-button padding the cell
-	// already applies to its other glyph buttons, so both fit the column as it stands
-	// instead of the column growing into the description.
-	rule(".txn-table .td-actions .add-wrap > .btn",
-		padding("0.2rem 0.35rem"),
-		minHeight("0"),
-	)
-	rule(".txn-row-edit",
-		display("inline-flex"),
-		alignItems("center"),
-		marginRight(".1rem"),
-		color("var(--text-dim)"),
-	)
-	rule(".txn-row-edit:hover, .txn-row-edit:focus-visible",
-		color("var(--accent)"),
-	)
-	// The word stays in the accessibility tree and out of the layout.
-	rule(".txn-row-edit-label",
-		position("absolute"),
-		width("1px"),
-		height("1px"),
-		padding("0"),
-		margin("-1px"),
-		overflow("hidden"),
-		whiteSpace("nowrap"),
-		border("0"),
-	)
-
 	// --- The header select-all checkbox ----------------------------------------
 	// It sits in the header cell above the per-row boxes, so it aligns with them
 	// rather than centring in the cell like a column label would.

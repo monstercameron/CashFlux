@@ -63,8 +63,8 @@ func TestBULK2BulkBarKeepsPrimaryControlsInlineAndNamesActionsOnce(t *testing.T)
 		}
 	}
 	clear := bulk2ByTestID(f, "button", "bulk-clear-selection")
-	if clear == nil || clear.Text() != "×" || clear.Attr("aria-label") != "Clear selection" {
-		t.Errorf("clear selection control = %v, want × with accessible name Clear selection", clear)
+	if clear == nil || clear.Attr("aria-label") != "Clear selection" {
+		t.Errorf("clear selection control = %v, want an icon-only button named Clear selection", clear)
 	}
 
 	bulk2ByTestID(f, "button", "bulk-more-actions").Click()

@@ -5,7 +5,7 @@ package styles
 // registerV5Row keeps transaction controls reachable and raises notices above
 // the fixed bulk-action bar while it is visible.
 func registerV5Row() {
-	rule(".bento-ledger .txn-ledger-row button",
+	rule(".bento-ledger .txn-ledger-row button:not(.btn-tool)",
 		boxSizing("border-box"), minWidth("32px"), minHeight("32px"),
 	)
 	rule(".bento-ledger .txn-ledger-row input[type=checkbox]",
@@ -21,9 +21,6 @@ func registerV5Row() {
 		content(`""`), display("block"), width("8px"), height("4px"),
 		margin("3px 0 0 3px"), borderLeft("2px solid #fff"),
 		borderBottom("2px solid #fff"), transform("rotate(-45deg)"),
-	)
-	rule(".bento-ledger .txn-ledger-row .txn-row-menu > button[aria-haspopup], .bento-ledger .txn-ledger-row .txn-row-edit",
-		width("32px"), height("32px"), minWidth("32px"), minHeight("32px"),
 	)
 	rule(".bento-ledger .txn-ledger-row .txn-row-menu [role=menuitem]",
 		width("100%"), minWidth("160px"), minHeight("32px"),

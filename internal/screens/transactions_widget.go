@@ -1274,9 +1274,11 @@ func txnRowActionsCell(props *txnFrameRowProps) ui.Node {
 	stop := ui.UseEvent(func(e ui.Event) { e.StopPropagation() })
 	edit := ui.UseEvent(func(e ui.Event) { e.StopPropagation(); props.OnOpen(props.ID) })
 	return Td(ClassStr("td-actions txn-col-actions"), OnClick(stop),
-		Button(css.Class("btn btn-icon txn-row-edit"), Type("button"), Attr("data-testid", "txn-rowedit"),
-			Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount)), Title(uistate.T("transactions.rowEditHint")), OnClick(edit),
-			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(css.Class("txn-row-edit-label"), uistate.T("transactions.rowEdit"))),
+		uiw.ToolButton(uiw.ToolButtonProps{
+			Icon: icon.Pencil, TestID: "txn-rowedit",
+			AriaLabel: txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount),
+			Title:     uistate.T("transactions.rowEditHint"),
+		}, OnClick(edit)),
 		txnRowMenu(*props))
 }
 

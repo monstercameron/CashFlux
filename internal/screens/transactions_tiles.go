@@ -1152,9 +1152,10 @@ func txnBulkPicker(props txnBulkPickerProps) ui.Node {
 		testID = props.ID
 	}
 	return Div(css.Class("bulk-picker"),
-		Button(css.Class("field", "bulk-picker-trigger"), Type("button"), Attr("id", props.ID), Attr("data-testid", testID),
-			Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
-			OnClick(onToggle), OnKeyDown(onTriggerKey), props.Placeholder),
+		uiw.ToolButton(uiw.ToolButtonProps{
+			Icon: icon.Tag, Label: props.Placeholder, AriaLabel: props.Label, TestID: testID, Open: open.Get(),
+		}, Attr("id", props.ID), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
+			OnClick(onToggle), OnKeyDown(onTriggerKey)),
 		popup,
 	)
 }
@@ -1420,13 +1421,13 @@ func txnBulkBarContent(props txnBulkBarContentProps) ui.Node {
 		}),
 		uiw.ToolButton(uiw.ToolButtonProps{
 			Label: uistate.T("r1c.markReviewed"), Icon: icon.CheckCircle, TestID: "bulk-mark-reviewed",
-			Class: "txn-bulk-primary txn-bulk-inline-reviewed",
+			Class: "txn-bulk-inline-reviewed",
 		}, OnClick(bulkMarkReviewed)),
 		tagEditor,
 		moreActions,
 		txnBulkDeleteButton(props.Saving, bulkDelete),
 		uiw.ToolButton(uiw.ToolButtonProps{
-			Label: "×", AriaLabel: uistate.T("r1c.clearSelection"), Title: uistate.T("r1c.clearSelection"),
+			Icon: icon.Close, AriaLabel: uistate.T("r1c.clearSelection"), Title: uistate.T("r1c.clearSelection"),
 			TestID: "bulk-clear-selection", Class: "bulk-clear-selection",
 		}, OnClick(clearSelection)),
 		If(props.PickerOpen, txnBulkCategoryPicker(props.PickerQuery, props.PickerKind,
@@ -1449,7 +1450,7 @@ func txnBulkDeleteButton(saving bool, onDelete ui.Handler) ui.Node {
 	deleteLabel := uistate.T("txp3.bulkDeleteSelected")
 	props := uiw.ToolButtonProps{
 		Label: deleteLabel, Icon: icon.Trash, TestID: "bulk-delete",
-		Class: "bt-danger txn-bulk-primary txn-bulk-inline-delete",
+		Class: "bt-danger txn-bulk-inline-delete",
 	}
 	extra := []any{OnClick(onDelete)}
 	if saving {
@@ -1512,10 +1513,10 @@ func txnBulkOwnerPicker(props txnBulkOwnerPickerProps) ui.Node {
 			Attr("id", props.ID+"-listbox"), Attr("role", "listbox"),
 			Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), rows),
 	)
-	trigger := Button(css.Class("field", "bulk-picker-trigger"), Type("button"),
-		Attr("id", props.ID), Attr("data-testid", props.TestID), Attr("aria-label", props.Label),
-		Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
-		Attr("aria-controls", props.ID+"-listbox"), OnClick(onToggle), props.Label)
+	trigger := uiw.ToolButton(uiw.ToolButtonProps{
+		Icon: icon.Users, Label: props.Label, AriaLabel: props.Label, TestID: props.TestID, Open: open.Get(),
+	}, Attr("id", props.ID), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
+		Attr("aria-controls", props.ID+"-listbox"), OnClick(onToggle))
 	overlay := ui.AccessibleOverlay(ui.AccessibleOverlayProps{
 		Open: open.Get(), Target: ui.PortalTarget{Selector: "body"}, SurfaceID: props.ID + "-surface",
 		Kind: ui.OverlayKindSheet, Role: "dialog", LabelledBy: props.ID + "-title", Modal: true,

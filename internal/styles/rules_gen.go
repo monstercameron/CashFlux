@@ -2337,10 +2337,6 @@ func registerGenerated() {
 		color("var(--text-faint)"),
 		fontSize("var(--type-13)"),
 	)
-	rule(".txn-table .td-actions .btn-icon",
-		padding("0.2rem 0.35rem"),
-		minHeight("0"),
-	)
 	rule(".txn-table .tx-2nd",
 		transition("opacity 0.12s ease"),
 	)

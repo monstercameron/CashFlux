@@ -63,9 +63,6 @@ func registerR3K() {
 		prop("box-shadow", "0 8px 24px rgba(0,0,0,.24)"),
 	)
 	rule(".bulk-picker", prop("position", "relative"), prop("flex", "0 1 auto"))
-	rule(".bulk-picker-trigger",
-		prop("max-width", "12rem"), prop("overflow", "hidden"), prop("text-overflow", "ellipsis"),
-	)
 	rule(".bulk-picker-popover",
 		prop("position", "absolute"), prop("left", "0"), prop("bottom", "calc(100% + 8px)"),
 		prop("z-index", "72"), prop("width", "min(20rem, calc(100vw - 2rem))"),

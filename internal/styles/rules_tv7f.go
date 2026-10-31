@@ -28,9 +28,4 @@ func registerTV7F() {
 		maxHeight("none"),
 		overflow("visible"),
 	)
-	rule(".txn-bulkbar-overlay .txn-bulk-primary > *, .txn-bulkbar-overlay > .btn-tool, .txn-bulkbar-overlay .bulk-picker-trigger",
-		boxSizing("border-box"),
-		height("36px"),
-		minHeight("36px"),
-	)
 }
