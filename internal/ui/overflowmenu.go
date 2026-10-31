@@ -319,6 +319,9 @@ func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
 			st := menu.Get("style")
 			st.Set("maxHeight", "")
 			st.Set("overflowY", "")
+			// The panel grows in over its fade, so its height reads low until the animation settles.
+			// Suspend the animation to measure the height the panel settles at, then hand it back.
+			st.Set("animation", "none")
 			r := menu.Call("getBoundingClientRect")
 			vw := win.Get("innerWidth").Float()
 			vh := win.Get("innerHeight").Float()
@@ -335,9 +338,8 @@ func anchorOverflowMenu(isOpen bool, wrapID string, setPlacement func(string)) {
 			// every open.
 			wr := w.Call("getBoundingClientRect")
 			openLeft := wr.Get("left").Float()+r.Get("width").Float() > vw-margin
-			// The menu grows in over its fade, so judge its flip and height by the height it
-			// settles at, not the height it has reached.
 			fullHeight := max(r.Get("height").Float(), menu.Get("scrollHeight").Float())
+			st.Set("animation", "")
 			openUp := wr.Get("bottom").Float()+6+fullHeight > boundaryBottom
 			avail := boundaryBottom - wr.Get("bottom").Float() - 6
 			if openUp {

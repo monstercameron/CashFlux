@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Row ⋯ menus open on the side and direction that fit. The menu now measures its settled height before choosing where to open, so a menu opened near the bottom of the screen opens upward instead of running off it.
 - Account screens read in the user's own date style (the date preference) instead of fixed English formats, and the missing-exchange-rate and excluded-balance notes are translation keys. The balance button names its account, and the details toggle names the panel it controls.
 - Everything under an account row's head (the recurring-charges line and the details panel) indents to the account name's column, so nested content reads as belonging to the name instead of the row edge.
 - The account details panel is a two-column layout: the period money in, out and net sit across the top, the balance chart and the 90-day projection sit on the left, the reading and the account facts sit on the right, and documents and the institution share a footer line. Narrow screens stack it into one column.
