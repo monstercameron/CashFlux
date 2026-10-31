@@ -172,19 +172,25 @@ func TestCSTABLEActionsCellOwnsEditAndMenu(t *testing.T) {
 	r.OnOpen = func(string) { edits++ }
 	r.OnDelete = func(string) { deletes++ }
 	f.Render(Table(Tbody(Tr(ui.CreateElement(txnRowActionsCell, r)))))
-	edit := findByTestID(f, "button", "txn-rowedit")
-	if edit == nil || edit.Name() != txnRowActionName(uistate.T("transactions.rowEdit"), r.Desc, r.Date, r.Amount) {
-		t.Fatal("pencil changed")
-	}
-	edit.Click()
-	if edits != 1 {
-		t.Fatal("edit handler")
+	if findByTestID(f, "button", "txn-rowedit") != nil {
+		t.Fatal("edit has its own button; it belongs in the row menu")
 	}
 	trigger := findByTestID(f, "button", "txn-kebab-"+r.ID)
 	if trigger == nil {
 		t.Fatal("row menu missing")
 	}
 	trigger.Click()
+	f.Stabilize()
+	edit := findByTestID(f, "button", "txn-rowedit")
+	if edit == nil || edit.Name() != uistate.T("transactions.rowEdit") {
+		t.Fatal("edit menu item missing or misnamed")
+	}
+	edit.Click()
+	if edits != 1 {
+		t.Fatal("edit handler")
+	}
+	trigger.Click()
+	f.Stabilize()
 	findByTestID(f, "button", "txn-delete").Click()
 	if deletes != 1 {
 		t.Fatal("delete handler")

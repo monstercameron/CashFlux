@@ -55,6 +55,8 @@ func TestSOL1OnlyDescriptionAndPencilOpenEdit(t *testing.T) {
 		t.Fatalf("description is not a keyboard reachable named edit button: %#v", description)
 	}
 	description.Click()
+	findByTestID(f, "button", "txn-kebab-"+props.ID).Click()
+	f.Stabilize()
 	findByTestID(f, "button", "txn-rowedit").Click()
 	if len(opened) != 2 || opened[0] != props.ID || opened[1] != props.ID {
 		t.Fatalf("description/pencil actions = %v, want the same record twice", opened)

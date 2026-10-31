@@ -18,7 +18,7 @@ func TestR3KRowMenuStaysWithinEightAndKeepsRequiredActions(t *testing.T) {
 	if len(items) > 8 {
 		t.Fatalf("richest consolidated menu has %d items, want at most 8", len(items))
 	}
-	want := []string{"txn-confirm-category", "txn-split-open", "txn-link-open", "txn-toggle-exclude", "txn-delete"}
+	want := []string{"txn-rowedit", "txn-confirm-category", "txn-split-open", "txn-link-open", "txn-toggle-exclude", "txn-delete"}
 	if len(items) != len(want) {
 		t.Fatalf("richest consolidated menu has %d items, want %d", len(items), len(want))
 	}

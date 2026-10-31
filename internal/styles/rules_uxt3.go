@@ -79,8 +79,8 @@ func registerRulesUXT3() {
 		textAlign("right"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-table .txn-col-actions",
-		width("104px"),
-		minWidth("104px"),
+		width("56px"),
+		minWidth("56px"),
 		whiteSpace("nowrap"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-table .td-date",

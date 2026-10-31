@@ -92,6 +92,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Fixed
 - The follow-up button on a transaction row previews its open follow-ups in a popover first. The popover holds the way on to the To-do page, and a receipt button when the row has one.
+- Edit transaction moved from the row's pencil button into its ⋯ menu, as the first entry. The actions column now holds the one button.
 - The row Edit and ⋯ buttons are spaced like the Accounts row actions, a 0.75rem gap, and each keeps its standard size. The actions column is 104px to fit them.
 - The Transactions table has a title, "Transactions", with its count and transferred total beside it, as the Accounts list has its title beside its controls.
 - Opening a day from the transaction calendar shows that day in the ledger. Clearing the date returns the page to the calendar, instead of staying in the ledger.

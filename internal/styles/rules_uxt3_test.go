@@ -24,7 +24,7 @@ func TestUXT3ResponsiveTransactionsRules(t *testing.T) {
 		".bento-ledger .txn-table .txn-col-account{display:none !important;}",
 		".txn-desc-account{display:block;flex:0 0 100%;min-width:0;font-size:var(--fs-meta);",
 		".txn-table .txn-col-amount{width:112px;min-width:112px;text-align:right;}",
-		".txn-table .txn-col-actions{width:104px;min-width:104px;white-space:nowrap;}",
+		".txn-table .txn-col-actions{width:56px;min-width:56px;white-space:nowrap;}",
 		".txn-table .txn-desc-mainline{flex-wrap:wrap;}",
 		".txn-table .txn-desc-mainline .row-desc-text{flex:1 1 120px;min-width:120px;}",
 		"@media (max-width: 767px)",

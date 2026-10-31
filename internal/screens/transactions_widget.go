@@ -1279,15 +1279,8 @@ func txnRowCategoryCell(props txnFrameRowCellsProps) ui.Node {
 
 func txnRowActionsCell(props *txnFrameRowProps) ui.Node {
 	stop := ui.UseEvent(func(e ui.Event) { e.StopPropagation() })
-	edit := ui.UseEvent(func(e ui.Event) { e.StopPropagation(); props.OnOpen(props.ID) })
 	return Td(ClassStr("td-actions txn-col-actions"), OnClick(stop),
-		Div(css.Class("txn-row-actions"),
-			uiw.ToolButton(uiw.ToolButtonProps{
-				Icon: icon.Pencil, TestID: "txn-rowedit",
-				AriaLabel: txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount),
-				Title:     uistate.T("transactions.rowEditHint"),
-			}, OnClick(edit)),
-			txnRowMenu(*props)))
+		Div(css.Class("txn-row-actions"), txnRowMenu(*props)))
 }
 
 func flashTransactionRow(doc js.Value, txnID string) func() {
@@ -1437,6 +1430,11 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 
 func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	var items []uiw.OverflowMenuItem
+	// Edit is the menu's first entry: the row's primary action, opened from its ⋯ trigger.
+	items = append(items, uiw.OverflowMenuItem{
+		Label: uistate.T("transactions.rowEdit"), Icon: icon.Pencil, TestID: "txn-rowedit",
+		OnSelect: func() { props.OnOpen(props.ID) },
+	})
 	menu := txnMenuDecisions(props)
 	organize := uistate.T(txnMenuOrganize)
 	links := uistate.T(txnMenuLinks)
