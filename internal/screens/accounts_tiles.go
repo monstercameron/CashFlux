@@ -830,7 +830,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	app := props.App
 	filterAtom := uistate.UseAccountsFilter()
 	transferAtom := uistate.UseAcctTransferOpen()
-	formulasAtom := uistate.UseAcctShowFormulas()
 	activeMemberID := acctActiveMemberID()
 	f := filterAtom.Get()
 
@@ -842,7 +841,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	onSearch := func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Search = v }) }
 
 	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
-	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 	// Menu items take plain funcs (the item owns its click hook), so the transfer opener is one too.
 	openTransfer := func() { transferAtom.Set(true) }
 	// AC1: open the account-group manager. When at least one group exists, jump
@@ -907,18 +905,11 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	if f.ShowArchived {
 		archLabel = uistate.T("accounts.hideArchived")
 	}
-	formulasLabel := uistate.T("accounts.showFormulas")
-	if formulasAtom.Get() {
-		formulasLabel = uistate.T("accounts.hideFormulas")
-	}
 	filtersBody := Div(css.Class("filter-fields"),
 		filterSelect(uistate.T("accounts.filterType"), f.Type, typeOpts, func(v string) { setFilter(func(x *uistate.AccountsFilter) { x.Type = v }) }),
 		withFieldLabel(uistate.T("accounts.archived"),
 			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(f.ShowArchived)),
 				Attr("data-testid", "acct-toggle-archived"), OnClick(onToggleArch), Text(archLabel))),
-		withFieldLabel(uistate.T("accounts.formulaTitle"),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
-				Attr("data-testid", "acct-toggle-formulas"), OnClick(onToggleFormulas), Text(formulasLabel))),
 	)
 
 	chips := []uiw.Chip{}
