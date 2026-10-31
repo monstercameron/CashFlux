@@ -1,9 +1,7 @@
 # Existing true hook-order hazards outside the transactions and budgets ownership scope.
 # One file:function entry; remove entries as each site is fixed.
 screens/accountaddform.go:accountAddForm
-screens/accounts_docs.go:accountDocsDrawer
 screens/accounts_institutions.go:InstitutionsManagerForm
-screens/accounts_recurring.go:accountRecurringPanel
 screens/accounts_sweep_card.go:accountsSweepCard
 screens/accounts_sweep_card.go:accountsSweepCards
 screens/accounts_sweep_config.go:SweepRulesForm
