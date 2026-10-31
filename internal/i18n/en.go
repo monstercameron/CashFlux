@@ -2183,7 +2183,7 @@ var english = Catalog{
 	"transactions.whoLabel":            "Household member",
 
 	// Accounts screen
-	"accounts.addTitle":               "Add account",
+	"accounts.addTitle":               "Add an account",
 	"accounts.firstRunHint":           "Add your first account to start tracking money — a checking account, savings, credit card, or cash. Everything stays on this device.",
 	"accounts.currency":               "Currency",
 	"accounts.useOtherCurrency":       "Use a different currency",

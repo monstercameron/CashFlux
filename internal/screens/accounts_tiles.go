@@ -28,6 +28,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
+	"github.com/monstercameron/CashFlux/internal/services"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -562,7 +563,6 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// Declared unconditionally so the hook position is stable, like goToDebt in acctListWidget.
 	goToAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
 	// The page's add-account action, pinned over the summary's top-right corner.
-	openAdd := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
@@ -605,7 +605,18 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 
 	body := Div(
 		Div(css.Class("acct-summary-frame"),
-			acctToolbarGlyph("accounts-add", icon.Plus, uistate.T("accounts.addTitle"), "", "modal", "primary", openAdd),
+			// One Add control for both things the page can add. Each item names what it creates.
+			uiw.OverflowMenu(uiw.OverflowMenuProps{
+				TriggerText:   uistate.T("accounts.addMenu"),
+				TriggerLabel:  uistate.T("accounts.addMenuTitle"),
+				TriggerTestID: "accounts-add",
+				TriggerClass:  "primary",
+				TriggerIcon:   icon.Plus,
+				Items: []uiw.OverflowMenuItem{
+					{Label: uistate.T("accounts.addAccountItem"), Icon: icon.Accounts, TestID: "accounts-add-account", OnSelect: func() { uistate.SetAddTarget("account") }},
+					{Label: uistate.T("accounts.addServiceItem"), Icon: icon.Repeat, TestID: "accounts-add-service", OnSelect: func() { uistate.SetAddTarget("service") }},
+				},
+			}),
 			acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,
 				smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual, acctLiquidityLine(app, props.Base, props.Rates)),
 		),
@@ -1116,17 +1127,24 @@ func acctListWidget(props acctListProps) ui.Node {
 		}
 	}
 	hasLiab := len(liabs) > 0
+	// Services are recurring bills, not accounts. They have their own class view.
+	serviceList := services.Of(app.Recurring())
+	hasServices := len(serviceList) > 0
 
-	// The class view. With no liabilities the toggle is pointless, so force the
+	// The class view. With no liabilities or services the toggle is pointless, so force the
 	// assets-only view (and hide the segment) — the page reads exactly as before.
 	classView := f.Class
-	if !hasLiab {
+	if classView == serviceClassView && !hasServices || classView != serviceClassView && !hasLiab {
 		classView = string(domain.ClassAsset)
 	}
+	inServices := classView == serviceClassView
 	assetsOnly := classView == string(domain.ClassAsset)
 
 	var shown []domain.Account
 	for _, ac := range active {
+		if inServices {
+			break
+		}
 		if assetsOnly && ac.Class == domain.ClassLiability {
 			continue
 		}
@@ -1239,6 +1257,9 @@ func acctListWidget(props acctListProps) ui.Node {
 	}
 
 	bodyContent := ui.Match().
+		When(inServices, func() ui.Node {
+			return servicesBody(app, serviceList, props.Base, props.Rates)
+		}).
 		When(len(active) == 0, func() ui.Node {
 			return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
 		}).
@@ -1283,7 +1304,7 @@ func acctListWidget(props acctListProps) ui.Node {
 		}
 	}
 
-	classSeg := ui.If(hasLiab, func() ui.Node {
+	classSeg := ui.If(hasLiab || hasServices, func() ui.Node {
 		return uiw.RadioGroup(uiw.RadioGroupProps{
 			Label: uistate.T("accounts.classFilterLabel"),
 			Value: classView,
@@ -1291,6 +1312,7 @@ func acctListWidget(props acctListProps) ui.Node {
 				{Value: "", Label: uistate.T("accounts.classAll"), TestID: "acct-class-all"},
 				{Value: string(domain.ClassAsset), Label: uistate.T("accounts.classAssets"), TestID: "acct-class-assets"},
 				{Value: string(domain.ClassLiability), Label: uistate.T("accounts.classLiabilities"), TestID: "acct-class-liabilities"},
+				{Value: serviceClassView, Label: uistate.T("accounts.classServices"), TestID: "acct-class-services"},
 			},
 			OnChange: func(v string) {
 				nf := filterAtom.Get()
@@ -1303,11 +1325,14 @@ func acctListWidget(props acctListProps) ui.Node {
 		})
 	})
 
+	if inServices {
+		title = uistate.T("accounts.servicesTitle")
+	}
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: title,
-		// The class filter (All / Assets / Liabilities) is the only header action; the
-		// old "Smart" sparkle shortcut was dropped here as noise (the Smart hub is one
-		// nav click away and the page already carries the inline Smart strip up top).
+		// The class filter (All / Assets / Liabilities / Services) is the header action; the old
+		// "Smart" sparkle shortcut was dropped here as noise (the Smart hub is one nav click away
+		// and the page already carries the inline Smart strip up top). Adding is in the summary's Add menu.
 		HeaderAction: classSeg,
 		Body:         bodyContent,
 	})
