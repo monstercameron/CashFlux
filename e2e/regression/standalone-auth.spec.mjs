@@ -24,8 +24,8 @@ async function openCloud(page) {
   const start = page.getByTestId("cloud-setup-start");
   if (await start.isVisible()) await start.click();
   await expect(page.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId("cloud-server-options").click();
   await page.getByRole("radio", { name: "Your own server", exact: true }).click();
-  await page.getByTestId("cloud-address-advanced").click();
   await page.getByTestId("sync-server-url").fill(`${BACKEND}/`);
   await page.getByTestId("sync-test").click();
   await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
@@ -65,7 +65,7 @@ async function rediscoverBackend(page) {
     await page.locator("#cf-dialog-confirm").click();
   }
   await expect(page.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("cloud-address-advanced").click();
+  await page.getByTestId("cloud-server-options").click();
   await page.getByTestId("sync-test").click();
   await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
   await page.getByTestId("cloud-where-continue").click();

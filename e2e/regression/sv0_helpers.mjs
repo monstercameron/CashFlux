@@ -101,8 +101,8 @@ export async function configureRemote(page, origin) {
   await expect.poll(async () => (await start.isVisible()) || (await page.getByTestId("cloud-setup-where").isVisible()), { timeout: 15_000 }).toBe(true);
   if (await start.isVisible()) await start.click();
   await expect(page.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId("cloud-server-options").click();
   await page.getByRole("radio", { name: "Your own server", exact: true }).click();
-  await page.getByTestId("cloud-address-advanced").click();
   await page.getByTestId("sync-server-url").fill(`${origin}/`);
   await page.getByTestId("sync-test").click();
   try {
