@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -142,50 +141,38 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// Recording a reconciliation appends to the account's capped history, confirms
 	// the balance (BalanceAsOf), and closes the modal. Only offered once the
 	// difference is zero, so the recorded event is always a true match.
-	doRecordRecon := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
-		if perr != nil {
-			done()
-			return
-		}
-		ev := domain.Reconciliation{At: time.Now(), StatementBalance: money.New(stmtMinor, a.Currency)}
-		if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
-			ev.StatementDate = d
-		}
-		cp := a
-		cp.Reconciliations = reconcile.Record(cp.Reconciliations, ev)
-		cp.BalanceAsOf = time.Now()
-		if err := app.PutAccount(cp); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		// Reconciling records what the balance actually was, so any provisional
-		// checkpoint standing in for it up to this date has done its job and is now
-		// double-counting against the statement's own rows. A stand-in nothing ever
-		// removes is worse than no stand-in: the error compounds every time somebody
-		// checks their balance between statements.
-		retired := 0
-		app.BulkMutate(func() {
-			for _, cid := range provisional.SupersededBy(a.ID, app.Transactions(), ev.Through()) {
-				if err := app.DeleteTransaction(cid); err == nil {
-					retired++
-				}
+		doRecordRecon := ui.UseEvent(Prevent(func() {
+			if app == nil {
+				done()
+				return
 			}
-		})
-		uistate.ClearReconcileDraft(a.ID)
-		reconUndo.Get().Forget() // a completed reconciliation keeps what it wrote
-		uistate.BumpDataRevision()
-		msg := uistate.T("accounts.reconRecorded", uistate.CurrentPrefs().FormatDate(ev.Through()))
-		if retired > 0 {
-			msg += " " + uistate.T("accounts.reconCheckpointsRetired", retired)
-		}
-		uistate.PostNotice(msg, false)
-		done()
-	}))
+			stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
+			if perr != nil {
+				uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
+				return
+			}
+			ev := domain.Reconciliation{At: time.Now(), StatementBalance: money.New(stmtMinor, a.Currency)}
+			if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
+				ev.StatementDate = d
+			}
+			outcome, err := app.RecordReconciliation(a.ID, ev)
+			if err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.ClearReconcileDraft(a.ID)
+			reconUndo.Get().Forget() // a completed reconciliation keeps what it wrote
+			uistate.BumpDataRevision()
+			msg := uistate.T("accounts.reconRecorded", uistate.CurrentPrefs().FormatDate(ev.Through()))
+			if outcome.Retired > 0 {
+				msg += " " + uistate.T("accounts.reconCheckpointsRetired", outcome.Retired)
+			}
+			if outcome.RetireFailures != nil {
+				uistate.PostNotice(outcome.RetireFailures.Error(), true)
+			}
+			uistate.PostNotice(msg, false)
+			done()
+		}))
 	// Discrepancy-resolution paths.
 	// Post an adjustment transaction for the exact difference so the cleared
 	// balance meets the statement; cleared+reviewed, clearly labeled, undoable.
@@ -237,16 +224,17 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
 				ev.StatementDate = d
 			}
-			cp := a
-			cp.Reconciliations = reconcile.Record(cp.Reconciliations, ev)
-			cp.BalanceAsOf = time.Now()
-			if err := app.PutAccount(cp); err != nil {
+			outcome, err := app.RecordReconciliation(a.ID, ev)
+			if err != nil {
 				uistate.PostNotice(err.Error(), true)
 				return
 			}
 			uistate.ClearReconcileDraft(a.ID)
 			reconUndo.Get().Forget() // a recorded reconciliation keeps what it wrote
 			uistate.BumpDataRevision()
+			if outcome.RetireFailures != nil {
+				uistate.PostNotice(outcome.RetireFailures.Error(), true)
+			}
 			uistate.PostNotice(uistate.T("accounts.reconForceRecorded", diffStr), false)
 			done()
 		})
