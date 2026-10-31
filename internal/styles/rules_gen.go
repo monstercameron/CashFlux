@@ -4710,6 +4710,9 @@ func registerGenerated() {
 		customProp("--shadow-1", "0 1px 2px rgba(0,0,0,0.22)"),
 		customProp("--shadow-2", "0 8px 24px rgba(0,0,0,0.28)"),
 		customProp("--shadow-3", "0 20px 60px rgba(0,0,0,0.38)"),
+		// Menus lift off the card with a tight contact edge and a soft fall beneath it, so the
+		// options read as a layer above the content they open over.
+		customProp("--shadow-menu", "0 1px 2px rgba(0,0,0,0.3), 0 12px 28px rgba(0,0,0,0.45)"),
 		customProp("--type-11", "calc(11px * var(--ui-scale, 1))"),
 		customProp("--type-12", "calc(12px * var(--ui-scale, 1))"),
 		customProp("--type-13", "calc(13px * var(--ui-scale, 1))"),
@@ -10951,7 +10954,7 @@ func registerGenerated() {
 		border("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"),
 		padding("4px"),
-		boxShadow("0 8px 24px rgba(0,0,0,.3)"),
+		boxShadow("var(--shadow-menu)"),
 		display("flex"),
 		flexDirection("column"),
 		gap("2px"),
