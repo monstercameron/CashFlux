@@ -234,8 +234,6 @@ func setTxFilterOn(atom state.Atom[uistate.TxFilter], mut func(*uistate.TxFilter
 // atom is cleared.
 func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.AttachmentRef]) ui.Node {
 	dismiss := func() { previewAtom.Set(domain.AttachmentRef{}) }
-	closePreview := ui.UseEvent(Prevent(dismiss))
-	closeOption := OnClick(closePreview)
 	ref := previewAtom.Get()
 	open := ref.ArtifactID != ""
 	art := domain.Artifact{}
@@ -259,15 +257,15 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 			Body: body,
 		})
 	}
-	return ui.AccessibleOverlay(ui.AccessibleOverlayProps{
-		Open: open, Target: ui.PortalTarget{Selector: "body"}, SurfaceID: "receipt-preview-surface",
-		Kind: ui.OverlayKindDialog, Role: "dialog", LabelledBy: "receipt-preview-title", Modal: true,
-		TrapFocus: true, RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
-		LockScroll: true, BackgroundInert: true, Backdrop: true, BaseZIndex: 3000,
-		BackdropClass:        "receipt-preview-overlay",
-		InitialFocusSelector: `[data-testid="receipt-preview-close"]`,
-		Child:                dialog, OnDismiss: dismiss,
-	})
+	var body ui.Node
+	if art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); art != nil && len(art.Bytes) > 0 {
+		body = Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
+	} else {
+		body = uiw.Callout(uiw.CalloutProps{Tone: uiw.CalloutWarn, Body: Span(uistate.T("transactions.previewMissing"))})
+	}
+	return uiw.PortalFlipPanel(uiw.FlipPanelProps{Title: uistate.T("transactions.previewReceipt"), Width: uiw.FlipLargeW, Height: uiw.FlipLargeH,
+		NoFooter: true, FlushBody: true, OnClose: dismiss,
+		Back: Div(css.Class("modal-scroll"), Attr("data-testid", "receipt-preview"), body)}, "receipt-preview-surface")
 }
 
 // txnTableProps carries the engine-hydrated ledger frame and the data the table tile

@@ -109,7 +109,6 @@ func TestTV8FDialogCollectorCoversReviewFlipAndQuickAdd(t *testing.T) {
 		".txn-form-add .txt-picker:has(.txt-empty){display:none;}",
 		".rvs [class*='rvs-'], .rvs [class*='rvw-']{font-size:var(--fs-body);font-weight:400;font-style:normal;text-transform:none;}",
 		".rvs .rvs-tier-count, .rvs .rvs-foot-sub, .rvs .rvs-note, .rvs .rvs-kbd, .rvs .rvw-rawpayee{font-size:var(--fs-meta);font-weight:400;font-style:normal;font-variant-numeric:tabular-nums;}",
-		".cf-overlay__surface--modal:has(.txn-add-layout){width:min(760px, 90vw);max-height:min(720px, 90vh);}",
 		".txn-form-add .qa-sentence > label{font-size:var(--fs-body);font-weight:500;font-style:normal;text-transform:none;}",
 	} {
 		if !strings.Contains(css, expected) {

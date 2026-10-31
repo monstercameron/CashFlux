@@ -84,8 +84,15 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		Close: closePanel, Transfer: func() { transferOpen.Set(true) }, CategoryOpen: categoryOpen.Get(), SetCategoryOpen: categoryOpen.Set, App: props.App}
 	footer := uic.CreateElement(quickAddFooter, quickAddFooterProps{Saving: saving, Close: closePanel,
 		Save: func() { save(closePanel) }, Another: func() { save(reset) }})
-	return ui.Overlay(ui.OverlayProps{Open: props.Open, Kind: ui.OverlayModal, Title: uistate.T("quickAdd.title"),
-		TestID: "txn-add-dialog", Body: uic.CreateElement(quickAddBody, fields), Footer: footer, OnClose: closePanel})
+	if !props.Open {
+		return Fragment()
+	}
+	return ui.FlipPanel(ui.FlipPanelProps{Title: uistate.T("quickAdd.title"), Width: ui.FlipMediumW, Height: ui.FlipMediumH,
+		NoFooter: true, FlushBody: true, OnClose: closePanel,
+		Back: Div(css.Class("txn-add-panel"), Attr("data-testid", "txn-add-dialog"),
+			Div(css.Class("modal-scroll"), uic.CreateElement(quickAddBody, fields)),
+			footer),
+	})
 }
 
 type quickAddSaveProps struct {
@@ -397,10 +404,10 @@ type quickAddFooterProps struct {
 }
 
 func quickAddFooter(p quickAddFooterProps) uic.Node {
-	return Div(css.Class("txn-form-footer"), Div(css.Class("txn-form-footer-actions"),
+	return Div(css.Class("modal-foot"),
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-add-cancel"), OnClick(p.Close), uistate.T("action.cancel")),
 		Button(css.Class("btn"), Type("button"), Disabled(p.Saving), Attr("data-testid", "txn-add-another"), OnClick(p.Another), uistate.T("quickAdd.saveAndAnother")),
-		Button(css.Class("btn btn-primary"), Type("button"), Disabled(p.Saving), Attr("aria-busy", strconv.FormatBool(p.Saving)), Attr("id", "txn-add-save"), Attr("data-testid", "flip-save"), OnClick(p.Save), uistate.T("action.save"))))
+		Button(css.Class("btn btn-primary"), Type("button"), Disabled(p.Saving), Attr("aria-busy", strconv.FormatBool(p.Saving)), Attr("id", "txn-add-save"), Attr("data-testid", "flip-save"), OnClick(p.Save), uistate.T("action.save")))
 }
 
 // Compatibility aliases keep existing tests unchanged; all decisions live in txnform.

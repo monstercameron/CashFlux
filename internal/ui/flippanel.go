@@ -85,6 +85,9 @@ type FlipPanelProps struct {
 	// buttons, so the panel does not show two sets of buttons. The header close button,
 	// Escape and a backdrop click still dismiss via OnClose.
 	NoFooter bool
+	// NoEntrance starts the panel already flipped. A panel mounted through a portal cannot rely on
+	// the entrance effect to flip it, because the effect's state change does not re-render there.
+	NoEntrance bool
 }
 
 // FlipPanel is the settings overlay shared by per-widget and global settings and by the
@@ -106,7 +109,7 @@ func FlipPanel(props FlipPanelProps) uic.Node {
 func flipPanel(props FlipPanelProps) uic.Node {
 	// shown drives both the backdrop fade-in and the card flip; it flips to true
 	// once just after mount so the CSS transition animates.
-	shown := uic.UseState(false)
+	shown := uic.UseState(props.NoEntrance)
 	uic.UseEffect(func() func() {
 		if !shown.Get() {
 			shown.Set(true)
@@ -425,4 +428,17 @@ func slugifyTitle(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+// PortalFlipPanel shows a flip panel at the page body. A panel built inside a bento tile or
+// another transformed ancestor would resolve its fixed backdrop against that ancestor, so a
+// panel opened from a tile portals out. The panel keeps its own backdrop, focus and Escape
+// handling; the portal only lifts it out of the tree and makes the page behind inert.
+func PortalFlipPanel(props FlipPanelProps, surfaceID string) uic.Node {
+	props.NoEntrance = true
+	return uic.AccessibleOverlay(uic.AccessibleOverlayProps{
+		Open: true, Target: uic.PortalTarget{Selector: "body"}, SurfaceID: surfaceID,
+		Kind: uic.OverlayKindDialog, Role: "dialog", Modal: true, BackgroundInert: true,
+		LockScroll: true, BaseZIndex: 3000, Child: FlipPanel(props),
+	})
 }

@@ -27,8 +27,8 @@ func DuplicatesHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("transactions.dupReviewBtn"),
-		Width:     "900px",
-		Height:    "660px",
+		Width:     uiw.FlipLargeW,
+		Height:    uiw.FlipLargeH,
 		CloseOnly: true,
 		OnClose:   func() { open.Set(false) },
 		Back:      uic.CreateElement(screens.DuplicatesPanelBody, struct{}{}),

@@ -77,22 +77,28 @@ type txnEditOverlayProps struct {
 	OnClose      func()
 }
 
+// txnEditOverlay is the Edit transaction panel. It is the standard flip panel at the medium size,
+// with the form in the scrolling region and the Delete, Cancel and Save bar pinned beneath it,
+// the same layout the Accounts editors use.
 func txnEditOverlay(props txnEditOverlayProps) uic.Node {
 	cancel := uic.UseEvent(func() {
 		if props.OnClose != nil {
 			props.OnClose()
 		}
 	})
-	return uiw.Overlay(uiw.OverlayProps{
-		Open: props.Open, Kind: uiw.OverlayModal, Title: uistate.T("transactions.editTitle"),
-		TestID: "txn-edit-dialog", OnClose: props.OnClose, Body: props.Body,
-		Footer: Div(css.Class("txn-form-footer"),
-			props.Delete,
-			Div(css.Class("txn-form-footer-actions"),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-cancel"), OnClick(cancel), uistate.T("action.cancel")),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("form", "txn-edit-form"),
-					Attr("data-testid", "txn-edit-save"), uistate.T("action.save")),
-			),
+	if !props.Open {
+		return Fragment()
+	}
+	return uiw.FlipPanel(uiw.FlipPanelProps{
+		Title: uistate.T("transactions.editTitle"), Width: uiw.FlipMediumW, Height: uiw.FlipMediumH,
+		NoFooter: true, FlushBody: true, OnClose: props.OnClose,
+		Back: Div(css.Class("txn-edit-panel"), Attr("data-testid", "txn-edit-dialog"),
+			Div(css.Class("modal-scroll"), props.Body),
+			Div(css.Class("modal-foot"), props.Delete,
+				Div(css.Class("txn-form-footer-actions"),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-cancel"), OnClick(cancel), uistate.T("action.cancel")),
+					Button(css.Class("btn btn-primary"), Type("submit"), Attr("form", "txn-edit-form"),
+						Attr("data-testid", "txn-edit-save"), uistate.T("action.save")))),
 		),
 	})
 }

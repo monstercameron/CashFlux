@@ -652,7 +652,7 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 	chips, lensChips := txnToolbarChips(props)
 	return uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search: props.Filter.Text, SearchLabel: uistate.T("transactions.searchPlaceholder"), OnSearch: onFilterText, OnClearSearch: clearSearchNow, SearchPending: searchPending.Get(), ResultsSelector: ".data-table",
-		FiltersLabel: uistate.T("transactions.filters"), FiltersTitle: uistate.T("transactions.filtersTitle"), FilterSheet: true,
+		FiltersLabel: uistate.T("transactions.filters"), FiltersTitle: uistate.T("transactions.filtersTitle"),
 		ActiveAriaLabel: func(n int) string {
 			if n == 0 {
 				return uistate.T("transactions.filters")
@@ -1507,23 +1507,23 @@ func txnBulkOwnerPicker(props txnBulkOwnerPickerProps) ui.Node {
 			})
 		},
 	)
-	panel := Div(css.Class("cf-multipicker-sheet", tw.WFull, tw.MaxW85, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg),
-		Div(Attr("id", props.ID+"-title"), props.Label),
-		Div(css.Class("cf-multipicker-list", tw.MaxH55vh, tw.OverflowYAuto, tw.Flex, tw.FlexWrap, tw.Gap2),
-			Attr("id", props.ID+"-listbox"), Attr("role", "listbox"),
-			Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), rows),
-	)
+	listbox := Div(css.Class("cf-multipicker-list", tw.Flex, tw.FlexWrap, tw.Gap2),
+		Attr("id", props.ID+"-listbox"), Attr("role", "listbox"),
+		Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), rows)
 	trigger := uiw.ToolButton(uiw.ToolButtonProps{
 		Icon: icon.Users, Label: props.Label, AriaLabel: props.Label, TestID: props.TestID, Open: open.Get(),
 	}, Attr("id", props.ID), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
 		Attr("aria-controls", props.ID+"-listbox"), OnClick(onToggle))
-	overlay := ui.AccessibleOverlay(ui.AccessibleOverlayProps{
-		Open: open.Get(), Target: ui.PortalTarget{Selector: "body"}, SurfaceID: props.ID + "-surface",
-		Kind: ui.OverlayKindSheet, Role: "dialog", LabelledBy: props.ID + "-title", Modal: true,
-		TrapFocus: true, RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
-		InitialFocusSelector: "#" + props.ID + "-option-0", Child: panel, OnDismiss: close,
-	})
-	return Fragment(trigger, overlay)
+	// The choices stage inside the panel and apply when it closes, so Done and the close
+	// button both commit the selection.
+	sheet := If(open.Get(), uiw.PortalFlipPanel(uiw.FlipPanelProps{
+		Title: props.Label, Width: uiw.FlipSmallW, Height: uiw.FlipSmallH,
+		NoFooter: true, FlushBody: true, OnClose: close,
+		Back: Div(css.Class("modal-scroll"), listbox,
+			Div(css.Class("modal-foot"),
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", props.TestID+"-done"), OnClick(close), uistate.T("action.done")))),
+	}, props.ID+"-surface"))
+	return Fragment(trigger, sheet)
 }
 
 type txnBulkOwnerOptionProps struct {

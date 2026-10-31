@@ -29,8 +29,8 @@ func TransferReviewHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("txnreview.reviewBtn"),
-		Width:     "900px",
-		Height:    "660px",
+		Width:     uiw.FlipLargeW,
+		Height:    uiw.FlipLargeH,
 		NoFooter:  true,
 		FlushBody: true,
 		OnClose:   func() { open.Set(false) },

@@ -26,8 +26,8 @@ func ImportPanelHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:  uistate.T("transactions.importBtn"),
-		Width:  "900px",
-		Height: "660px",
+		Width:  uiw.FlipLargeW,
+		Height: uiw.FlipLargeH,
 		// The import frame owns its step-aware footer: Cancel, plus one
 		// result-named action only on the review step.
 		NoFooter:  true,

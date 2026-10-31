@@ -54,9 +54,6 @@ type FilterToolbarProps struct {
 	// OnClearSearch clears the query at once, bypassing the debounce that typing uses. When it is nil
 	// the toolbar calls OnSearch("") instead, which is also immediate.
 	OnClearSearch func()
-	// FilterSheet shows the panel as a sheet (the .filter-sheet styling) instead of an inline
-	// disclosure. It is opt-in, so existing pages keep the inline layout.
-	FilterSheet bool
 
 	FiltersLabel string   // trigger button text, e.g. "Filters"
 	FiltersTitle string   // popover title + trigger tooltip
@@ -299,14 +296,9 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		primaryActions = append(primaryActions, action)
 	}
 	panelTitle := props.FiltersTitle
-	if props.FilterSheet {
-		panelTitle = props.FiltersLabel
-	}
 
-	// The panel is built once and placed two ways. A sheet portals to the page body, so it opens
-	// at the viewport edge. Inside the bento tile the toolbar sits in, a transformed tile would
-	// make the fixed sheet position against the tile instead.
-	panel := Div(ClassStr(filterPanelClass(props.FilterSheet, !open.Get())),
+	// The panel opens inline under the toolbar, the same disclosure the Accounts page uses.
+	panel := Div(ClassStr(filterPanelClass(!open.Get())),
 		Attr("id", "filter-inline-panel"),
 		Attr("role", "region"), Attr("aria-label", panelTitle),
 		// Escape from anywhere inside the panel, not just from the trigger.
@@ -323,29 +315,10 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 				OnClick(closePanel), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		Div(css.Class("filter-inline-body"), Attr("data-scroll-owner", "sheet"), props.FilterFields),
-		If(props.FilterSheet, Div(css.Class("filter-sheet-footer"),
-			Button(css.Class("btn-link filter-sheet-clear"), Type("button"),
-				Attr("data-testid", "filter-sheet-clear-all"),
-				OnClick(func() {
-					if props.OnClearAll != nil {
-						props.OnClearAll()
-					}
-				}),
-				uistate.T("transactions.clearAllFilters")),
-			Button(css.Class("btn btn-primary filter-sheet-done"), Type("button"),
-				Attr("data-testid", "filter-sheet-done"),
-				OnClick(closePanel),
-				uistate.T("action.done")),
-		)),
 	)
 	// The inline panel has no backdrop, so the table stays visible below while filters change.
 	// It stays mounted through its fade-out (UsePanelFade).
-	var panelNode uic.Node
-	if props.FilterSheet {
-		panelNode = Overlay(OverlayProps{Open: open.Get(), Kind: OverlaySheet, Label: panelTitle, OnClose: closePanel, Body: panel})
-	} else {
-		panelNode = If(open.Get() || panelMounted, panel)
-	}
+	panelNode := If(open.Get() || panelMounted, panel)
 	return Div(
 		// Two rows. Row 1 holds the search field, the Filters trigger and the primary actions.
 		// Row 2 holds the remaining actions, so the buttons never wrap into a ragged line.
@@ -422,13 +395,10 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	)
 }
 
-// filterPanelClass returns the classes of the filter panel: the fade style, the sheet variant when
-// sheet is set, and is-leaving while the panel fades out.
-func filterPanelClass(sheet, leaving bool) string {
+// filterPanelClass returns the classes of the filter panel: the fade style, and is-leaving while
+// the panel fades out.
+func filterPanelClass(leaving bool) string {
 	class := "filter-inline-panel fade-panel"
-	if sheet {
-		class += " filter-sheet"
-	}
 	if leaving {
 		class += " is-leaving"
 	}

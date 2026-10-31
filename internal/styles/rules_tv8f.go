@@ -77,10 +77,6 @@ func registerTV8F() {
 		fontSize("var(--fs-figure)"),
 		fontWeight("600"),
 	)
-	rule(".cf-overlay__surface--modal:has(.txn-add-layout)",
-		width("min(760px, 90vw)"),
-		maxHeight("min(720px, 90vh)"),
-	)
 	rule(".txn-form-add .txt-picker:has(.txt-empty)",
 		display("none"),
 	)

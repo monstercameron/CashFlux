@@ -152,11 +152,6 @@ func categoryPickerComponent(componentProps categoryPickerComponentProps) ui.Nod
 
 	onQuery := ui.UseEvent(func(v string) { query.Set(v) })
 	onParent := ui.UseEvent(func(e ui.Event) { parentID.Set(e.GetValue()) })
-	closePicker := ui.UseEvent(func() {
-		if props.OnClose != nil {
-			props.OnClose()
-		}
-	})
 	// doCreate is a plain closure so both the button and the Enter key run it
 	// without Enter submitting any enclosing form.
 	doCreate := func() {
@@ -212,8 +207,17 @@ func categoryPickerComponent(componentProps categoryPickerComponentProps) ui.Nod
 	}
 
 	typed := strings.TrimSpace(query.Get())
-	return Div(css.Class("catpick-back"), Attr("data-testid", "catpick"),
-		Div(css.Class("catpick"), Attr("role", "dialog"), Attr("aria-label", uistate.T("catpick.title")),
+	dismiss := func() {
+		if props.OnClose != nil {
+			props.OnClose()
+		}
+	}
+	// The picker is a standard flip panel over the page, so it sits above the form it was opened
+	// from, with a title, a scrolling list and a pinned footer like the other editors.
+	return uiw.PortalFlipPanel(uiw.FlipPanelProps{
+		Title: uistate.T("catpick.title"), Width: uiw.FlipSmallW, Height: uiw.FlipMediumH,
+		NoFooter: true, FlushBody: true, OnClose: dismiss,
+		Back: Div(css.Class("modal-scroll"), Attr("data-testid", "catpick"),
 			Div(css.Class("catpick-search"),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "catpick-search"),
 					Attr("aria-label", uistate.T("catpick.searchPlaceholder")),
@@ -240,12 +244,12 @@ func categoryPickerComponent(componentProps categoryPickerComponentProps) ui.Nod
 							uistate.T("catpick.create")),
 					),
 				)),
-			Div(css.Class("catpick-foot"),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "catpick-close"),
-					OnClick(closePicker), uistate.T("catpick.close")),
+			Div(css.Class("modal-foot"),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "catpick-close"),
+					OnClick(dismiss), uistate.T("catpick.close")),
 			),
 		),
-	)
+	}, "catpick-surface")
 }
 
 // catPickRowProps drives one selectable category row.

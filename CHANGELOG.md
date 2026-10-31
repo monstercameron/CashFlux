@@ -122,6 +122,7 @@ and every commit updates this file under `Unreleased`.
 - Excluding or deleting a transaction reads the ledger with a checked read. If the ledger cannot be read, the confirm does not open and the person is told nothing was changed.
 - Saving a payment link reports when its repeating rule could not be saved, after the payment itself saved, and keeps the form open instead of reporting success.
 - Template chips on the Transactions page have their delete control beside the pick button, not nested inside it, and the recategorise offer keeps its buttons outside its live status message.
+- Transaction modals (Add, Edit, the receipt preview, the bulk owner and category pickers, Duplicates, Import and Transfer review) and the Filters panel now use the standard flip panel. The category picker is a titled panel that sits above the form it opened from.
 
 ### Changed
 - The `Topmost` flag on FlipPanel is removed. It did nothing: GWC sets the z-index of a managed overlay inline, which overrides any class, so a deeper overlay (a confirm opened from a modal) already sits above the one below it. The `--z-dialog` rule for the flip backdrop is removed with it.
