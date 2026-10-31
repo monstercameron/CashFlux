@@ -22,9 +22,6 @@ var (
 	pickerSearchStyles  = css.New(tw.WFull, tw.Px3, tw.Py2, tw.Rounded)
 	pickerListStyles    = css.New(tw.MaxH55vh, tw.OverflowYAuto, tw.Py1)
 	pickerOptionStyles  = css.New(tw.Flex, tw.WFull, tw.ItemsCenter, tw.Gap2, tw.Rounded, tw.Px2, tw.Py1, tw.TextLeft)
-	multiSheetStyles    = css.New(tw.WFull, tw.MaxW85, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg)
-	multiListStyles     = css.New(tw.MaxH55vh, tw.OverflowYAuto, tw.Flex, tw.FlexWrap, tw.Gap2)
-	multiOptionStyles   = css.New(tw.InlineFlex, tw.ItemsCenter, tw.Gap2, tw.RoundedFull, tw.Px3, tw.Py2)
 	secondaryTextStyles = css.New(tw.TextDim, css.FontSize(css.Rem(0.75)))
 )
 
@@ -98,52 +95,75 @@ func pickerPanelPlacement(triggerID, panelID string) (placement pickerPosition, 
 	return placement, true
 }
 
-// usePickerPlacement keeps an open panel beside its trigger. It measures on open and
-// again on resize or scroll, and hands each placement to setPosition.
+// usePickerPlacement keeps an open panel beside its trigger. It measures on open, then
+// again when the page scrolls or resizes. Scroll events arrive in bursts, so each burst
+// is coalesced into one animation frame, and a placement equal to the last one is not
+// handed on, so the picker only re-renders when the panel really moves.
 func usePickerPlacement(open bool, id string, setPosition func(pickerPosition)) {
 	uic.UseEffect(func() func() {
 		if !open {
 			return nil
 		}
-		reposition := func() {
-			if placement, ok := pickerPanelPlacement(id, id+"-surface"); ok {
-				setPosition(placement)
+		var last pickerPosition
+		placed := false
+		place := func() {
+			placement, ok := pickerPanelPlacement(id, id+"-surface")
+			if !ok || (placed && placement == last) {
+				return
 			}
+			last, placed = placement, true
+			setPosition(placement)
 		}
-		reposition()
+		place()
 		window := js.Global().Get("window")
 		if !window.Truthy() {
 			return nil
 		}
-		listener := js.FuncOf(func(js.Value, []js.Value) any { reposition(); return nil })
-		window.Call("addEventListener", "resize", listener)
-		window.Call("addEventListener", "scroll", listener, true)
+		frame := js.Undefined()
+		queued := false
+		onFrame := js.FuncOf(func(js.Value, []js.Value) any {
+			queued = false
+			place()
+			return nil
+		})
+		onScroll := js.FuncOf(func(js.Value, []js.Value) any {
+			if !queued {
+				queued = true
+				frame = window.Call("requestAnimationFrame", onFrame)
+			}
+			return nil
+		})
+		window.Call("addEventListener", "resize", onScroll)
+		window.Call("addEventListener", "scroll", onScroll, true)
 		return func() {
-			window.Call("removeEventListener", "resize", listener)
-			window.Call("removeEventListener", "scroll", listener, true)
-			listener.Release()
+			window.Call("removeEventListener", "resize", onScroll)
+			window.Call("removeEventListener", "scroll", onScroll, true)
+			if queued {
+				window.Call("cancelAnimationFrame", frame)
+			}
+			onScroll.Release()
+			onFrame.Release()
 		}
 	}, open, id)
 }
 
 // multiSheetSurfaceStyle places the multi-select sheet beside its trigger, as wide as the
-// trigger but never narrower than a readable list, and scrolls inside the room it has.
+// trigger but never narrower than a readable list. Only the placement is inline; the
+// sheet's colours and shape come from the shared styles.
 func multiSheetSurfaceStyle(place pickerPosition) map[string]string {
 	return map[string]string{
-		"position":        "fixed",
-		"top":             strconv.Itoa(place.Top) + "px",
-		"left":            strconv.Itoa(place.Left) + "px",
-		"width":           strconv.Itoa(max(place.Width, 200)) + "px",
-		"max-height":      strconv.Itoa(place.MaxHeight) + "px",
-		"overflow-y":      "auto",
-		"background":      "var(--bg-elev)",
-		"border":          "1px solid var(--border)",
-		"border-radius":   "var(--radius-xl)",
-		"box-shadow":      "0 12px 32px rgba(0, 0, 0, 0.35)",
-		"padding":         "0.4rem",
-		"box-sizing":      "border-box",
-		"scrollbar-width": "thin",
+		"position":   "fixed",
+		"top":        strconv.Itoa(place.Top) + "px",
+		"left":       strconv.Itoa(place.Left) + "px",
+		"width":      strconv.Itoa(max(place.Width, 200)) + "px",
+		"max-height": strconv.Itoa(place.MaxHeight) + "px",
 	}
+}
+
+// pickerContains reports whether node sits inside the element with the given id.
+func pickerContains(containerID string, node js.Value) bool {
+	container := js.Global().Get("document").Call("getElementById", containerID)
+	return container.Truthy() && container.Call("contains", node).Bool()
 }
 
 // PickerProps configures a searchable, explicit-commit picker.
@@ -385,18 +405,28 @@ func pickerCreateRow(props pickerCreateRowProps) uic.Node {
 	)
 }
 
-// MultiPickerProps configures a controlled listbox that toggles multiple values.
+// MultiPickerProps configures a MultiPicker.
 type MultiPickerProps struct {
-	ID, Label, Placeholder string
-	Options                []PickerOption
-	Selected               []string
-	OnToggle               func(value string)
-	TestID                 string
+	// ID names the trigger. The sheet, its title and its options derive their ids from it.
+	ID string
+	// Label is the accessible name of the trigger and the heading of the sheet.
+	Label string
+	// Placeholder is the trigger's text, usually a summary of what is chosen.
+	Placeholder string
+	// Options are the choices, in order.
+	Options []PickerOption
+	// Selected holds the values currently chosen.
+	Selected []string
+	// OnToggle receives the value of each option the reader clicks.
+	OnToggle func(value string)
+	// TestID names the trigger for tests. Empty adds no test id.
+	TestID string
 }
 
-// MultiPicker renders a portalled multi-select sheet. Each option has
-// aria-selected state and click toggles it through OnToggle; Escape closes and
-// restores focus to the trigger.
+// MultiPicker is a field that opens a sheet of choices beside it. Choosing an option
+// toggles it through OnToggle and the sheet stays open, so several can be picked in one
+// visit. The sheet closes on Escape, on a press outside it, or when focus moves out of
+// it. Escape also returns focus to the field.
 func MultiPicker(props MultiPickerProps) uic.Node {
 	return uic.CreateElement(multiPickerComponent, multiPickerComponentProps{Props: props, PortalTarget: "body"})
 }
@@ -409,78 +439,108 @@ type multiPickerComponentProps struct {
 func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	props := componentProps.Props
 	open := uic.UseState(false)
-	listID := props.ID + "-listbox"
 	active := uic.UseState(0)
 	place := uic.UseState(pickerPosition{MaxHeight: 420})
 	usePickerPlacement(open.Get(), props.ID, place.Set)
-	closePicker := func() { open.Set(false); focusPickerID(props.ID) }
-	onTrigger := OnClick(func() { active.Set(0); open.Set(true) })
-	trigger := Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger,
-		props.Placeholder)
-	if props.TestID != "" {
-		trigger = Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-			Attr("id", props.ID), Attr("type", "button"), Attr("data-testid", props.TestID), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger, props.Placeholder)
+	listID := props.ID + "-listbox"
+	surfaceID := props.ID + "-surface"
+
+	onOpen := uic.UseEvent(func(uic.Event) {
+		active.Set(0)
+		open.Set(true)
+	})
+	onTriggerKey := uic.UseEvent(func(event uic.KeyboardEvent) {
+		if key := event.GetKey(); key == "ArrowDown" || key == "ArrowUp" {
+			event.PreventDefault()
+			active.Set(0)
+			open.Set(true)
+		}
+	})
+	dismiss := func() { open.Set(false) }
+	// leave closes the sheet when focus lands outside it. A blur with no destination
+	// means focus left the page, so it closes too. A blur from a row that a re-render
+	// has already removed is ignored, so a pick never closes the sheet it was made in.
+	leave := func(event uic.Event) {
+		if next := event.JSValue().Get("relatedTarget"); next.Truthy() {
+			if !pickerContains(surfaceID, next) {
+				dismiss()
+			}
+			return
+		}
+		if event.JSValue().Get("target").Get("isConnected").Truthy() {
+			dismiss()
+		}
 	}
-	options := FilterPickerOptions(props.Options, "")
+
+	trigger := []any{
+		css.Class("cf-multi-trigger"), Type("button"),
+		Attr("id", props.ID), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"),
+		Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID),
+		OnClick(onOpen), OnKeyDown(onTriggerKey), props.Placeholder,
+	}
+	if props.TestID != "" {
+		trigger = append(trigger, Attr("data-testid", props.TestID))
+	}
+
 	var panel uic.Node = Fragment()
+	initialFocus := ""
 	if open.Get() {
-		rows := make([]uic.Node, 0, len(options))
+		options := FilterPickerOptions(props.Options, "")
+		if len(options) > 0 {
+			initialFocus = "#" + props.ID + "-option-0"
+		}
+		list := []any{
+			css.Class("cf-multi-list"), Attr("id", listID), Attr("role", "listbox"),
+			Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"),
+			Attr("aria-activedescendant", props.ID+"-option-"+strconv.Itoa(active.Get())),
+		}
 		for index, option := range options {
-			selected := containsPickerValue(props.Selected, option.Value)
-			rows = append(rows, uic.CreateElement(multiPickerOptionRow, multiPickerOptionRowProps{
-				ID: props.ID + "-option-" + strconv.Itoa(index), Option: option, Selected: selected, Active: index == active.Get(),
-				OnToggle: func(value string) {
-					if props.OnToggle != nil {
-						props.OnToggle(value)
-					}
-				},
+			list = append(list, uic.CreateElement(multiPickerOptionRow, multiPickerOptionRowProps{
+				ID:       props.ID + "-option-" + strconv.Itoa(index),
+				Option:   option,
+				Selected: containsPickerValue(props.Selected, option.Value),
+				OnToggle: props.OnToggle,
+				OnLeave:  leave,
 				OnMove: func(delta int) {
-					next := PickerNextIndex(options, index, delta)
-					if next >= 0 {
+					if next := PickerNextIndex(options, index, delta); next >= 0 {
 						active.Set(next)
 						focusPickerID(props.ID + "-option-" + strconv.Itoa(next))
 					}
 				},
 			}))
 		}
-		listArgs := []any{Attr("id", listID), Attr("role", "listbox"), Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), Attr("aria-activedescendant", props.ID+"-option-"+strconv.Itoa(active.Get())), css.Class("cf-multipicker-list", multiListStyles)}
-		for _, row := range rows {
-			listArgs = append(listArgs, row)
-		}
-		panel = Div(css.Class("cf-multipicker-sheet", multiSheetStyles),
-			Div(Attr("id", props.ID+"-title"), props.Label), Div(listArgs...),
+		panel = Div(css.Class("cf-multi-sheet"),
+			Div(css.Class("cf-multi-title"), Attr("id", props.ID+"-title"), props.Label),
+			Div(list...),
 		)
 	}
-	initialFocus := ""
-	if len(options) > 0 {
-		initialFocus = "#" + props.ID + "-option-0"
-	}
+
 	overlay := uic.AccessibleOverlay(uic.AccessibleOverlayProps{
-		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget}, SurfaceID: props.ID + "-surface",
-		SurfaceStyle: multiSheetSurfaceStyle(place.Get()),
-		Kind:         uic.OverlayKindSheet, Role: "dialog", LabelledBy: props.ID + "-title", Modal: true,
-		TrapFocus: true, RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
-		InitialFocusSelector: initialFocus, Child: panel, OnDismiss: closePicker,
+		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget},
+		SurfaceID: surfaceID, SurfaceClass: "cf-multi-surface", SurfaceStyle: multiSheetSurfaceStyle(place.Get()),
+		Kind: uic.OverlayKindPopover, Role: "dialog", LabelledBy: props.ID + "-title",
+		RestoreFocus: true, CloseOnEscape: true, CloseOnOutsideClick: true,
+		InitialFocusSelector: initialFocus, Child: panel, OnDismiss: dismiss,
 	})
-	return Fragment(trigger, overlay)
+	return Fragment(Button(trigger...), overlay)
 }
 
 type multiPickerOptionRowProps struct {
 	ID       string
 	Option   PickerOption
 	Selected bool
-	Active   bool
 	OnToggle func(string)
 	OnMove   func(int)
+	OnLeave  func(uic.Event)
 }
 
 func multiPickerOptionRow(props multiPickerOptionRowProps) uic.Node {
 	onKey := uic.UseEvent(func(event uic.KeyboardEvent) {
 		delta := 0
-		if event.GetKey() == "ArrowDown" {
+		switch event.GetKey() {
+		case "ArrowDown":
 			delta = 1
-		} else if event.GetKey() == "ArrowUp" {
+		case "ArrowUp":
 			delta = -1
 		}
 		if delta != 0 {
@@ -490,22 +550,21 @@ func multiPickerOptionRow(props multiPickerOptionRowProps) uic.Node {
 			}
 		}
 	})
-	selected := "false"
-	if props.Selected {
-		selected = "true"
-	}
-	class := "cf-multipicker-option"
-	if props.Active {
-		class += " is-active"
-	}
-	return Button(css.Class(class, multiOptionStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("role", "option"), Attr("aria-selected", selected), Attr("aria-disabled", boolAttr(props.Option.Disabled)),
-		OnKeyDown(onKey),
-		OnClick(func() {
-			if !props.Option.Disabled && props.OnToggle != nil {
-				props.OnToggle(props.Option.Value)
-			}
-		}), props.Option.Label)
+	onClick := uic.UseEvent(func(uic.Event) {
+		if !props.Option.Disabled && props.OnToggle != nil {
+			props.OnToggle(props.Option.Value)
+		}
+	})
+	onBlur := uic.UseEvent(func(event uic.Event) {
+		if props.OnLeave != nil {
+			props.OnLeave(event)
+		}
+	})
+	return Button(css.Class("cf-multi-option"), Type("button"),
+		Attr("id", props.ID), Attr("role", "option"),
+		Attr("aria-selected", boolAttr(props.Selected)), Attr("aria-disabled", boolAttr(props.Option.Disabled)),
+		OnKeyDown(onKey), OnClick(onClick), OnBlur(onBlur),
+		props.Option.Label)
 }
 
 func containsPickerValue(values []string, target string) bool {
