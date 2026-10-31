@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- A confirm or prompt that opens from inside another modal now sits above it. The confirm host's panel sets `Topmost`, which lifts its backdrop to the `--z-dialog` layer. Before, it shared the modal layer, so the page's own modal could cover it.
+
 ### Changed
 - Every FlipPanel modal shares one backdrop: a single `.flip-backdrop` rule set and one class helper, replacing four overlapping rule blocks and the unused dialog scrim styles. The panel's shadow now sits on its wrapper, so the flip's 3D layer no longer clips it into a hard-edged rectangle around the card. The unused `webkitBackdropFilter` property constructor is removed.
 - Comments across the menu, picker, filter, dialog and credential code now describe the GWC design, with stale history and ticket tags removed. Two comments that claimed behaviour the code does not have are corrected. Small helpers replace repeated code (boolAttr, jsString, tileIndex, tileSpan, slices.Contains). No behaviour changes.

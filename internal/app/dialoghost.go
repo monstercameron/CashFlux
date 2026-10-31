@@ -133,6 +133,8 @@ func DialogHost() uic.Node {
 		Height:    ui.FlipSmallH,
 		NoFooter:  true,
 		FlushBody: true,
+		// A confirm can open on top of another modal, so it sits in the confirm layer.
+		Topmost: true,
 		// Enter reaches OnSave. Escape, a backdrop click and the header close button reach
 		// OnClose, which is a cancel. finish ignores every answer after the first.
 		OnSave:  func() { finish(true) },

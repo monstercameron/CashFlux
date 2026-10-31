@@ -9854,6 +9854,10 @@ func registerGenerated() {
 		pointerEvents("auto"),
 		backdropFilter("blur(calc(3px * var(--wonder-on)))"),
 	)
+	// A confirm or prompt that opens from inside another modal lifts above it.
+	rule(".flip-backdrop.flip-backdrop-top",
+		zIndex("var(--z-dialog)"),
+	)
 	rule(".flip-wrap",
 		width("384px"),
 		maxWidth("92vw"),
