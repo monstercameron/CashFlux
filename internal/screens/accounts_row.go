@@ -357,18 +357,18 @@ func AccountRow(props accountRowProps) ui.Node {
 					OnClick(openHoldings),
 					uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
 					Span(uistate.T("accountsInvest.viewHoldings")))),
-		),
-		// The detail block (balance chart, this-period flow, projection, filed documents,
-		// notes, custom fields) sits behind a quiet per-row disclosure, so the resting list
-		// reads as name then balance. The body mounts only while open or fading out, so the
-		// panel's facts are prepared only for a row the reader opened.
-		uiw.Disclosure(uiw.DisclosureProps{
-			ID: "acct-details-" + a.ID, TestID: "acct-details-toggle-" + a.ID, Class: "acct-details",
-			Summary: Span(css.Class("sr-only"), uistate.T("accountsRedesign.detailsAria", a.Name)),
-			Body: ui.CreateElement(accountDetailsPanel, accountDetailsPanelProps{
-				Row: props, Range: chartRange.Get(), OnRange: onChartRange,
+			// The detail block (balance chart, this-period flow, projection, filed documents,
+			// notes, custom fields) sits behind a quiet per-row disclosure, so the resting list
+			// reads as name then balance. The body mounts only while open or fading out, so the
+			// panel's facts are prepared only for a row the reader opened.
+			uiw.Disclosure(uiw.DisclosureProps{
+				ID: "acct-details-" + a.ID, TestID: "acct-details-toggle-" + a.ID, Class: "acct-details",
+				Summary: Span(css.Class("sr-only"), uistate.T("accountsRedesign.detailsAria", a.Name)),
+				Body: ui.CreateElement(accountDetailsPanel, accountDetailsPanelProps{
+					Row: props, Range: chartRange.Get(), OnRange: onChartRange,
+				}),
 			}),
-		}),
+		),
 		// The account's own findings, stated inline. The dot above says something is true
 		// about this row; these lines say what, and let it be acted on. They show at
 		// Standard density and up. At Minimal, the row keeps only the dot.

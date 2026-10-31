@@ -87,6 +87,17 @@ func registerAccountsS1() {
 	rule(".acct-row-badges:empty",
 		display("none"),
 	)
+	// The details toggle shares the badge line and sits at its right end. An open panel wraps
+	// to a full-width line of its own beneath the badges.
+	rule(".acct-row-badges > .acct-details",
+		flex("0 0 auto"),
+		width("auto"),
+		marginLeft("auto"),
+	)
+	rule(".acct-row-badges > .acct-details > .disclosure-body",
+		flex("0 0 100%"),
+		minWidth("0"),
+	)
 
 	// The details toggle is the chevron alone, at its natural width, not a full-width bar.
 	rule(".acct-details .disclosure-btn",
