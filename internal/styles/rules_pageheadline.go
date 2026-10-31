@@ -18,11 +18,11 @@ func registerPageHeadline() {
 		display("flex"), alignItems("baseline"), flexWrap("wrap"), gap("0.35rem 0.75rem"), minWidth("0"),
 	)
 	rule(".page-headline-figure",
-		fontSize("var(--fs-figure)"), fontWeight("600"), fontVariantNumeric("tabular-nums"), lineHeight("1.15"), color("var(--text)"),
+		fontSize("var(--fs-figure)"), fontWeight("600"), fontVariantNumeric("tabular-nums"), lineHeight("1.2"), color("var(--text)"),
 	)
 	rule(".page-headline-secondary",
 		display("inline-flex"), flexWrap("wrap"), alignItems("baseline"), gap("0.15rem 0.45rem"),
-		fontSize("var(--fs-body)"), fontWeight("400"), lineHeight("1.4"), color("var(--text)"),
+		fontSize("var(--fs-body)"), fontWeight("400"), lineHeight("1.55"), color("var(--text)"),
 	)
 	rule(".page-headline-secondary .stat-sub",
 		display("inline-flex"), flexDirection("row"), alignItems("center"), gap("0.3rem"),
@@ -43,6 +43,7 @@ func registerPageHeadline() {
 	rule(".page-headline-facts",
 		display("flex"), alignItems("baseline"), flexWrap("wrap"), gap("0.3rem 1.5rem"),
 		fontSize("var(--fs-body)"), color("var(--text)"),
+		lineHeight("1.55"),
 	)
 	rule(".page-headline-fact",
 		display("inline-flex"), alignItems("baseline"), gap("0.35rem"), color("inherit"),
@@ -83,6 +84,7 @@ func registerPageHeadline() {
 	// The footer line brings its own caption margin; the headline spaces its rows itself.
 	rule("main .page-headline-footer > p.t-caption",
 		marginTop("0"), marginBottom("0"),
+		lineHeight("1.55"),
 	)
 	rule(".page-headline-footer:empty",
 		display("none"),
