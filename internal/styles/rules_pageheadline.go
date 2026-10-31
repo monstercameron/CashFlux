@@ -152,10 +152,10 @@ func registerPageHeadline() {
 	rule(".acct-summary-frame",
 		position("relative"),
 	)
-	rule(".acct-summary-frame > [data-testid=\"accounts-add\"]",
+	rule(".acct-summary-frame > .acct-add-menu",
 		position("absolute"), top("0"), right("0"), zIndex("2"),
 	)
-	ruleMedia("(max-width: 720px)", ".acct-summary-frame > [data-testid=\"accounts-add\"]",
+	ruleMedia("(max-width: 720px)", ".acct-summary-frame > .acct-add-menu",
 		position("static"),
 	)
 }

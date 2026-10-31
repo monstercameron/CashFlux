@@ -62,6 +62,8 @@ type OverflowMenuProps struct {
 	// TriggerClass adds classes to the trigger. The trigger is always the shared tool button, so
 	// these add to its look rather than replace it.
 	TriggerClass string
+	// TriggerVariant tints the trigger as ToolButton does: "primary" for the page's main action.
+	TriggerVariant string
 	// TriggerIcon replaces the ⋯ glyph. Use a chevron when the trigger picks a variant of the
 	// action beside it, as the second half of a split button does. A ⋯ there reads as one more
 	// generic menu, and readers would miss the variants.
@@ -108,7 +110,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	// It stays highlighted while the menu is open.
 	trigger := ToolButton(ToolButtonProps{
 		Label: props.TriggerText, Icon: trigIcon, Title: triggerLabel, AriaLabel: triggerLabel,
-		Open: menu.Open, Class: props.TriggerClass, TestID: props.TriggerTestID,
+		Open: menu.Open, Class: props.TriggerClass, Variant: props.TriggerVariant, TestID: props.TriggerTestID,
 	},
 		Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(menu.Open)),
 		OnKeyDown(openFromKeyboard), OnClick(toggleOpen),

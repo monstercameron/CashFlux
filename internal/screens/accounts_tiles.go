@@ -604,18 +604,20 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 
 	body := Div(
 		Div(css.Class("acct-summary-frame"),
-			// One Add control for both things the page can add. Each item names what it creates.
-			uiw.OverflowMenu(uiw.OverflowMenuProps{
-				TriggerText:   uistate.T("accounts.addMenu"),
-				TriggerLabel:  uistate.T("accounts.addMenuTitle"),
-				TriggerTestID: "accounts-add",
-				TriggerClass:  "primary",
-				TriggerIcon:   icon.Plus,
-				Items: []uiw.OverflowMenuItem{
-					{Label: uistate.T("accounts.addAccountItem"), Icon: icon.Accounts, TestID: "accounts-add-account", OnSelect: func() { uistate.SetAddTarget("account") }},
-					{Label: uistate.T("accounts.addServiceItem"), Icon: icon.Repeat, TestID: "accounts-add-service", OnSelect: func() { uistate.SetAddTarget("service") }},
-				},
-			}),
+			// One Add control for both things the page can add. Each item names what it creates. It sits
+			// pinned to the summary's top-right corner (see rules_pageheadline.go) as the green main action.
+			Div(css.Class("acct-add-menu"),
+				uiw.OverflowMenu(uiw.OverflowMenuProps{
+					TriggerText:    uistate.T("accounts.addMenu"),
+					TriggerLabel:   uistate.T("accounts.addMenuTitle"),
+					TriggerTestID:  "accounts-add",
+					TriggerVariant: "primary",
+					TriggerIcon:    icon.Plus,
+					Items: []uiw.OverflowMenuItem{
+						{Label: uistate.T("accounts.addAccountItem"), Icon: icon.Accounts, TestID: "accounts-add-account", OnSelect: func() { uistate.SetAddTarget("account") }},
+						{Label: uistate.T("accounts.addServiceItem"), Icon: icon.Repeat, TestID: "accounts-add-service", OnSelect: func() { uistate.SetAddTarget("service") }},
+					},
+				})),
 			acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,
 				smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual, acctLiquidityLine(app, props.Base, props.Rates)),
 		),
