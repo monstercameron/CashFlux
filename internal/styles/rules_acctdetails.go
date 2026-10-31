@@ -8,6 +8,16 @@ package styles
 // facts sit on the right, and the documents and the institution share a footer line. Below 760px
 // it becomes a single column. Registered from Register().
 func registerAcctDetails() {
+	// The row's head starts with a 1rem type icon and a 0.75rem gap, so the name sits 1.75rem in.
+	// Everything under the head (the recurring line, the details panel) indents to that same
+	// column, so the nested content reads as belonging to the name rather than to the row edge.
+	rule(".acct-row",
+		customProp("--acct-indent", "1.75rem"),
+	)
+	rule(".acct-row > :not(.acct-row-head)",
+		prop("margin-left", "var(--acct-indent)"),
+		prop("min-width", "0"),
+	)
 	rule(".acct-row-details",
 		prop("display", "grid"),
 		prop("grid-template-columns", "minmax(0, 1.6fr) minmax(0, 1fr)"),
