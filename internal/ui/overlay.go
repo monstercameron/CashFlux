@@ -93,6 +93,12 @@ func overlayView(props OverlayProps) uic.Node {
 	case OverlayModal:
 		baseZ = 3000 // Existing --z-modal token; the separate confirm host uses --z-dialog.
 	}
+	// The framework draws a backdrop whenever a backdrop class is set, even when Backdrop is
+	// false. A popover or bottom bar has none, so its class is cleared; otherwise the page dims
+	// behind a hover popover and the backdrop covers the cells the pointer moves onto.
+	if !backdrop {
+		backdropClass = ""
+	}
 	if kind == OverlayPopover {
 		surfaceClass += " " + string(css.New(overlayPopoverRules...))
 	}

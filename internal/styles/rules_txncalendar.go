@@ -217,8 +217,16 @@ func registerTxnCalendar() {
 		prop("text-overflow", "ellipsis"),
 		prop("white-space", "nowrap"),
 	)
+	// One line per figure keeps every day cell the same height, whatever its amounts say.
 	rule(".txn-cal-moved, .txn-cal-week-moved",
-		prop("white-space", "normal"),
+		prop("overflow", "hidden"),
+		prop("text-overflow", "ellipsis"),
+		prop("white-space", "nowrap"),
+	)
+	// The day preview is a read-only hover card. It must not take the pointer, or the cell under
+	// it would lose its hover and the card would close as it opened.
+	rule(".cf-overlay__surface:has([data-testid=\"txn-cal-preview\"])",
+		prop("pointer-events", "none"),
 	)
 	rule(".txn-cal-net.text-down",
 		prop("color", "var(--money-negative)"),

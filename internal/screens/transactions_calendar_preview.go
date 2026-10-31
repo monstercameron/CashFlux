@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
@@ -67,7 +68,7 @@ func txnCalDayItems(shown []domain.Transaction) map[string][]txnCalDayItem {
 func txnCalPreviewOverlay(preview txnCalPreview, items map[string][]txnCalDayItem, leave func()) ui.Node {
 	return uiw.Overlay(uiw.OverlayProps{
 		Open: preview.Key != "" && preview.Phase == txnCalPreviewOpen, Kind: uiw.OverlayPopover,
-		Label: uistate.T("transactions.calPreviewLabel", preview.Key), AnchorID: "txn-cal-day-" + preview.Key,
+		Title: txnCalPreviewTitle(preview.Key), Label: uistate.T("transactions.calPreviewLabel", preview.Key), AnchorID: "txn-cal-day-" + preview.Key,
 		OnClose: leave, TestID: "txn-cal-preview",
 		Body: txnCalPreviewBody(items[preview.Key]),
 	})
@@ -96,4 +97,14 @@ func txnCalPreviewBody(items []txnCalDayItem) ui.Node {
 		content = Div(args...)
 	}
 	return Div(css.Class("txn-cal-preview-body"), loader, Div(css.Class("txn-cal-preview-content"), content))
+}
+
+// txnCalPreviewTitle names the previewed day in the user's date style, so the card's heading
+// reads as a date rather than a storage key.
+func txnCalPreviewTitle(dateKey string) string {
+	d, err := dateutil.ParseDate(dateKey)
+	if err != nil {
+		return dateKey
+	}
+	return calendarLabels(uistate.LoadPrefs()).Prefs.FormatDate(d)
 }
