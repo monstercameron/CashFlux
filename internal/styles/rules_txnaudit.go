@@ -8,6 +8,25 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// The info mark is a 24px centred box, so its centre sits on the row's centre line with the
+	// cleared check beside it.
+	rule(".bento-ledger .txn-table .txn-desc-status .txn-row-info-wrap",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		width("24px"),
+		height("24px"),
+	)
+	rule(".bento-ledger .txn-table .txn-desc-status .txn-row-info",
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		width("24px"),
+		height("24px"),
+		minHeight("0"),
+		padding("0"),
+		lineHeight("1"),
+	)
 	// The description takes the spare width and truncates. The status marks sit in one fixed,
 	// right-aligned column so the same marks line up down the ledger.
 	rule(".bento-ledger .txn-table .txn-desc-mainline > .row-desc-text",
