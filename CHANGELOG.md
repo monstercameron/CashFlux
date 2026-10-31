@@ -39,6 +39,7 @@ and every commit updates this file under `Unreleased`.
 - Menu items fill the menu's width, and the hover and focus highlight uses the same tints as the open Filters and More buttons instead of a flat grey.
 - The More menu has a layered drop shadow from a shared --shadow-menu token, so its options read as raised above the content.
 - The More menu and the row "⋯" menus are one shared component. They open, fade, stay on screen, dismiss and stack the same way, so the row menus no longer jump when they close.
+- Typed search waits 250ms after the last keystroke before it applies, in every filter toolbar. The note and the stale rows still answer each keystroke at once, and Clear or Escape applies immediately. Transactions no longer adds its own second delay on top.
 - New shared RadioGroup component (uiw.RadioGroup) with radiogroup semantics, arrow, Home and End keys, and a roving tab stop. The Accounts All / Assets / Liabilities control uses it, with CSS transitions, hover and focus states, and a selection settle that stops under reduced motion.
 - The radio selection is one indicator that slides between the options, so the colour travels from one choice to the next instead of fading in place.
 - The radio group uses the button radius token, so its corners match buttons and fields.

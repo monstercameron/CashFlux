@@ -7,6 +7,9 @@ package ui
 import (
 	"strconv"
 	"syscall/js"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/debounce"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -110,6 +113,9 @@ func FilterToolbar(props FilterToolbarProps) uic.Node {
 	return uic.CreateElement(filterToolbar, props)
 }
 
+// filterSearchDebounce is how long a typed search waits for the reader to pause.
+const filterSearchDebounce = 250 * time.Millisecond
+
 // markSearchPending shows the "Searching…" note and marks the box busy in the
 // same tick as the keystroke.
 //
@@ -212,18 +218,27 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	// Stable ids for the two nodes the keystroke has to touch before the app can
 	// re-render (C628).
 	searchID, pendingID := "fctrl-search-"+uid, "fctrl-pending-"+uid
+	searchKey := "filter-search:" + uid
+	// A typed query applies after filterSearchDebounce of quiet, so a word typed at speed is one
+	// search rather than one per letter. The note and the stale rows still answer the keystroke
+	// at once.
 	onSearch := uic.UseEvent(func(v string) {
-		// Reveal the pending note NOW, in the keystroke, rather than waiting for the
-		// re-render that raising the app's flag will eventually cause. On the ledger
-		// that round trip measured 520ms — longer than the debounce it is reporting.
 		markSearchPending(searchID, pendingID, props.ResultsSelector)
-		if props.OnSearch != nil {
-			props.OnSearch(v)
-		}
+		debounce.Call(searchKey, filterSearchDebounce, func() {
+			if props.OnSearch != nil {
+				props.OnSearch(v)
+			}
+		})
 	})
+	// Dropping a pending query on teardown keeps it from firing into an unmounted toolbar.
+	uic.UseEffect(func() func() {
+		return func() { debounce.Flush(searchKey) }
+	}, searchKey)
 	// Unconditional handler for the search box's clear (×) so its hook sits at a stable
 	// position even though the button itself only renders when there's a query.
 	clearSearchNow := func() {
+		// Drop the pending query first, so a debounced search does not land after the clear.
+		debounce.Flush(searchKey)
 		if props.OnClearSearch != nil {
 			props.OnClearSearch()
 			return

@@ -706,14 +706,12 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 	filterAtom := uistate.UseTxFilter()
 	searchPending := uistate.UseTxnSearchPending()
 	setFilter := props.SetFilter
-	debFilterD := func(key string, delay time.Duration, mut func(*uistate.TxFilter)) {
-		debounce.Call("txn-filter:"+key, delay, func() { setFilter(mut) })
-	}
+	// The toolbar already debounces typed search, so the query applies as it arrives here.
 	onFilterText := func(v string) {
 		if !searchPending.Get() {
 			searchPending.Set(true)
 		}
-		debFilterD("text", 150*time.Millisecond, func(x *uistate.TxFilter) { x.Text = v; searchPending.Set(false) })
+		setFilter(func(x *uistate.TxFilter) { x.Text = v; searchPending.Set(false) })
 	}
 	clearSearchNow := func() {
 		debounce.Flush("txn-filter:text")
