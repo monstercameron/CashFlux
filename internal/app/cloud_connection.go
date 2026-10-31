@@ -157,6 +157,12 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 		return nil
 	}, p.ServerURL, string(step))
 	test := func() {
+		// Sign-in retries the already selected server. A capability check must
+		// not write preferences (or race a pending local dataset save).
+		if step != cloudWhere {
+			probe(atom.Get().ServerURL, false)
+			return
+		}
 		address := strings.TrimSpace(url.Get())
 		if segment.Get() == "local" {
 			address = currentPageOrigin()

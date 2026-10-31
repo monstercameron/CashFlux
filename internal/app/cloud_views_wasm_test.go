@@ -9,6 +9,7 @@ import (
 	"syscall/js"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -132,6 +133,55 @@ func TestCloudOAuthCannotAuthorizeUnprotectedSync(t *testing.T) {
 				t.Fatal("OAuth bypassed protection")
 			}
 		})
+	}
+}
+
+func TestCloudSignInCanRetryConnectionDiscovery(t *testing.T) {
+	for _, phase := range []discoveryPhase{discoveryIdle, discoveryChecking, discoveryError, discoveryOK} {
+		t.Run(string(phase), func(t *testing.T) {
+			calls := 0
+			f := cloudTestFixture(t, uic.CreateElement(cloudSignInView, cloudSignInProps{Connection: cloudConnection{
+				Segment: "local", Phase: phase, Test: func() { calls++ },
+			}}))
+			button := cloudTestID(f, "button", "cloud-signin-test-connection")
+			if phase == discoveryOK {
+				if button != nil {
+					t.Fatal("successful discovery still offers a redundant connection check")
+				}
+				return
+			}
+			if button == nil {
+				t.Fatal("sign-in step cannot retry an unfinished connection check")
+			}
+			button.Click()
+			f.Stabilize()
+			want := 1
+			if phase == discoveryChecking {
+				want = 0
+			}
+			if calls != want {
+				t.Fatalf("connection check calls = %d, want %d", calls, want)
+			}
+		})
+	}
+}
+
+func TestCloudSignInKeepsExistingAccountLoginPrimaryWhenRegistrationClosed(t *testing.T) {
+	f := cloudTestFixture(t, uic.CreateElement(cloudSignInView, cloudSignInProps{Connection: cloudConnection{
+		Segment: "local", Phase: discoveryOK, Discovery: backendauth.Discovery{
+			CustomAuthEnabled: true, RegistrationOpen: false,
+		},
+	}}))
+	if cloudTestID(f, "div", "password-auth-card") == nil ||
+		cloudTestID(f, "input", "password-auth-username") == nil ||
+		cloudTestID(f, "input", "password-auth-password") == nil {
+		t.Fatal("existing-account login is hidden when registration is closed")
+	}
+	if cloudTestID(f, "button", "pending-device-expand") == nil {
+		t.Fatal("new users have no way to request access")
+	}
+	if cloudTestID(f, "button", "pending-device-request") != nil {
+		t.Fatal("request access obscures the existing-account login")
 	}
 }
 
