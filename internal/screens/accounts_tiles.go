@@ -28,7 +28,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
-	"github.com/monstercameron/CashFlux/internal/services"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -1128,13 +1127,14 @@ func acctListWidget(props acctListProps) ui.Node {
 	}
 	hasLiab := len(liabs) > 0
 	// Services are recurring bills, not accounts. They have their own class view.
-	serviceList := services.Of(app.Recurring())
+	serviceList := app.Services()
 	hasServices := len(serviceList) > 0
 
-	// The class view. With no liabilities or services the toggle is pointless, so force the
-	// assets-only view (and hide the segment) — the page reads exactly as before.
+	// The class view. Without liabilities the toggle has nothing to switch between, so the page
+	// falls back to the assets-only view, as before. The Services view stays on once it is chosen,
+	// even before the household has any service, so its empty state can be seen.
 	classView := f.Class
-	if classView == serviceClassView && !hasServices || classView != serviceClassView && !hasLiab {
+	if classView != serviceClassView && !hasLiab {
 		classView = string(domain.ClassAsset)
 	}
 	inServices := classView == serviceClassView
@@ -1304,7 +1304,7 @@ func acctListWidget(props acctListProps) ui.Node {
 		}
 	}
 
-	classSeg := ui.If(hasLiab || hasServices, func() ui.Node {
+	classSeg := ui.If(hasLiab || hasServices || inServices, func() ui.Node {
 		return uiw.RadioGroup(uiw.RadioGroupProps{
 			Label: uistate.T("accounts.classFilterLabel"),
 			Value: classView,

@@ -53,23 +53,22 @@ type Draft struct {
 	ID           string
 	Name         string
 	Provider     string
-	CategoryID   string // the budget category the cost counts against; a bill outside any tracked category does not reach budgets
 	Currency     string
 	MonthlyMinor int64 // the monthly cost in minor units of Currency
 	NextDue      time.Time
 }
 
-// NewMonthly builds the monthly recurring bill for a service. The bill is stored as spending, so its
-// amount is negative, the same as every other recurring bill.
+// NewMonthly builds the stored record for a service. The cost is kept as a negative amount, the sign
+// every recurring bill uses for spending. It is marked as a service, so the app keeps it out of
+// budgets, reports and forecasts.
 func NewMonthly(d Draft) domain.Recurring {
 	return domain.Recurring{
-		ID:         d.ID,
-		Label:      d.Name,
-		Provider:   d.Provider,
-		CategoryID: d.CategoryID,
-		Service:    true,
-		Cadence:    domain.CadenceMonthly,
-		Amount:     money.New(-d.MonthlyMinor, d.Currency),
-		NextDue:    d.NextDue,
+		ID:       d.ID,
+		Label:    d.Name,
+		Provider: d.Provider,
+		Service:  true,
+		Cadence:  domain.CadenceMonthly,
+		Amount:   money.New(-d.MonthlyMinor, d.Currency),
+		NextDue:  d.NextDue,
 	}
 }

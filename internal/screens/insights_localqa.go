@@ -89,11 +89,7 @@ func (s *insightsQASource) transactions() ([]domain.Transaction, error) {
 	return rows, nil
 }
 func (s *insightsQASource) recurring() ([]domain.Recurring, error) {
-	rows, err := s.app.Store().ListRecurring()
-	if err != nil {
-		return nil, fmt.Errorf("read recurring schedules: %w", err)
-	}
-	return rows, nil
+	return s.app.Recurring(), nil
 }
 func (s *insightsQASource) goals() ([]domain.Goal, error) {
 	rows, err := s.app.Store().ListGoals()

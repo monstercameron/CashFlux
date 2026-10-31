@@ -119,7 +119,8 @@ func computeRecurView(app *appstate.App, now time.Time) recurView {
 	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 	v := recurView{Base: base, Dec: currency.Decimals(base), Rates: rates}
 
-	flows, flowsErr := app.Store().ListRecurring()
+	flows := app.Recurring()
+	var flowsErr error
 	if flowsErr != nil {
 		// Keep saved definitions visible and manageable, but do not present their
 		// cached values as checked financial facts.

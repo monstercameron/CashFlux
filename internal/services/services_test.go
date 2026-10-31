@@ -54,11 +54,11 @@ func TestMonthlyTotalNormalisesCadence(t *testing.T) {
 	}
 }
 
-func TestNewMonthlyStoresASpendingBillInItsCategory(t *testing.T) {
+func TestNewMonthlyStoresASpendingServiceMarkedAsAService(t *testing.T) {
 	due := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-	r := NewMonthly(Draft{ID: "svc-1", Name: "Comcast Xfinity", Provider: "Comcast", CategoryID: "utilities",
+	r := NewMonthly(Draft{ID: "svc-1", Name: "Comcast Xfinity", Provider: "Comcast",
 		Currency: "USD", MonthlyMinor: 8000, NextDue: due})
-	if !r.Service || r.Provider != "Comcast" || r.Label != "Comcast Xfinity" || r.CategoryID != "utilities" {
+	if !r.Service || r.Provider != "Comcast" || r.Label != "Comcast Xfinity" {
 		t.Fatalf("NewMonthly fields = %+v", r)
 	}
 	if r.Amount.Amount != -8000 || r.Cadence != domain.CadenceMonthly || !r.NextDue.Equal(due) {

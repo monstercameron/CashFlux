@@ -47,7 +47,6 @@ func serviceAddForm(props ServiceAddFormProps) ui.Node {
 	name := ui.UseState("")
 	provider := ui.UseState("")
 	monthly := ui.UseState("")
-	categoryID := ui.UseState("")
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
@@ -60,10 +59,6 @@ func serviceAddForm(props ServiceAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("services.nameRequired"))
 			return
 		}
-		if categoryID.Get() == "" {
-			errMsg.Set(uistate.T("services.categoryRequired"))
-			return
-		}
 		cur := app.Settings().BaseCurrency
 		minor, err := money.ParseMinor(strings.TrimSpace(monthly.Get()), currency.Decimals(cur))
 		if err != nil || minor <= 0 {
@@ -71,7 +66,7 @@ func serviceAddForm(props ServiceAddFormProps) ui.Node {
 			return
 		}
 		r := services.NewMonthly(services.Draft{ID: id.New(), Name: n, Provider: strings.TrimSpace(provider.Get()),
-			CategoryID: categoryID.Get(), Currency: cur, MonthlyMinor: minor, NextDue: dateutil.NextMonthlyDue(time.Now(), 1)})
+			Currency: cur, MonthlyMinor: minor, NextDue: dateutil.NextMonthlyDue(time.Now(), 1)})
 		if err := app.PutRecurring(r); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -81,7 +76,6 @@ func serviceAddForm(props ServiceAddFormProps) ui.Node {
 		name.Set("")
 		provider.Set("")
 		monthly.Set("")
-		categoryID.Set("")
 		errMsg.Set("")
 		if props.OnDone != nil {
 			props.OnDone()
@@ -108,14 +102,6 @@ func serviceAddForm(props ServiceAddFormProps) ui.Node {
 			labeledField(uistate.T("services.monthly"),
 				Input(css.Class("field"), Attr("id", "service-add-monthly"), Type("text"), Attr("inputmode", "decimal"),
 					Attr("aria-label", uistate.T("services.monthly")), Attr("aria-required", "true"), Placeholder("0.00"), OnInput(onMonthly), uiw.FieldValue(monthly.Get()))),
-			labeledField(uistate.T("services.category"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   categorySelectOptions(app.Categories(), categoryID.Get()),
-					Selected:  categoryID.Get(),
-					OnChange:  func(v string) { categoryID.Set(v) },
-					AriaLabel: uistate.T("services.category"),
-					TestID:    "service-add-category",
-				})),
 			P(css.Class("muted"), Attr("data-testid", "service-explain"), uistate.T("services.explain")),
 		),
 		errText("service-err", errMsg.Get()),

@@ -19,6 +19,40 @@ import (
 	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
+// TestAccountsServicesViewStaysOnWhenThereAreNoServices checks that choosing Services with no services
+// yet shows an empty state rather than switching back to the asset list.
+func TestAccountsServicesViewStaysOnWhenThereAreNoServices(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	lens := state.NewGlobalAtom("household:activeScope", scope.ReportScope{})
+	previousLens := lens.Get()
+	t.Cleanup(func() { lens.Set(previousLens); uistate.PersistAcctClass(""); clearAccountDetailCaches() })
+	lens.Set(scope.ReportScope{})
+
+	now := time.Now()
+	checking := domain.Account{ID: "checking", Name: "Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(10000, "USD"), BalanceAsOf: now}
+	card := domain.Account{ID: "card", Name: "Card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: money.New(-5000, "USD"), BalanceAsOf: now}
+	for _, a := range []domain.Account{checking, card} {
+		if err := app.PutAccount(a); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	uistate.PersistAcctClass(serviceClassView)
+	f := render.New(t, render.WithQueuedScheduler())
+	defer f.Cleanup()
+	f.Render(ui.CreateElement(Accounts))
+	f.Stabilize()
+
+	if byTestID(f, "p", "acct-services-none") == nil {
+		t.Fatalf("Services view with no services should show its empty state: %s", f.Text())
+	}
+	if byTestID(f, "div", "acct-row-checking") != nil {
+		t.Fatal("Services view fell back to the account list")
+	}
+}
+
 // TestAccountsServicesViewListsServicesWithTheirMonthlyTotal checks the Services filter: it lists
 // the recurring services instead of accounts, shows their monthly total, and leaves the accounts out.
 func TestAccountsServicesViewListsServicesWithTheirMonthlyTotal(t *testing.T) {
@@ -37,10 +71,10 @@ func TestAccountsServicesViewListsServicesWithTheirMonthlyTotal(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := app.Store().PutRecurring(services.NewMonthly(services.Draft{ID: "xfinity", Name: "Comcast Xfinity", Provider: "Comcast",
-		CategoryID: "utilities", Currency: "USD", MonthlyMinor: 8000, NextDue: now.AddDate(0, 0, 3)})); err != nil {
+		Currency: "USD", MonthlyMinor: 8000, NextDue: now.AddDate(0, 0, 3)})); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.Store().PutRecurring(services.NewMonthly(services.Draft{ID: "power", Name: "Power", CategoryID: "utilities",
+	if err := app.Store().PutRecurring(services.NewMonthly(services.Draft{ID: "power", Name: "Power",
 		Currency: "USD", MonthlyMinor: 5000, NextDue: now.AddDate(0, 0, 9)})); err != nil {
 		t.Fatal(err)
 	}

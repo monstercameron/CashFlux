@@ -44,6 +44,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/revalue"
 	"github.com/monstercameron/CashFlux/internal/ruleapply"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/services"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
@@ -599,13 +600,38 @@ func (a *App) SavedInsights() []domain.SavedInsight {
 	return v
 }
 
-// Recurring returns every scheduled recurring cash flow.
+// Recurring returns every scheduled recurring cash flow that feeds budgets, reports, forecasts and
+// auto-posting. Services are monthly bills the household tracks on the Accounts page without letting
+// them touch those totals, so they are left out here; see Services.
 func (a *App) Recurring() []domain.Recurring {
+	return withoutServices(a.allRecurring())
+}
+
+// Services returns the monthly services the household tracks on the Accounts page. They are kept out
+// of Recurring, so they never reach budgets, reports, forecasts or auto-posting.
+func (a *App) Services() []domain.Recurring {
+	return services.Of(a.allRecurring())
+}
+
+// allRecurring is every stored recurring record, services included. It is cached once per store
+// revision, so Recurring and Services share one read.
+func (a *App) allRecurring() []domain.Recurring {
 	return a.reads.recurring.get(a.store.Rev(), func() []domain.Recurring {
 		v, err := a.store.ListRecurring()
 		a.logErr("recurring", err)
 		return v
 	})
+}
+
+// withoutServices returns recs with the services removed, in their stored order.
+func withoutServices(recs []domain.Recurring) []domain.Recurring {
+	out := make([]domain.Recurring, 0, len(recs))
+	for _, r := range recs {
+		if !r.Service {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // AllocProfiles returns every saved capital-allocation weight profile.
