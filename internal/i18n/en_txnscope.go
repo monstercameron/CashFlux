@@ -71,9 +71,13 @@ var txnScopeKeys = Catalog{
 	// KIND of transaction: the three items above it are kinds, so a heading of the
 	// same weight in the same list gets read as one. It names the different thing
 	// this section is — a bulk route in, rather than one entry.
-	"transactions.addFromFile": "Many at once",
-	"transactions.showNote":    "Show note",
-	"transactions.hideNote":    "Hide note",
+	"transactions.addFromFile":       "Many at once",
+	"transactions.showNote":          "Show note",
+	"transactions.hideNote":          "Hide note",
+	"transactions.calPreviewLabel":   "Transactions on %s",
+	"transactions.calPreviewLoading": "Loading this day…",
+	"transactions.calPreviewEmpty":   "No transactions on this day.",
+	"transactions.calPreviewMore":    "+%d more",
 	// The global "+" menu names the same three kinds the page's Add menu does, so a
 	// user meets one vocabulary wherever they start (C573).
 	"addmenu.expense": "Expense",

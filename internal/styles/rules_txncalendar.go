@@ -8,6 +8,69 @@ package styles
 // .cal-dot vocabulary from the bills calendar and layers the ledger-specific
 // pieces. Token-based throughout so it tracks every theme.
 func registerTxnCalendar() {
+	// The loader sits over the rows and fades out, so the day's rows show beneath it at once.
+	keyframes("txnCalPreviewLoaderOut",
+		at("0%", prop("opacity", "1")),
+		at("70%", prop("opacity", "1")),
+		at("100%", prop("opacity", "0"), prop("visibility", "hidden")),
+	)
+	keyframes("txnCalPreviewContentIn",
+		at("0%", prop("opacity", "0")),
+		at("100%", prop("opacity", "1")),
+	)
+	rule(".txn-cal-preview-body",
+		display("grid"),
+		minWidth("14rem"),
+	)
+	rule(".txn-cal-preview-loading, .txn-cal-preview-content",
+		gridArea("1 / 1"),
+	)
+	rule(".txn-cal-preview-loading",
+		zIndex("1"),
+		background("var(--bg-card)"),
+		prop("animation", "txnCalPreviewLoaderOut 420ms ease-out both"),
+	)
+	rule(".txn-cal-preview-content",
+		prop("animation", "txnCalPreviewContentIn 180ms ease-out 240ms both"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".txn-cal-preview-loading",
+		display("none"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".txn-cal-preview-content",
+		prop("animation", "none"),
+	)
+	// The day preview lists its rows in the popover. The loader sits beside its words.
+	rule(".txn-cal-preview-list",
+		display("grid"),
+		gap("0.25rem"),
+		minWidth("14rem"),
+		maxWidth("22rem"),
+	)
+	rule(".txn-cal-preview-row",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.75rem"),
+		fontSize("var(--fs-body)"),
+	)
+	rule(".txn-cal-preview-label",
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".txn-cal-preview-amount",
+		fontWeight("600"),
+		fontVariantNumeric("tabular-nums"),
+		whiteSpace("nowrap"),
+	)
+	rule(".txn-cal-preview-loading",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		color("var(--text-dim)"),
+		fontSize("var(--fs-meta)"),
+	)
 	rule(".txn-cal",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),

@@ -12,6 +12,7 @@ package screens
 
 import (
 	"fmt"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -74,6 +75,7 @@ type txnCalMonthCellProps struct {
 	Ghosts    []txncalendar.Ghost
 	Rates     currency.Rates
 	OnPick    func(dateKey string)
+	Hover     txnCalHover
 }
 
 // txnCalendarWidget subscribes to calendar inputs and binds a day pick to the
@@ -95,7 +97,7 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 		uistate.PostNotice(selection.Notice, false)
 	}
 	return ui.CreateElement(txnCalCalendar, txnCalCalendarProps{
-		Month: *month, Headers: labels.Headers(pr.WeekStartWeekday()), OnPick: pickDay,
+		Month: *month, Headers: labels.Headers(pr.WeekStartWeekday()), OnPick: pickDay, Items: txnCalDayItems(props.Shown),
 	})
 }
 
@@ -119,9 +121,11 @@ type txnCalCalendarProps struct {
 	Month   txncalendarview.Month
 	Headers []txncalendarview.Header
 	OnPick  func(string)
+	Items   map[string][]txnCalDayItem
 }
 
-// txnCalCalendar owns the static tile layout, caption and projection notices.
+// txnCalCalendar owns the static tile layout, caption, projection notices and the day hover
+// preview. The preview's timer and phase live here, so one popover serves the whole grid.
 func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 	nav := Div(css.Class("txn-cal-nav", "row"),
 		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), props.Month.Caption),
@@ -134,9 +138,31 @@ func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 					uistate.T("transactions.calFxMissingRate"))),
 		})
 	}
+	preview := ui.UseState(txnCalPreview{})
+	// One timer: pointing at a day waits txnCalPreviewDelayMs, then opens its popover. The loader
+	// and the rows are both in the popover from that moment, and the loader fades itself out.
+	ui.UseEffect(func() func() {
+		p := preview.Get()
+		if p.Phase != txnCalPreviewWaiting {
+			return nil
+		}
+		cancelled := false
+		cb := js.FuncOf(func(js.Value, []js.Value) any {
+			if !cancelled {
+				preview.Set(txnCalPreview{Key: p.Key, Phase: txnCalPreviewOpen})
+			}
+			return nil
+		})
+		handle := js.Global().Call("setTimeout", cb, txnCalPreviewDelayMs)
+		return func() { cancelled = true; js.Global().Call("clearTimeout", handle); cb.Release() }
+	}, preview.Get().Key, preview.Get().Phase)
+	hover := txnCalHover{
+		Enter: func(dateKey string) { preview.Set(txnCalPreview{Key: dateKey, Phase: txnCalPreviewWaiting}) },
+		Leave: func() { preview.Set(txnCalPreview{}) },
+	}
 	rows := MapKeyed(props.Month.Weeks, func(week txncalendarview.Week) any { return week.Total.SummaryID },
 		func(week txncalendarview.Week) ui.Node {
-			return ui.CreateElement(txnCalWeekRow, txnCalWeekRowProps{Week: week, OnPick: props.OnPick})
+			return ui.CreateElement(txnCalWeekRow, txnCalWeekRowProps{Week: week, OnPick: props.OnPick, Hover: hover})
 		})
 	fxNotice := If(props.Month.RateIssues > 0,
 		Div(css.Class("text-dim"), Attr("role", "status"), Attr("data-testid", "txn-cal-fx-warning"),
@@ -146,6 +172,7 @@ func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 		Body: Div(css.Class("txn-cal"), nav, fxNotice,
 			Div(css.Class("txn-cal-viewport"),
 				Div(css.Class("txn-cal-weeks"), ui.CreateElement(txnCalWeekHeader, props.Headers), rows)),
+			txnCalPreviewOverlay(preview.Get(), props.Items, hover.Leave),
 			txnCalOverflow(props.Month.Weeks),
 			Div(css.Class("txn-cal-legend"),
 				Span(css.Class("txn-cal-legend-dots"), Span(css.Class("cal-dot txn-cal-legend-dot"))),
@@ -167,6 +194,7 @@ func txnCalWeekHeader(headers []txncalendarview.Header) ui.Node {
 type txnCalWeekRowProps struct {
 	Week   txncalendarview.Week
 	OnPick func(string)
+	Hover  txnCalHover
 }
 
 // txnCalWeekRow renders one keyed row; each interactive day owns its click hook.
@@ -176,7 +204,7 @@ func txnCalWeekRow(props txnCalWeekRowProps) ui.Node {
 			return ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
 				DateKey: day.DateKey, Day: day.Day, InMonth: day.InMonth, MonthName: day.MonthName,
 				Today: day.Today, NetStr: day.NetStr, NetTone: day.NetTone, MovedStr: day.MovedStr,
-				AriaLabel: day.AriaLabel, Count: day.Count, Ghosts: day.Ghosts, Rates: day.Rates, OnPick: props.OnPick,
+				AriaLabel: day.AriaLabel, Count: day.Count, Ghosts: day.Ghosts, Rates: day.Rates, OnPick: props.OnPick, Hover: props.Hover,
 			})
 		})
 	return Div(css.Class("txn-cal-week-row"), cells, ui.CreateElement(txnCalWeekTotal, props.Week.Total))
@@ -268,7 +296,8 @@ func calendarWeekday(day time.Weekday, full bool) string {
 	return calendarLabels(uistate.LoadPrefs()).Weekday(day, full)
 }
 
-// txnCalMonthCell renders one day button with its own stable event hooks.
+// txnCalMonthCell renders one day button with its own stable event hooks. Every day is a button
+// that opens its date, and pointing at it reports the day to the calendar's hover preview.
 func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	summary := calendarLabels(uistate.LoadPrefs()).CellSummary(txncalendarview.Day{
 		DateKey: props.DateKey, Day: props.Day, InMonth: props.InMonth, MonthName: props.MonthName,
@@ -278,6 +307,16 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	pick := ui.UseEvent(func() {
 		if summary.Pickable && props.OnPick != nil {
 			props.OnPick(props.DateKey)
+		}
+	})
+	enter := ui.UseEvent(func() {
+		if props.Hover.Enter != nil {
+			props.Hover.Enter(props.DateKey)
+		}
+	})
+	leave := ui.UseEvent(func() {
+		if props.Hover.Leave != nil {
+			props.Hover.Leave()
 		}
 	})
 	dots := make([]any, 0, summary.Dots)
@@ -295,16 +334,11 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 			ghosts = append(ghosts, Span(css.Class("txn-cal-more-due"), uistate.T("transactions.calMoreDue", extra)))
 		}
 	}
-	args := []any{ClassStr(summary.Class), Type("button"), Attr("data-date", props.DateKey),
-		Attr("data-testid", "txn-cal-day-"+props.DateKey), Attr("aria-label", summary.Aria)}
-	click := OnClick(pick)
-	if summary.Pickable {
-		args = append(args, click)
-		if summary.Current {
-			args = append(args, Attr("aria-current", "date"))
-		}
-	} else {
-		args = append(args, Disabled(true))
+	args := []any{ClassStr(summary.Class), Type("button"), Attr("id", "txn-cal-day-"+props.DateKey),
+		Attr("data-date", props.DateKey), Attr("data-testid", "txn-cal-day-"+props.DateKey), Attr("aria-label", summary.Aria),
+		OnClick(pick), OnMouseEnter(enter), OnMouseLeave(leave)}
+	if summary.Current {
+		args = append(args, Attr("aria-current", "date"))
 	}
 	args = append(args,
 		Span(css.Class("cal-day"), summary.DayText),
