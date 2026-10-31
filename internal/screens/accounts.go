@@ -51,7 +51,7 @@ func labeledFieldRequired(label string, control ui.Node) ui.Node {
 	return Label(css.Class("labeled-field"),
 		css.Class(css.New(css.Display.Flex, css.FlexDir.Col, css.Gap(css.Rem(0.25)))),
 		Span(css.Class("t-caption", tw.TextDim), label,
-			Span(css.Class(tw.TextDanger), Attr("aria-hidden", "true"), " *"),
+			Span(css.Class(tw.TextDanger), AriaHidden(true), " *"),
 			Span(css.Class("sr-only"), " "+uistate.T("budgets.fieldRequired"))),
 		control,
 	)

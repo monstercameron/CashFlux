@@ -101,9 +101,9 @@ func accountsSweepCard(props accountsSweepCardProps) ui.Node {
 
 	return Div(
 		css.Class("catchup-card"),
-		Attr("role", "status"),
+		Role("status"),
 		Attr("data-testid", "acct-sweep-card-"+p.RuleID),
-		Attr("aria-label", uistate.T("acctSweep.aria", props.FromName)),
+		AriaLabel(uistate.T("acctSweep.aria", props.FromName)),
 		Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Span(css.Class("catchup-card-icon"), "🧹"),

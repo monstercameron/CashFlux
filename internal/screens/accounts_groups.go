@@ -94,7 +94,7 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 
 	editBtn := If(isReal, Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
 		Attr("data-testid", "acct-group-edit-"+g.ID),
-		Attr("aria-label", uistate.T("accounts.editGroupTitle")),
+		AriaLabel(uistate.T("accounts.editGroupTitle")),
 		Title(uistate.T("accounts.editGroupTitle")), OnClick(openEdit),
 		uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))))
 
@@ -117,8 +117,8 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	}
 
 	return Div(css.Class("acct-group-header", tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Attr("role", "heading"), Attr("aria-level", "3"),
-		Attr("aria-label", uistate.T("accounts.groupRowAria", name)),
+		Role("heading"), Attr("aria-level", "3"),
+		AriaLabel(uistate.T("accounts.groupRowAria", name)),
 		// The name is the collapse toggle: a wide, keyboard-reachable target that
 		// discloses/hides the section's rows. aria-expanded reflects the open state.
 		// Styled inline as bare text-with-a-chevron (no stylesheet dependency) so it
@@ -126,15 +126,15 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 		Button(css.Class("acct-group-toggle", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			css.Class(css.New(css.Bg(css.Color("transparent")), css.BorderStyle(css.LineNone), css.Padding(css.Length("0")), css.Margin(css.Length("0")), tw.CursorPointer, css.TextColor(css.Color("var(--text)")), tw.TextLeft)),
 			Attr("data-testid", toggleTestID), Title(toggleTitle),
-			Attr("aria-expanded", ariaBool(!props.Collapsed)),
-			Attr("aria-label", uistate.T("accountsGroup.toggleAria", name)),
+			AriaExpanded(!props.Collapsed),
+			AriaLabel(uistate.T("accountsGroup.toggleAria", name)),
 			OnClick(toggle),
 			uiw.Icon(chevron, css.Class("acct-group-chevron", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-group-name", tw.FontMedium), name),
 			Span(css.Class("acct-group-count", tw.TextDim), plural(len(props.Section.Accounts), "account")),
 		),
 		Span(css.Class("acct-group-subtotal", tw.TextDim, tw.MlAuto),
-			Attr("aria-label", uistate.T("accounts.groupSubtotalAria", fmtMoney(props.Section.Subtotal))),
+			AriaLabel(uistate.T("accounts.groupSubtotalAria", fmtMoney(props.Section.Subtotal))),
 			uistate.T("accounts.groupSubtotal", fmtMoney(props.Section.Subtotal)),
 			If(props.Section.Incomplete, Span(css.Class("t-caption", tw.TextDim),
 				Attr("data-testid", "acct-group-incomplete-"+g.ID), Title(subtotalNote), " · "+subtotalNote))),
@@ -173,12 +173,12 @@ func sparklineFigure(a domain.Account, series []int64, ariaLabel, caption string
 	return Div(css.Class("acct-spark-fig"), Attr("data-testid", "acct-spark-fig-"+a.ID),
 		Svg(css.Class("acct-spark"), Attr("data-testid", "acct-spark-"+a.ID),
 			Attr("viewBox", "0 0 120 24"), Attr("width", "120"), Attr("height", "24"),
-			Attr("role", "img"), Attr("aria-label", ariaLabel), Attr("preserveAspectRatio", "none"),
+			Role("img"), AriaLabel(ariaLabel), Attr("preserveAspectRatio", "none"),
 			Polyline(Attr("points", points), Attr("fill", "none"),
 				Attr("stroke", "var(--accent)"), Attr("stroke-width", "1.5"),
 				Attr("stroke-linejoin", "round"), Attr("stroke-linecap", "round")),
 		),
-		Span(css.Class("row-meta", tw.TextDim), Attr("aria-hidden", "true"), caption),
+		Span(css.Class("row-meta", tw.TextDim), AriaHidden(true), caption),
 	)
 }
 
@@ -248,7 +248,7 @@ func accountFlowFigures(a domain.Account, f accountflow.Flow, show bool) ui.Node
 		netCls += " " + tw.ColorClass("neg")
 	}
 	return Span(css.Class("row-meta acct-flow"), Attr("data-testid", "acct-flow-"+a.ID),
-		Attr("aria-label", uistate.T("accounts.flowAria", fmtMoney(f.In), fmtMoney(f.Out), fmtMoney(f.Net))),
+		AriaLabel(uistate.T("accounts.flowAria", fmtMoney(f.In), fmtMoney(f.Out), fmtMoney(f.Net))),
 		Span(css.Class("acct-flow-in"), uistate.T("accounts.flowIn"), " ", fmtMoney(f.In)),
 		Span(css.Class(tw.TextDim), " · "),
 		Span(css.Class("acct-flow-out"), uistate.T("accounts.flowOut"), " ", fmtMoney(f.Out)),
@@ -271,14 +271,11 @@ type groupAccountToggleProps struct {
 func groupAccountToggle(props groupAccountToggleProps) ui.Node {
 	a := props.Account
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(a.ID) }))
-	cls := "pool-acct-toggle"
-	if props.Checked {
-		cls += " is-checked"
-	}
+	cls := ClassNames("pool-acct-toggle", When(props.Checked, "is-checked"))
 	checkMark := If(props.Checked, uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
-	return Button(ClassStr(cls), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", ariaBool(props.Checked)),
+	return Button(ClassStr(cls), Type("button"), Role("checkbox"), Attr("aria-checked", ariaBool(props.Checked)),
 		Attr("data-testid", "group-acct-"+a.ID), OnClick(toggle),
-		Span(css.Class("pool-acct-check"), Attr("aria-hidden", "true"), checkMark),
+		Span(css.Class("pool-acct-check"), AriaHidden(true), checkMark),
 		Span(css.Class("pool-acct-name"), a.Name),
 		Span(css.Class("inv-chip inv-class"), humanizeType(string(a.Type))),
 	)
@@ -400,7 +397,7 @@ func AccountGroupsForm(props AccountGroupsFormProps) ui.Node {
 			Div(css.Class("pool-acct-list-label", tw.TextDim), uistate.T("accounts.groupPickAccounts")),
 			If(len(accounts) == 0, P(css.Class("empty"), uistate.T("accounts.groupNoAccounts"))),
 			Div(css.Class("pool-acct-list"), toggles),
-			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
+			If(errS.Get() != "", P(css.Class("err"), Role("alert"), errS.Get())),
 			deleteRow,
 		),
 	)

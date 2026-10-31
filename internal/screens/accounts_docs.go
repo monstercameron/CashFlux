@@ -155,7 +155,7 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 	}
 
 	toggleBtn := Button(css.Class("btn-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "acct-docs-toggle-"+a.ID), Attr("aria-expanded", ariaBool(expanded.Get())), OnClick(toggle),
+		Attr("data-testid", "acct-docs-toggle-"+a.ID), AriaExpanded(expanded.Get()), OnClick(toggle),
 		uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(toggleLabel))
 
 	if !expanded.Get() {
@@ -195,9 +195,9 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "acct-doc-label-"+a.ID),
 					css.Class(css.New(css.Flex(css.Num(1), css.Num(1), css.Length("12rem")))),
-					Placeholder(uistate.T("accounts.documentLabelPh")), Attr("aria-label", uistate.T("accounts.documentLabelField")), OnInput(onLabel), uiw.FieldValue(labelS.Get())),
+					Placeholder(uistate.T("accounts.documentLabelPh")), AriaLabel(uistate.T("accounts.documentLabelField")), OnInput(onLabel), uiw.FieldValue(labelS.Get())),
 				Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-doc-expiry-"+a.ID),
-					Attr("aria-label", uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(expiryS.Get())),
+					AriaLabel(uistate.T("accounts.documentExpiryField")), Title(uistate.T("accounts.documentExpiryField")), OnInput(onExpiry), uiw.FieldValue(expiryS.Get())),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-doc-attach-btn-"+a.ID),
 					OnClick(attach), uistate.T("accounts.attachDocument")),
 			),

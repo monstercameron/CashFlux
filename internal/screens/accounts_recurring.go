@@ -77,7 +77,7 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 	listID := "acct-recur-list-" + props.Account.ID
 	head := Button(css.Class("budget-drivers-toggle"), Type("button"),
 		Attr("data-testid", "acct-recur-toggle-"+props.Account.ID),
-		Attr("aria-expanded", ariaBool(open)), Attr("aria-controls", listID), OnClick(toggle),
+		AriaExpanded(open), Attr("aria-controls", listID), OnClick(toggle),
 		Span(uistate.T("sm6.hint", len(cands))),
 		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
 

@@ -43,14 +43,14 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 		return Fragment()
 	}
 	if projectionErr != nil {
-		return P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 	}
 	if !p.Known() {
 		return Fragment()
 	}
 	pts, err := p.Series(now, forwardHorizonDays)
 	if err != nil {
-		return P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 	}
 	if len(pts) < 2 {
 		return Fragment()
@@ -64,7 +64,7 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 	end := money.New(p.End, a.Currency)
 	negAt, goesNegative, err := p.FirstNegative(now)
 	if err != nil {
-		return P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		return P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 	}
 
 	// The reading comes first and the chart supports it. A shape alone leaves the
@@ -89,7 +89,7 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 		// aria-hidden with the reading beside it in text: a line whose shape a
 		// screen reader cannot perceive is decoration, and the sentence above
 		// already carries every fact the chart encodes.
-		Attr("aria-hidden", "true"), Attr("preserveAspectRatio", "none"),
+		AriaHidden(true), Attr("preserveAspectRatio", "none"),
 		Polyline(Attr("points", points), Attr("fill", "none"),
 			Attr("stroke", "var(--text-faint)"), Attr("stroke-width", "1.5"),
 			// Dashed, and in the faint colour: this is a projection sitting next

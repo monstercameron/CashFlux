@@ -76,7 +76,7 @@ func institutionChip(instByID map[string]domain.Institution, instID string) ui.N
 	}
 	return Span(css.Class("inst-chip", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 		Attr("data-testid", "inst-chip-"+instID),
-		Attr("aria-label", uistate.T("accounts.institutionChipAria", in.TrimmedName())),
+		AriaLabel(uistate.T("accounts.institutionChipAria", in.TrimmedName())),
 		Span(css.Class(css.New(css.W(css.Px(8)), css.H(css.Px(8)), css.Rounded(css.Length("50%")), css.Bg(css.Color(institutionSwatchColor(in))), css.Display.InlineBlock, tw.ShrinkO))),
 		Span(css.Class(tw.TextDim), in.TrimmedName()),
 	)
@@ -161,7 +161,7 @@ func institutionListRow(props institutionListRowProps) ui.Node {
 			If(strings.TrimSpace(in.SupportPhone) != "", Span(css.Class("row-meta"), in.SupportPhone)),
 		),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "institution-edit-"+in.ID),
-			Attr("aria-label", uistate.T("accounts.editInstitution")), Title(uistate.T("accounts.editInstitution")), OnClick(edit),
+			AriaLabel(uistate.T("accounts.editInstitution")), Title(uistate.T("accounts.editInstitution")), OnClick(edit),
 			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 	)
 }
@@ -278,7 +278,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 			labeledField(uistate.T("accounts.institutionColorLabel"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Input(css.Class("color-input"), Type("color"), Attr("data-testid", "institution-color"),
-						Attr("aria-label", uistate.T("accounts.institutionColorLabel")), OnInput(onColor), uiw.FieldValue(swatch)))),
+						AriaLabel(uistate.T("accounts.institutionColorLabel")), OnInput(onColor), uiw.FieldValue(swatch)))),
 			labeledField(uistate.T("accounts.institutionPhoneLabel"),
 				Input(css.Class("field"), Type("tel"), Attr("data-testid", "institution-phone"),
 					Placeholder(uistate.T("accounts.institutionPhonePh")), OnInput(onPhone), uiw.FieldValue(phoneS.Get()))),
@@ -288,7 +288,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 			labeledField(uistate.T("accounts.institutionNoteLabel"),
 				uiw.TextAreaInput(uiw.TextFieldProps{Value: noteS.Get(), Placeholder: uistate.T("accounts.institutionNotePh"),
 					AriaLabel: uistate.T("accounts.institutionNoteLabel"), OnInput: onNote})),
-			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
+			If(errS.Get() != "", P(css.Class("err"), Role("alert"), errS.Get())),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

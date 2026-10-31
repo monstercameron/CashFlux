@@ -215,7 +215,7 @@ func staleBadgeNode(props accountRowProps) ui.Node {
 	a := props.Account
 	if props.StaleCollapsed {
 		return Span(css.Class("acct-stale-dot"), Attr("data-testid", "acct-stale-dot-"+a.ID),
-			Attr("role", "img"), Attr("aria-label", uistate.T("accounts.staleDotAria")),
+			Role("img"), AriaLabel(uistate.T("accounts.staleDotAria")),
 			Title(staleBadgeTitle(a.Type, props.DaysStale)))
 	}
 	return Span(css.Class("badge badge-prio prio-med"), Attr("data-testid", "acct-stale-badge-"+a.ID),
@@ -252,7 +252,7 @@ func acctOwnerChip(props accountRowProps) ui.Node {
 	}
 	return Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-owner-badge-"+a.ID),
 		Title(uistate.T("accounts.ownerBadgeTitle", name)),
-		Attr("aria-label", uistate.T("accounts.ownerBadgeTitle", name)), name)
+		AriaLabel(uistate.T("accounts.ownerBadgeTitle", name)), name)
 }
 
 func moneyMajorOrEmpty(m money.Money, dec int) string {
@@ -468,7 +468,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// investment): a single signed figure — "▲ $2,000.00 this month" — in place of
 	// the old scrolling valuation-history list, which was noise in the row (C225
 	// [F31]). Shown only when there is history to compare against. Display-only.
-	valChange := uiw.IfLazy(isValuationType(a.Type) && len(props.ValuationHistory) >= 2, func() ui.Node {
+	valChange := ui.If(isValuationType(a.Type) && len(props.ValuationHistory) >= 2, func() ui.Node {
 		chg, ok := valuation.MonthToDateChange(props.ValuationHistory, props.Balance, time.Now())
 		if !ok {
 			return Fragment()
@@ -501,15 +501,14 @@ func AccountRow(props accountRowProps) ui.Node {
 	// expandable on click, so an attached note is legible in the row instead of being
 	// hidden behind a hover tooltip on a tiny glyph (replaces acct-notes-dot).
 	notes := strings.TrimSpace(a.Notes)
-	notesNode := uiw.IfLazy(notes != "", func() ui.Node {
-		notesCls := "acct-notes"
+	notesNode := ui.If(notes != "", func() ui.Node {
+		notesCls := ClassNames("acct-notes", When(notesExpanded.Get(), "open"))
 		toggleLabel := uistate.T("accounts.notesReadMore")
 		if notesExpanded.Get() {
-			notesCls += " open"
 			toggleLabel = uistate.T("accounts.notesReadLess")
 		}
 		return Button(ClassStr(notesCls), Type("button"), Attr("data-testid", "acct-notes-"+a.ID),
-			Attr("aria-expanded", ariaBool(notesExpanded.Get())), Attr("aria-label", uistate.T("accounts.notesBadge")),
+			AriaExpanded(notesExpanded.Get()), AriaLabel(uistate.T("accounts.notesBadge")),
 			Title(toggleLabel), OnClick(toggleNotes),
 			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-notes-text"), notes),
@@ -522,7 +521,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// for liabilities and valuation-type assets, whose balances aren't cash curves.
 	var projNode ui.Node = Fragment()
 	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.ProjectionErr != nil {
-		projNode = P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		projNode = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 	} else if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
 		dec := currency.Decimals(a.Currency)
 		low := money.New(props.Projection.Low, a.Currency)
@@ -543,10 +542,10 @@ func AccountRow(props accountRowProps) ui.Node {
 		}
 		projNode = Div(css.Class("acct-proj"), Attr("data-testid", "acct-proj-"+a.ID),
 			Span(css.Class("row-meta"), Title(uistate.T("accounts.projectedTitle")),
-				Attr("aria-label", uistate.T("accounts.projectedLowAria", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
+				AriaLabel(uistate.T("accounts.projectedLowAria", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
 				uistate.T("accounts.projectedLow", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
 			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-proj-toggle-"+a.ID),
-				Attr("aria-expanded", ariaBool(projExpanded.Get())), OnClick(toggleProj), toggleLabel),
+				AriaExpanded(projExpanded.Get()), OnClick(toggleProj), toggleLabel),
 			driverNode,
 		)
 	}
@@ -589,7 +588,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		if validBalance {
 			chart = accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange)
 		} else {
-			chart = P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+			chart = P(css.Class("row-meta"), Role("status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
 		}
 		detailsNode = Div(css.Class("acct-row-details"), Attr("data-testid", "acct-details-"+a.ID),
 			valChange,
@@ -634,7 +633,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		Div(css.Class("acct-row-head"),
 			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
 			// Credit Card are distinguishable without reading the meta-line.
-			Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
+			Span(css.Class("acct-type-icon", tw.TextDim), AriaHidden(true),
 				uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Div(css.Class("acct-row-id"),
 				Div(css.Class("acct-row-name"),
@@ -663,8 +662,8 @@ func AccountRow(props accountRowProps) ui.Node {
 					Span(css.Class("row-meta"), meta),
 					Button(css.Class("btn-link acct-details-toggle"), Type("button"),
 						Attr("data-testid", "acct-details-toggle-"+a.ID),
-						Attr("aria-expanded", ariaBool(detailsOpen.Get())),
-						Attr("aria-label", uistate.T("accountsRedesign.detailsAria", a.Name)),
+						AriaExpanded(detailsOpen.Get()),
+						AriaLabel(uistate.T("accountsRedesign.detailsAria", a.Name)),
 						OnClick(toggleDetails), detailsLabel),
 					// C365: investment accounts deep-link to their holdings + growth on
 					// /investments — a quiet link (not an everyday-action button), so the
@@ -672,7 +671,7 @@ func AccountRow(props accountRowProps) ui.Node {
 					If(isInvest,
 						Button(css.Class("btn-link acct-holdings-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 							Attr("data-testid", "acct-holdings-link-"+a.ID),
-							Attr("aria-label", uistate.T("accountsInvest.viewHoldingsTitle")),
+							AriaLabel(uistate.T("accountsInvest.viewHoldingsTitle")),
 							Title(uistate.T("accountsInvest.viewHoldingsTitle")),
 							OnClick(openHoldings),
 							uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
@@ -688,12 +687,12 @@ func AccountRow(props accountRowProps) ui.Node {
 				Button(ClassStr(amountClass(dispBal)+" acct-row-figure budget-limit-btn"), Type("button"),
 					Attr("data-testid", "acct-balance-btn-"+a.ID),
 					Title(uistate.T("accounts.balanceEditTitle")),
-					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
+					AriaLabel(uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 					OnClick(setBal),
 					fmtMoney(dispBal)),
 				Span(ClassStr(amountClass(dispBal)+" acct-row-figure"),
 					Title(uistate.T("accounts.balanceTitle")),
-					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
+					AriaLabel(uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 					fmtMoney(dispBal))),
 			// Quieter rows: exactly ONE inline everyday action ("Transactions"), plus the
 			// ⋯ overflow. The balance figure itself is already click-to-edit for updates,
@@ -714,22 +713,22 @@ func AccountRow(props accountRowProps) ui.Node {
 						Icon: icon.MoreH, Title: uistate.T("accounts.moreActions"),
 						AriaLabel: uistate.T("accounts.moreActions") + " — " + a.Name, Open: menu.Open,
 					},
-						Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menu.Open)), OnClick(toggleMenu),
+						Attr("aria-haspopup", "menu"), AriaExpanded(menu.Open), OnClick(toggleMenu),
 					),
-					Div(ClassStr(menu.PanelClass()), Attr("role", "menu"),
-						If(!a.Archived && !props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-default-household-"+a.ID), OnClick(setHouseholdDefault), uistate.T("defaultAccount.makeHousehold"))),
-						If(!a.Archived && props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-clear-household-default-"+a.ID), OnClick(clearHouseholdDefault), uistate.T("defaultAccount.clearHousehold"))),
-						If(!a.Archived && props.DefaultMemberID != "" && !containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-default-member-"+a.ID), OnClick(setMemberDefault), uistate.T("defaultAccount.makeMember", props.DefaultMemberName))),
-						If(!a.Archived && props.DefaultMemberID != "" && containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-clear-member-default-"+a.ID), OnClick(clearMemberDefault), uistate.T("defaultAccount.clearMember", props.DefaultMemberName))),
+					Div(ClassStr(menu.PanelClass()), Role("menu"),
+						If(!a.Archived && !props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-default-household-"+a.ID), OnClick(setHouseholdDefault), uistate.T("defaultAccount.makeHousehold"))),
+						If(!a.Archived && props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-clear-household-default-"+a.ID), OnClick(clearHouseholdDefault), uistate.T("defaultAccount.clearHousehold"))),
+						If(!a.Archived && props.DefaultMemberID != "" && !containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-default-member-"+a.ID), OnClick(setMemberDefault), uistate.T("defaultAccount.makeMember", props.DefaultMemberName))),
+						If(!a.Archived && props.DefaultMemberID != "" && containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "acct-clear-member-default-"+a.ID), OnClick(clearMemberDefault), uistate.T("defaultAccount.clearMember", props.DefaultMemberName))),
 						// C412: the demoted "Update value/balance" action leads the menu for
 						// the rows that actively need it (stale / valuation assets); it stamps
 						// the same set-balance editor the balance figure opens.
-						If(showValueInMenu, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
+						If(showValueInMenu, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
 						// Edit leads the menu — the most common of the demoted actions. (The
 						// everyday balance update stays inline / on the figure; Edit covers the
 						// rarer name/type/attribute changes.) Available on archived rows too,
 						// matching the prior inline behavior.
-						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
+						Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
 						// C1: reconcile-to-statement only where statements + transactions exist —
 						// a valuation account (property/vehicle/investment/…) uses Update value.
 						//
@@ -740,22 +739,22 @@ func AccountRow(props accountRowProps) ui.Node {
 						// nobody sends a statement for, producing exactly the cleared figure
 						// the row now hides. Offering an action whose result the app then
 						// refuses to show is worse than offering neither.
-						If(!a.Archived && !isValuationType(a.Type) && a.Type.IsReconcilable(), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
+						If(!a.Archived && !isValuationType(a.Type) && a.Type.IsReconcilable(), Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
 						// C2: money moves FROM liquid cash — a property or 401(k) row doesn't
 						// offer an outgoing transfer. (The page-level Transfer money picks any
 						// eligible source.) C9: one name for the action everywhere.
-						If(!a.Archived && earmarkEligibleType(a.Type), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						If(!a.Archived && earmarkEligibleType(a.Type), Button(css.Class("add-item"), Type("button"), Role("menuitem"),
 							Attr("data-testid", "transfer-start-btn-"+a.ID), Title(uistate.T("accounts.transferWhen")), OnClick(startTransfer),
 							uistate.T("accounts.transferMoney"))),
-						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Title(uistate.T("accounts.markUpdatedWhen")), OnClick(refresh), uistate.T("accounts.markUpdated"))),
-						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "set-institution-"+a.ID), OnClick(setInstitution), uistate.T("accounts.setInstitution"))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Title(uistate.T("accounts.markUpdatedWhen")), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Role("menuitem"), Attr("data-testid", "set-institution-"+a.ID), OnClick(setInstitution), uistate.T("accounts.setInstitution"))),
 						// Security + lifecycle, grouped last: the encrypted vault sits beside
 						// Archive/Delete, not amid everyday money actions.
-						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Title(uistate.T("creds.menuItemTitle")), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
-						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+						Button(css.Class("add-item"), Type("button"), Role("menuitem"), Title(uistate.T("creds.menuItemTitle")), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
+						Button(css.Class("add-item"), Type("button"), Role("menuitem"), Title(archTitle), OnClick(arch), archLabel),
 						// Delete stays in the menu as the last, destructive item (standing rule:
 						// delete never sits exposed on a row).
-						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
+						Button(css.Class("add-item danger"), Type("button"), Role("menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), AriaLabel(uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
 					),
 				),
 			),
@@ -850,7 +849,7 @@ func OwnerShareRow(props ownerShareRowProps) ui.Node {
 			Input(css.Class("field"),
 				css.Class(css.New(css.W(css.Length("5rem")))),
 				Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"),
-				Attr("aria-label", props.Member.Name+" "+uistate.T("account.sharePercent")), OnInput(onChange), uiw.FieldValue(shareStr)),
+				AriaLabel(props.Member.Name+" "+uistate.T("account.sharePercent")), OnInput(onChange), uiw.FieldValue(shareStr)),
 			Span(css.Class(tw.TextDim), "%"),
 		),
 	)
