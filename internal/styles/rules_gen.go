@@ -624,13 +624,6 @@ func registerGenerated() {
 	ruleMedia("(prefers-reduced-motion: reduce)", ".bento .w",
 		animation("none"),
 	)
-	rule(".flip-backdrop",
-		transition("opacity .28s var(--wonder-ease),\n                    backdrop-filter var(--wonder-dur-slow) var(--wonder-ease-out)"),
-		backdropFilter("blur(0px)"),
-	)
-	rule(".flip-backdrop.show",
-		backdropFilter("blur(calc(3px * var(--wonder-on)))"),
-	)
 	// Toasts rise and settle exactly once (spec §2: no overshoot) — the old
 	// bounce midpoint + elastic bezier are gone; enter curve at the overlay token.
 	keyframes("wonder-toast-in",
@@ -1471,10 +1464,6 @@ func registerGenerated() {
 	)
 	rule("[data-theme=\"light\"] #cf-cmd-palette",
 		background("rgba(239,237,232,0.72) !important"),
-	)
-	rule(".cf-dialog-scrim",
-		backdropFilter("blur(4px)"),
-		webkitBackdropFilter("blur(4px)"),
 	)
 	rule(".cf-dialog",
 		boxShadow("0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--border,#2a2a2c)"),
@@ -9852,17 +9841,18 @@ func registerGenerated() {
 		position("fixed"),
 		inset("0"),
 		background("rgba(4,4,6,.6)"),
-		backdropFilter("blur(3px)"),
+		backdropFilter("blur(0px)"),
 		display("grid"),
 		placeItems("center"),
 		opacity("0"),
 		pointerEvents("none"),
-		transition("opacity .28s"),
+		transition("opacity .28s var(--wonder-ease), backdrop-filter var(--wonder-dur-slow) var(--wonder-ease-out)"),
 		zIndex("var(--z-modal)"),
 	)
 	rule(".flip-backdrop.show",
 		opacity("1"),
 		pointerEvents("auto"),
+		backdropFilter("blur(calc(3px * var(--wonder-on)))"),
 	)
 	rule(".flip-wrap",
 		width("384px"),
@@ -9870,6 +9860,10 @@ func registerGenerated() {
 		height("470px"),
 		maxHeight("86vh"),
 		perspective("1500px"),
+		// The shadow belongs to the wrap, not the flipping face. The face sits in a preserve-3d
+		// layer, which clips its box-shadow to a hard-edged rectangle just outside the card.
+		borderRadius("var(--radius-sm)"),
+		boxShadow("0 30px 70px -20px rgba(0,0,0,.75)"),
 	)
 	rule(".flip-inner",
 		position("relative"),
@@ -9892,7 +9886,6 @@ func registerGenerated() {
 		overflow("hidden"),
 		display("flex"),
 		flexDirection("column"),
-		boxShadow("0 30px 70px -20px rgba(0,0,0,.75)"),
 	)
 	rule(".flip-back",
 		transform("rotateY(180deg)"),
@@ -11985,23 +11978,6 @@ func registerGenerated() {
 	)
 	rule(".dash-check:hover",
 		color("var(--accent,#3b82f6)"),
-	)
-	rule(".cf-dialog-backdrop",
-		position("fixed"),
-		inset("0"),
-		// Above flip-panel modals (--z-modal) so a confirm/prompt triggered from inside a
-		// modal — e.g. Merge/Delete in the Review-duplicates modal — is reachable, not
-		// trapped behind the modal's backdrop.
-		zIndex("var(--z-dialog)"),
-		display("flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		padding("1rem"),
-	)
-	rule(".cf-dialog-scrim",
-		position("absolute"),
-		inset("0"),
-		background("rgba(0,0,0,.45)"),
 	)
 	rule(".cf-dialog",
 		position("relative"),

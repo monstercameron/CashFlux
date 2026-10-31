@@ -173,9 +173,8 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		save()
 	})
 
-	backdropCls, innerCls := "flip-backdrop", "flip-inner"
+	backdropCls, innerCls := flipBackdropClass(shown.Get()), "flip-inner"
 	if shown.Get() {
-		backdropCls += " show"
 		innerCls += " flipped"
 	}
 
@@ -290,6 +289,16 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		OnDismiss:           cancel,
 		Child:               panel,
 	})
+}
+
+// flipBackdropClass returns the class for the dimmed backdrop behind every FlipPanel. The look
+// lives in the one .flip-backdrop rule set in the styles package, and show fades it in and
+// blurs the page behind.
+func flipBackdropClass(shown bool) string {
+	if shown {
+		return "flip-backdrop show"
+	}
+	return "flip-backdrop"
 }
 
 // flipPanelInitialFocusSelector returns the selector for the control that takes focus when a
