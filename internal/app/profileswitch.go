@@ -19,6 +19,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -30,8 +31,8 @@ import (
 )
 
 // psHandle is captured by ProfileSwitchHost on each mount so openProfileSwitch
-// can open the modal from outside any component (e.g. from MemberSwitcher's
-// button click handler). Nil before the first mount — no-op in that window.
+// can open the modal from outside any component (e.g. from the top bar's
+// profile button click handler). Nil before the first mount — no-op in that window.
 var psHandle interface {
 	Get() bool
 	Set(bool)
@@ -328,4 +329,11 @@ func switchToMember(memberID string) {
 		owners = []string{memberID}
 	}
 	uistate.SetActiveScope(scope.ReportScope{Owners: owners})
+}
+
+// ProfileSwitchButton opens the "Who's using CashFlux?" modal. It sits in the top bar's actions,
+// beside the add (+) button, as a shared ToolButton.
+func ProfileSwitchButton() uic.Node {
+	openSwitch := uic.UseEvent(func() { openProfileSwitch() })
+	return uiw.ToolButton(uiw.ToolButtonProps{Icon: icon.Users, Title: uistate.T("profileSwitch.switchBtn"), TestID: "profile-switch-btn"}, OnClick(openSwitch))
 }

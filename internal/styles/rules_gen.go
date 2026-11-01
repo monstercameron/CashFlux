@@ -830,42 +830,6 @@ func registerGenerated() {
 		margin("0 .35rem"),
 		background("var(--border)"),
 	)
-	rule(".topbar .member-switcher",
-		height("var(--tb-h)"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-lg)"),
-		background("var(--bg-elev, transparent)"),
-		color("inherit"),
-		fontSize(".82rem"),
-		padding("0 1.5rem 0 .6rem"),
-		maxWidth("12rem"),
-	)
-	rule(".topbar .cf-member-switcher-wrap",
-		display("inline-flex"),
-		alignItems("center"),
-		gap(".4rem"),
-		flex("none"),
-		whiteSpace("nowrap"),
-	)
-	// The "Switch profile…" companion is a standard bordered icon button (the
-	// .btn/.btn-tool chrome) sized to the shared control height.
-	rule(".topbar .cf-member-switcher-wrap .icon-btn",
-		width("var(--tb-h)"),
-		height("var(--tb-h)"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-lg)"),
-		background("var(--bg-elev)"),
-		color("var(--text-dim)"),
-		display("inline-flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
-	)
-	rule(".topbar .cf-member-switcher-wrap .icon-btn:hover",
-		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
-		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
-		color("var(--text)"),
-	)
 	rule(".period-control",
 		position("relative"),
 		display("inline-flex"),
@@ -976,11 +940,6 @@ func registerGenerated() {
 	rule(".period-rangerow",
 		paddingTop(".15rem"),
 	)
-	rule(".topbar .tb-context select.member-switcher",
-		height("var(--tb-h)"),
-		minHeight("0"),
-		padding("0 1.5rem 0 .6rem"),
-	)
 	// Standalone action buttons (bell, ⋯ More) wear the standard .btn/.btn-tool
 	// chrome — bordered bg-elev squares at the shared control height — so the
 	// header uses the same control language as every page toolbar.
@@ -1050,9 +1009,6 @@ func registerGenerated() {
 		flex("none"),
 	)
 	ruleMedia("(max-width: 1000px)", ".topbar [data-testid=\"profile-switch-btn\"]",
-		display("none !important"),
-	)
-	ruleMedia("(max-width: 680px)", ".topbar .tb-context .cf-member-switcher-wrap",
 		display("none !important"),
 	)
 	rule(".brand",

@@ -1524,7 +1524,6 @@ func TopBar(props topBarProps) uic.Node {
 		// chips (offline, sample data) LAST, so a chip appearing or disappearing never
 		// shifts the controls the user aims for.
 		Div(css.Class("tb-context", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.MinW0, tw.TextDim, tw.Text13),
-			uic.CreateElement(MemberSwitcher),
 			// QA CF-24: on /reports the compact month pill silently controls a rolling
 			// ANNUAL window — the prop makes the pill say so ("Year ending Jul 2026").
 			uic.CreateElement(shellResolutionSlot, shellResolutionSlotProps{

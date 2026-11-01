@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The top bar has one profile control, the switch profile button beside the + button. The second member selector ("Everyone") is gone.
 - The profile switch dialog has the Accounts modal layout: a title bar, the member list, and an actions bar with Cancel and Switch. A card selects a member, and Switch commits it, asking for a PIN where one is set. The footer buttons keep their natural width.
 - The row and overflow menus render their items again. The shared menu shows while it is open, and still closes without a fade-out.
 - The switch profile button is now left of the + button in the top bar.

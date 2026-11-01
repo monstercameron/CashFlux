@@ -47,13 +47,4 @@ func registerHeaderBalance() {
 		overflowY("hidden"),
 		scrollbarWidth("none"),
 	)
-	// On truly squeezed widths the "Viewing as" prose folds (the select keeps
-	// its accessible name) and the member select tightens, so the full context
-	// row fits without hiding the period control behind a scroll edge.
-	ruleMedia("(max-width: 1180px)", ".topbar .cf-viewas-label",
-		display("none !important"),
-	)
-	ruleMedia("(max-width: 1180px)", ".topbar .member-switcher",
-		maxWidth("10rem"),
-	)
 }
