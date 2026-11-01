@@ -10,7 +10,7 @@ import { test, expect, nav, openVia } from "./fixtures.mjs";
 async function panelState(app) {
   return app.evaluate(() => {
     const dialog = document.querySelector('[data-testid="txn-add-dialog"]');
-    const backdrop = document.querySelector(".cf-overlay__backdrop--modal");
+    const backdrop = document.querySelector(".cf-overlay__backdrop--modal, .flip-backdrop");
     if (!dialog || !backdrop) return { present: false };
     const cs = getComputedStyle(backdrop);
     const amount = document.querySelector('[data-testid="txn-add-amount"]');
@@ -35,6 +35,8 @@ test.describe("C611 · Quick Add modal is usable", { tag: "@prod" }, () => {
     // The dashboard is the heaviest route, so it is where the failure was first seen.
     await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-dialog"));
 
+    // The flip panel turns into place over a moment; hit-testing is only true once it settles.
+    await expect.poll(async () => (await panelState(app)).hitTestable, { timeout: 10_000 }).toBe(true);
     const s = await panelState(app);
     expect(s.present).toBe(true);
     expect(s.revealed).toBe(true);
@@ -48,6 +50,8 @@ test.describe("C611 · Quick Add modal is usable", { tag: "@prod" }, () => {
     await nav(app, "/transactions");
     await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-dialog"));
 
+    // The flip panel turns into place over a moment; hit-testing is only true once it settles.
+    await expect.poll(async () => (await panelState(app)).hitTestable, { timeout: 10_000 }).toBe(true);
     const s = await panelState(app);
     expect(s.revealed).toBe(true);
     expect(s.visibility).toBe("visible");

@@ -47,11 +47,9 @@ async function openMoreDetails(app) {
 async function openFirstTxnEdit(app) {
   await nav(app, "/transactions");
   const firstRow = app.locator('tr[data-testid^="txn-row-"]').first();
-  await openVia(
-    app,
-    firstRow.getByTestId("txn-rowedit"),
-    app.getByTestId("txn-edit-amount"),
-  );
+  // Edit lives in the row's ⋯ menu, so open the menu before choosing it.
+  await openVia(app, firstRow.locator('[data-testid^="txn-kebab-"]'), app.getByTestId("txn-rowedit"));
+  await openVia(app, app.getByTestId("txn-rowedit"), app.getByTestId("txn-edit-amount"));
 }
 
 // saveAndClose commits a flip panel and waits for it to actually go away.
@@ -231,16 +229,12 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
     await saveAndClose(app, app.getByTestId("txn-add-amount"));
 
     // It starts as income, by its own control.
-    const openProbe = () =>
-      openVia(
-        app,
-        app
-          .locator('tr[data-testid^="txn-row-"]')
-          .filter({ hasText: "DIRPROBE" })
-          .first()
-          .getByTestId("txn-rowedit"),
-        app.getByTestId("txn-edit-amount"),
-      );
+    const openProbe = async () => {
+      const row = app.locator('tr[data-testid^="txn-row-"]').filter({ hasText: "DIRPROBE" }).first();
+      // Edit lives in the row's ⋯ menu, so open that menu before choosing Edit.
+      await openVia(app, row.locator('[data-testid^="txn-kebab-"]'), row.getByTestId("txn-rowedit"));
+      await openVia(app, row.getByTestId("txn-rowedit"), app.getByTestId("txn-edit-amount"));
+    };
     await openProbe();
     await expect(app.getByTestId("txn-edit-direction-income")).toHaveAttribute("aria-pressed", "true");
 

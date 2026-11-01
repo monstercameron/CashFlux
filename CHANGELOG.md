@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The @prod e2e specs open Edit from the row's menu, expect Quick Add on the flip panel's backdrop, and wait for the panel to settle before hit-testing.
 - App wasm tests reset the shared persistence flags before they run, so the package passes as a whole instead of failing on state left by earlier tests.
 - Sweep operations post through one commit that cannot move money twice, with tests for replay and refusal.
 - Institutions save and validate through one appstate path with tests for the write and the refusal.

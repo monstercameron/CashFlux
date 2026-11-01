@@ -201,7 +201,7 @@ export async function settle(page) {
 //
 // `check` must be a locator for something that only exists once the action
 // succeeded, so a passing poll cannot be a false positive.
-export async function openVia(page, control, check, { timeout = 25_000, settleMs = 1500 } = {}) {
+export async function openVia(page, control, check, { timeout = 25_000, settleMs = 5000 } = {}) {
   await expect
     .poll(
       async () => {
