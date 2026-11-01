@@ -39,6 +39,12 @@ func MoreMenu(props moreMenuProps) uic.Node {
 	nav := router.UseNavigate()
 	pAtom := uistate.UsePrefs()
 	closeMenu := func() { menu.Set(false) }
+	// A route change closes the menu, whichever control navigated: the Updated stamp navigates
+	// without closing it, so the menu follows the active route it was rendered for.
+	uic.UseEffect(func() func() {
+		menu.Set(false)
+		return nil
+	}, props.ActivePath)
 
 	// item builds one labeled menu row. Called a fixed number of times at stable
 	// positions (If only gates RENDERING — the node, and thus its OnClick hook, is
