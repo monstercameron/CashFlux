@@ -111,6 +111,12 @@ func TestPrimaryNetWorthDashboardKpiAndHouseholdDisclosure(t *testing.T) {
 	}
 	uistate.BumpDataRevision()
 	f.Stabilize()
+	// The KPI re-renders after the revision bump, so wait for the new figure instead of trusting one settle.
+	deadline = time.Now().Add(3 * time.Second)
+	for !strings.Contains(kpi(), "GBP") && time.Now().Before(deadline) {
+		f.Stabilize()
+		time.Sleep(10 * time.Millisecond)
+	}
 	// A balance with no exchange rate is left out of the total and named, never summed in.
 	if text := kpi(); !strings.Contains(text, "100.00") || !strings.Contains(text, "Partial total") || !strings.Contains(text, "GBP") {
 		t.Fatalf("KPI did not leave the unpriced balance out of the total: %s", text)
