@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+//go:build !js || !wasm
+
 // Package loadgen models benchmark/stress-test workloads for the CashFlux
 // backend: named scenarios, per-client operation schedules with Poisson
 // arrivals, and deterministic seeding so any run can be reproduced exactly.

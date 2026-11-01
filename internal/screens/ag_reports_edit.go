@@ -75,9 +75,8 @@ type agTxnFilter struct {
 	MinAmount float64 `json:"min_amount"`
 	MaxAmount float64 `json:"max_amount"`
 	Uncat     bool    `json:"uncategorized"`
-	Sort      string  `json:"sort"
- "slices"` // newest | oldest | largest
-	Limit int `json:"limit"`
+	Sort      string  `json:"sort"` // newest | oldest | largest
+	Limit     int     `json:"limit"`
 }
 
 // agRunTxnFilter applies the filter and returns the matches in the requested

@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 // SPDX-License-Identifier: MIT
 
 package embed

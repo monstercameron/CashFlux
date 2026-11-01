@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 // SPDX-License-Identifier: MIT
 
 // Command cashflux-loadgen benchmarks and stress-tests a live CashFlux

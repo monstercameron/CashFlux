@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+//go:build !js || !wasm
+
 package server
 
 import "net/http"

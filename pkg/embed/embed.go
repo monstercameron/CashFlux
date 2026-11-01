@@ -1,4 +1,7 @@
+//go:build !js || !wasm
+
 // Package embed exposes CashFlux's data-sync engine as an embeddable gRPC-over-WebSocket handler so
+
 // another Go service can host CashFlux's multi-device sync as a managed backend in-process — owning
 // the encrypted server-side SQLite store (cashflux-server.db) rather than running a separate
 // cashflux-server process.
