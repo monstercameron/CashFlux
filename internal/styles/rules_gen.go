@@ -1109,7 +1109,7 @@ func registerGenerated() {
 		margin("0 auto"),
 		padding("1.75rem 1.25rem 4rem"),
 	)
-	ruleMedia("(min-width: 1441px)", "main.cf-scroll > *",
+	ruleMedia("(min-width: 1441px)", "main.cf-scroll > :not(.topbar)",
 		maxWidth("1440px"),
 		marginInline("auto"),
 	)

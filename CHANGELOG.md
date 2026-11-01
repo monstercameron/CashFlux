@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The top bar fills the full width of the main column on wide screens. The 1440px centring cap applies to page content, not the bar.
 - The net-worth dashboard test waits for the re-rendered KPI after the debt write instead of trusting one settle, so it passes in the full screens package on CI.
 - Native-only packages (loadgen, server, embed, and the server and load-generator commands) build only for native targets, and a malformed struct tag in the Accounts report form is fixed. The editor no longer flags them under js/wasm.
 - The dashboard hero and its test read the same wall clock, so the net-worth delta no longer reads as-of-today near the month boundary.
