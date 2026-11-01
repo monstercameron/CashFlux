@@ -32,7 +32,7 @@ func addMenuShouldOpenLeft() bool {
 	if !doc.Truthy() {
 		return false
 	}
-	btn := doc.Call("querySelector", ".add-btn")
+	btn := doc.Call("querySelector", `[data-testid="add-transaction-btn"]`)
 	if !btn.Truthy() {
 		return false
 	}
@@ -113,24 +113,16 @@ func AddMenu() uic.Node {
 		expanded = "true"
 	}
 	return Div(css.Class("add-wrap", tw.Flex, tw.ItemsCenter), Attr("id", menuID),
-		// C44: the primary "+" is now a one-click "Add transaction" (the overwhelmingly
-		// most common action), instead of merely opening a menu that then needs a
-		// second click. A small caret beside it opens the full add-anything menu.
-		Button(css.Class("add-btn"),
-			Attr("title", uistate.T("addmenu.transaction")),
-			Attr("aria-label", uistate.T("addmenu.transaction")),
-			Attr("data-testid", "add-transaction-btn"),
+		// C44: the primary "+" is a one-click "Add transaction" (the overwhelmingly most
+		// common action). A caret beside it opens the full add-anything menu. Both are the
+		// shared ToolButton, so they match the Accounts page's primary action.
+		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Plus, Variant: "primary", Title: uistate.T("addmenu.transaction"), TestID: "add-transaction-btn"},
 			OnClick(func() { closeMenu(); quickAdd.Set(true) }),
-			ui.Icon(icon.Plus, css.Class(tw.W18px, tw.H18px)),
 		),
-		Button(css.Class("add-caret"),
-			Attr("title", uistate.T("topbar.add")),
-			Attr("aria-label", uistate.T("addmenu.more")),
+		ui.ToolButton(ui.ToolButtonProps{Icon: icon.ChevronDown, Title: uistate.T("topbar.add"), AriaLabel: uistate.T("addmenu.more"), Open: open.Get(), TestID: "add-menu-caret"},
 			Attr("aria-haspopup", "menu"),
 			Attr("aria-expanded", expanded),
-			Attr("data-testid", "add-menu-caret"),
 			OnClick(toggleMenu),
-			ui.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4)),
 		),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+hidden+menuDir), Attr("role", "menu"),

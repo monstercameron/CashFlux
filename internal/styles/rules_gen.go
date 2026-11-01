@@ -11919,6 +11919,10 @@ func registerGenerated() {
 	rule(".muzak-btn.relative",
 		position("relative"),
 	)
+	// The shared tool button anchors the unread-count badge to its corner.
+	rule(".btn-tool.notify-bell",
+		position("relative"),
+	)
 	rule(".notify-badge",
 		position("absolute"),
 		top("-3px"),

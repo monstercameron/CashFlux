@@ -1678,9 +1678,9 @@ func NotifyBell() uic.Node {
 		}
 		badge = Span(css.Class("notify-badge"), label)
 	}
-	return A(css.Class("notify-btn", tw.Relative), Attr("href", uistate.RoutePath("/notifications")),
-		Attr("title", uistate.T("nav.notifications")), Attr("aria-label", uistate.T("nav.notifications")),
-		ui.Icon(icon.Bell, css.Class(tw.W18px, tw.H18px)),
+	// The bell is the shared ToolButton, so it matches every other page action. The
+	// unread count rides inside it as the notify badge.
+	return ui.ToolButton(ui.ToolButtonProps{Icon: icon.Bell, Title: uistate.T("nav.notifications"), Href: uistate.RoutePath("/notifications"), Class: "notify-bell", TestID: "notify-bell"},
 		badge,
 	)
 }
