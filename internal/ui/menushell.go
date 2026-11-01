@@ -26,9 +26,9 @@ type MenuControl struct {
 // unconditionally at a stable render position, with the id of the menu's wrapper.
 func UseMenu(id string) MenuControl {
 	open := uic.UseState(false)
-	// A menu closes at once. Keeping its panel mounted through a fade-out left a ghost of it on the
-	// page, and the panel could jump sides as its placement changed, so the fade is not used here.
-	shown := false
+	// A menu shows exactly while it is open. A fade-out kept its panel mounted after it closed, which
+	// left a ghost on the page and let the panel jump sides, so the menu is not faded out.
+	shown := open.Get()
 	placement := uic.UseState("")
 	DismissPopover(open.Get(), id, func() { open.Set(false) })
 	// A route change closes the menu. A link that navigates does not always reach the menu's own
