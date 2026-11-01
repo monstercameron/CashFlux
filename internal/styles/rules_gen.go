@@ -11919,6 +11919,20 @@ func registerGenerated() {
 	rule(".muzak-btn.relative",
 		position("relative"),
 	)
+	// The bell's preview panel lists the items that need the user, one title and body per row.
+	rule(".notify-preview-list",
+		display("grid"),
+		gap("0.6rem"),
+		minWidth("16rem"),
+		maxWidth("22rem"),
+	)
+	rule(".notify-preview-row",
+		display("grid"),
+		gap("0.15rem"),
+	)
+	rule(".notify-preview-title",
+		fontWeight("600"),
+	)
 	// The shared tool button anchors the unread-count badge to its corner.
 	rule(".btn-tool.notify-bell",
 		position("relative"),

@@ -1678,10 +1678,39 @@ func NotifyBell() uic.Node {
 		}
 		badge = Span(css.Class("notify-badge"), label)
 	}
-	// The bell is the shared ToolButton, so it matches every other page action. The
-	// unread count rides inside it as the notify badge.
-	return ui.ToolButton(ui.ToolButtonProps{Icon: icon.Bell, Title: uistate.T("nav.notifications"), Href: uistate.RoutePath("/notifications"), Class: "notify-bell", TestID: "notify-bell"},
-		badge,
+
+	// The bell opens a preview panel of what needs the user, with a button to the full
+	// Notifications page. The panel is the shared popover, anchored to the bell.
+	open := uic.UseState(false)
+	bellID := uic.UseId()
+	closePanel := func() { open.Set(false) }
+	toggle := uic.UseEvent(func() { open.Set(!open.Get()) })
+	const previewRows = 5
+	rows := make([]uic.Node, 0, previewRows)
+	for i, item := range needsYou {
+		if i == previewRows {
+			break
+		}
+		rows = append(rows, Div(css.Class("notify-preview-row"), Attr("data-testid", "notify-preview-row"),
+			Span(css.Class("notify-preview-title"), item.Title),
+			IfElse(item.Body != "", Span(css.Class("notify-preview-body t-caption"), item.Body), Fragment()),
+		))
+	}
+	body := Div(css.Class("notify-preview-list"), rows,
+		If(len(rows) == 0, P(css.Class("t-caption"), uistate.T("notifications.empty"))),
+	)
+	footer := ui.ToolButton(ui.ToolButtonProps{Label: uistate.T("notifications.openPage"), Href: uistate.RoutePath("/notifications"), Variant: "primary", TestID: "notify-open-page"})
+
+	return Fragment(
+		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Bell, Title: uistate.T("nav.notifications"), Open: open.Get(), Class: "notify-bell", TestID: "notify-bell"},
+			badge,
+			Attr("id", bellID),
+			Attr("aria-haspopup", "dialog"),
+			Attr("aria-expanded", strconv.FormatBool(open.Get())),
+			OnClick(toggle),
+		),
+		ui.Overlay(ui.OverlayProps{Open: open.Get(), Kind: ui.OverlayPopover, AnchorID: bellID, Title: uistate.T("nav.notifications"),
+			OnClose: closePanel, Body: body, Footer: footer, TestID: "notify-preview"}),
 	)
 }
 

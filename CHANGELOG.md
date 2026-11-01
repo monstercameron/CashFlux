@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The notification bell opens a preview panel of the items that need you, with an Open notifications button to the Notifications page. The bell and panel use the shared ToolButton and popover.
 - The top-bar plus opens the add menu, like the More button, with Add transaction as its first entry. The separate caret button is removed. The e2e specs open the menu first.
 - The top bar's notification bell and Add controls use the shared ToolButton, the same button component as the Accounts page, so they share one size, radius and state look.
 - The top bar fills the full width of the main column on wide screens. The 1440px centring cap applies to page content, not the bar.

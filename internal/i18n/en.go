@@ -100,6 +100,7 @@ var english = Catalog{
 	"nav.notifications":               "Notifications",
 	"screen.notificationsSub":         "Reminders the app surfaced for you",
 	"notifications.empty":             "No notifications yet.",
+	"notifications.openPage":          "Open notifications",
 	"notifications.noneMatch":         "No notifications match this filter.",
 	"notifications.clearAll":          "Clear all",
 	"notifications.clearAllAria":      "Clear all notifications",
