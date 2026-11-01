@@ -176,23 +176,26 @@ func ProfileSwitchHost() uic.Node {
 		prompt := fmt.Sprintf(uistate.T("profileSwitch.pinPrompt"), targetName)
 		return Div(css.Class("cf-ps-root"),
 			uiw.FlipPanel(uiw.FlipPanelProps{
-				Title:    uistate.T("profileSwitch.title"),
-				Width:    uiw.FlipSmallW,
-				Height:   uiw.FlipSmallH,
-				NoFooter: true,
-				OnClose:  closeAll,
+				Title:     uistate.T("profileSwitch.title"),
+				Width:     uiw.FlipMediumW,
+				Height:    uiw.FlipMediumH,
+				NoFooter:  true,
+				FlushBody: true,
+				OnClose:   closeAll,
 				Back: Fragment(
-					P(css.Class("cf-dialog-msg"), prompt),
-					Input(css.Class("set-input", "cf-dialog-input"),
-						Type("password"),
-						Attr("id", "cf-ps-pin"),
-						Attr("autocomplete", "off"),
-						Attr("autofocus", ""),
-						Attr("aria-label", uistate.T("profileSwitch.pinLabel")),
-						Placeholder(uistate.T("profileSwitch.pinLabel")),
-						OnInput(onPinInput), uiw.FieldValue(pinInput.Get())),
-					If(pinErr.Get() != "", P(css.Class("notice-danger"), pinErr.Get())),
-					Div(css.Class("cf-dialog-actions", "cf-ps-actions"),
+					Div(css.Class("modal-scroll"),
+						P(css.Class("cf-dialog-msg"), prompt),
+						Input(css.Class("set-input", "cf-dialog-input"),
+							Type("password"),
+							Attr("id", "cf-ps-pin"),
+							Attr("autocomplete", "off"),
+							Attr("autofocus", ""),
+							Attr("aria-label", uistate.T("profileSwitch.pinLabel")),
+							Placeholder(uistate.T("profileSwitch.pinLabel")),
+							OnInput(onPinInput), uiw.FieldValue(pinInput.Get())),
+						If(pinErr.Get() != "", P(css.Class("notice-danger"), pinErr.Get())),
+					),
+					Div(css.Class("modal-foot"),
 						Button(css.Class("btn"), Type("button"), OnClick(doClose),
 							uistate.T("profileSwitch.cancel")),
 						Button(css.Class("btn btn-primary"), Type("button"), OnClick(onPinSubmit),
@@ -234,7 +237,7 @@ func ProfileSwitchHost() uic.Node {
 
 	// Seed cards with the CSS class first so the slice can be spread directly
 	// into Div(cards...) — Go doesn't allow mixing Div(css.Class(...), slice...).
-	cards := []any{css.Class("cf-ps-cards")}
+	cards := []any{}
 	// "Everyone (household)" card — always first in the list.
 	cards = append(cards, uic.CreateElement(profileCardItem, profileCardItemProps{
 		MemberID:   "everyone",
@@ -263,17 +266,14 @@ func ProfileSwitchHost() uic.Node {
 
 	return Div(css.Class("cf-ps-root"),
 		uiw.FlipPanel(uiw.FlipPanelProps{
-			Title:    uistate.T("profileSwitch.title"),
-			Width:    uiw.FlipSmallW,
-			Height:   uiw.FlipSmallH,
-			NoFooter: true,
-			OnClose:  closeAll,
+			Title:     uistate.T("profileSwitch.title"),
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			NoFooter:  true,
+			FlushBody: true,
+			OnClose:   closeAll,
 			Back: Fragment(
-				Div(cards...),
-				Div(css.Class("cf-dialog-actions", "cf-ps-actions"),
-					Button(css.Class("btn"), Type("button"), OnClick(doClose),
-						uistate.T("profileSwitch.cancel")),
-				),
+				Div(css.Class("modal-scroll"), Div(append([]any{css.Class("cf-ps-cards")}, cards...)...)),
 			),
 		}),
 	)
