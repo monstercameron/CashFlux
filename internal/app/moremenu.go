@@ -103,7 +103,7 @@ func MoreMenu(props moreMenuProps) uic.Node {
 				Span(css.Class("tb-more-quick-label", "t-caption"), Attr("aria-hidden", "true"),
 					uistate.T("topbar.quickClusterLabel")),
 				Div(css.Class("tb-more-quick", tw.Flex, tw.ItemsCenter, tw.FlexWrap, tw.Gap25),
-					uic.CreateElement(UpdatedStamp),
+					uic.CreateElement(UpdatedStamp, updatedStampProps{OnOpen: closeMenu}),
 					screens.SmartPeekForPath(props.ActivePath),
 				),
 			),

@@ -20,16 +20,29 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
+// updatedStampProps configures UpdatedStamp.
+type updatedStampProps struct {
+	OnOpen func()
+}
+
 // UpdatedStamp is the top-bar "Updated 4m ago" chip — the freshness leg of the
 // persistent scope strip (parity scan: "Everyone · All accounts · Jul 2026 ·
 // Updated 4 min ago"). Local-first, the honest analog of a bank product's
 // "last synced" is the last change to the dataset: the newest audit entry.
 // Clicking opens /activity, where that change (and its Undo) lives. Renders
 // nothing before the first recorded change.
-func UpdatedStamp() uic.Node {
+// UpdatedStamp takes OnOpen, which runs when the stamp is pressed, so the menu that holds it can
+// close at once instead of waiting for the next page to render.
+func UpdatedStamp(props updatedStampProps) uic.Node {
 	_ = uistate.UseDataRevision().Get() // re-render the moment the data changes
 	nav := router.UseNavigate()
-	openActivity := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/activity")) })
+	openActivity := uic.UseEvent(func() {
+		if props.OnOpen != nil {
+			props.OnOpen()
+		}
+		// Navigate on the next tick, so the menu's close is rendered before the page's render starts.
+		time.AfterFunc(0, func() { nav.Navigate(uistate.RoutePath("/activity")) })
+	})
 
 	// A minute-ticker keeps the relative age honest while the app sits idle —
 	// without it "now" would read "now" an hour later. The tick state only
