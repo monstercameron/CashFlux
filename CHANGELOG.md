@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The dashboard hero and its test read the same wall clock, so the net-worth delta no longer reads as-of-today near the month boundary.
 - The budget direction select is controlled, so switching back to spend always drops the income categories. The net-worth dashboard test writes through the app, so its KPI cache refreshes, and it expects the partial-total wording.
 - Budget and count-line wasm tests no longer depend on the calendar date: the budget clock is a seam, and the tests anchor on the current month. A spending budget's category list leaves out income categories.
 - The @prod e2e specs open Edit from the row's menu, expect Quick Add on the flip panel's backdrop, and wait for the panel to settle before hit-testing.

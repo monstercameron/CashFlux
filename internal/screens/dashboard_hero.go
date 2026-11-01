@@ -125,7 +125,7 @@ func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
 	// since the start of the current month becomes the delta chip — both turn the
 	// flat figure into a living, contextual headline. Both degrade gracefully: if
 	// the series can't be computed the spark/chip simply don't render.
-	now := time.Now()
+	now := budgetNow()
 	trend := ui.UseMemo(func() dashboardview.NetWorthTrend {
 		if !sparkReady || !nw.Complete() {
 			return dashboardview.NetWorthTrend{}

@@ -39,7 +39,7 @@ func TestPrimaryNetWorthExclusionEditorKeepsHeadlinesTrendAndDeltaTogether(t *te
 			t.Fatal(err)
 		}
 	}
-	now := time.Now()
+	now := budgetNow()
 	monthStart := dateutil.MonthStart(now)
 	for _, txn := range []domain.Transaction{
 		{ID: "own-income", Desc: "Own income", AccountID: "own", Date: monthStart, Amount: money.New(200, "USD")},
