@@ -20,7 +20,7 @@
 // The ledger's own statement of direction is the tone class on the amount cell —
 // .text-down for spending, .text-up for income — so that is what these assert
 // against rather than a formatted string.
-import { test, expect, nav, openVia } from "./fixtures.mjs";
+import { test, expect, nav, openVia, openAddTransaction } from "./fixtures.mjs";
 
 // Both panels open through openVia: a single click can land while the wasm app
 // is mid-render and be swallowed, so the helper retries until the panel's own
@@ -33,7 +33,7 @@ import { test, expect, nav, openVia } from "./fixtures.mjs";
 // revealed. `flip_inert.spec.mjs` guards that directly.)
 async function openQuickAdd(app) {
   await nav(app, "/transactions");
-  await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
+  await openAddTransaction(app, app.getByTestId("txn-add-amount"));
 }
 
 async function openMoreDetails(app) {

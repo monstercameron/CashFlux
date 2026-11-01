@@ -261,3 +261,11 @@ export const test = base.extend({
 });
 
 export { expect };
+
+// openAddTransaction opens the add menu from its "+" button, then chooses Add transaction, and
+// waits for `check` to appear. The menu is hidden until the "+" is pressed, so the two steps
+// are separate: the first waits until the menu item is visible.
+export async function openAddTransaction(page, check, options) {
+  await openVia(page, page.getByTestId("add-menu-btn"), page.locator('[data-testid="add-transaction-btn"]:visible'), options);
+  await openVia(page, page.getByTestId("add-transaction-btn"), check, options);
+}

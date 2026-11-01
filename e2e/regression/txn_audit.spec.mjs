@@ -6,7 +6,7 @@
 // reads BOTH the control and the thing it claims to control, in the same moment
 // — that disagreement is the whole bug, and a test that reads only the label
 // would have passed against the broken build.
-import { test, expect, nav, openVia, settle } from "./fixtures.mjs";
+import { test, expect, nav, openVia, settle, openAddTransaction } from "./fixtures.mjs";
 
 // The suite's pinned clock (fixtures.FIXED_NOW) is 2026-07-01, so "this month"
 // is July 2026 and the month before it is June 2026 everywhere below.
@@ -753,7 +753,7 @@ test.describe("C570 — every category picker names the full path", () => {
 
   test("quick-add lists qualified paths", async ({ app }) => {
     await nav(app, "/transactions");
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
+    await openAddTransaction(app, app.getByTestId("txn-add-amount"));
     const opts = await app.evaluate(() =>
       [...document.querySelectorAll('[data-testid="txn-add-category"] option')].map((o) => o.text),
     );

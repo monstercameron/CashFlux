@@ -214,6 +214,7 @@ export async function waitForSync(page) {
 export async function addUniqueTransaction(page, name) {
   await nav(page, "/transactions");
   const panel = page.getByTestId("txn-add-amount");
+  await page.getByTestId("add-menu-btn").click();
   await page.getByTestId("add-transaction-btn").click();
   await expect(panel).toBeVisible({ timeout: 20_000 });
   await panel.fill("17.43");

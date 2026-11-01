@@ -32,7 +32,7 @@ func addMenuShouldOpenLeft() bool {
 	if !doc.Truthy() {
 		return false
 	}
-	btn := doc.Call("querySelector", `[data-testid="add-transaction-btn"]`)
+	btn := doc.Call("querySelector", `[data-testid="add-menu-btn"]`)
 	if !btn.Truthy() {
 		return false
 	}
@@ -113,13 +113,9 @@ func AddMenu() uic.Node {
 		expanded = "true"
 	}
 	return Div(css.Class("add-wrap", tw.Flex, tw.ItemsCenter), Attr("id", menuID),
-		// C44: the primary "+" is a one-click "Add transaction" (the overwhelmingly most
-		// common action). A caret beside it opens the full add-anything menu. Both are the
-		// shared ToolButton, so they match the Accounts page's primary action.
-		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Plus, Variant: "primary", Title: uistate.T("addmenu.transaction"), TestID: "add-transaction-btn"},
-			OnClick(func() { closeMenu(); quickAdd.Set(true) }),
-		),
-		ui.ToolButton(ui.ToolButtonProps{Icon: icon.ChevronDown, Title: uistate.T("topbar.add"), AriaLabel: uistate.T("addmenu.more"), Open: open.Get(), TestID: "add-menu-caret"},
+		// The "+" opens the add menu, the same way the More (⋯) button does. Its first
+		// entry is Add transaction, so the common action is one click away in the menu.
+		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Plus, Variant: "primary", Title: uistate.T("topbar.add"), AriaLabel: uistate.T("topbar.add"), Open: open.Get(), TestID: "add-menu-btn"},
 			Attr("aria-haspopup", "menu"),
 			Attr("aria-expanded", expanded),
 			OnClick(toggleMenu),
@@ -133,6 +129,13 @@ func AddMenu() uic.Node {
 			// three vocabularies for two underlying flows. Naming the direction here
 			// also means this path lands on a form that is already set up, exactly as
 			// the page's does.
+			// Add transaction leads the menu: the common action needs no reading at all.
+			Button(css.Class("add-item", tw.Flex, tw.ItemsCenter, tw.Gap25), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "add-transaction-btn"),
+				OnClick(func() { closeMenu(); quickAdd.Set(true) }),
+				ui.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("addmenu.transaction")),
+			),
 			// C604: money that moved, first and unheaded — the three things a person
 			// adds daily lead the menu, so the common case needs no reading at all.
 			item("addmenu.expense", icon.ArrowDown, func() { uistate.OpenQuickAddAs(uistate.QuickAddExpense) }),
