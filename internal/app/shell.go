@@ -1564,8 +1564,8 @@ func TopBar(props topBarProps) uic.Node {
 			// nothing there moves what the user is aiming for.
 			uic.CreateElement(SyncPulse),
 			uic.CreateElement(NotifyBell),
-			uic.CreateElement(AddMenu),
 			uic.CreateElement(ProfileSwitchButton),
+			uic.CreateElement(AddMenu),
 			// The "⋯ More" overflow menu sits last, against the right edge. It now hosts
 			// the relocated ambient controls (activity/history, Smart peek, music).
 			uic.CreateElement(MoreMenu, moreMenuProps{OnDashboard: onDashboard, ActivePath: curPath}),
