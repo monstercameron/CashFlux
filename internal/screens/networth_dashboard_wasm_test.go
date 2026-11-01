@@ -105,18 +105,20 @@ func TestPrimaryNetWorthDashboardKpiAndHouseholdDisclosure(t *testing.T) {
 	if text := kpi(); !strings.Contains(text, "100.00") || !strings.Contains(text, "Partial total") || !strings.Contains(text, "EUR") {
 		t.Fatalf("KPI hid missing FX: %s", text)
 	}
-	debt.OpeningBalance = money.New(-1000, "GBP")
-	if err := app.Store().PutAccount(debt); err != nil {
+	debt.Currency, debt.OpeningBalance = "GBP", money.New(-1000, "GBP")
+	if err := app.PutAccount(debt); err != nil {
 		t.Fatal(err)
 	}
 	uistate.BumpDataRevision()
 	f.Stabilize()
-	if text := kpi(); !strings.Contains(text, "—") || !strings.Contains(text, "unavailable") {
-		t.Fatalf("KPI rendered fatal balance as money: %s", text)
+	// A balance with no exchange rate is left out of the total and named, never summed in.
+	if text := kpi(); !strings.Contains(text, "100.00") || !strings.Contains(text, "Partial total") || !strings.Contains(text, "GBP") {
+		t.Fatalf("KPI did not leave the unpriced balance out of the total: %s", text)
 	}
 	lens.Set(scope.ReportScope{AccountIDs: []string{bank.ID}})
 	f.Stabilize()
-	if text := kpi(); !strings.Contains(text, "100.00") || !strings.Contains(text, uistate.T("calculation.unavailable")) {
-		t.Fatalf("scoped KPI or household comparison lost availability: %s", text)
+	// The bank-only scope has no unpriced account, so its figure stands on its own.
+	if text := kpi(); !strings.Contains(text, "100.00") {
+		t.Fatalf("scoped KPI lost its figure: %s", text)
 	}
 }

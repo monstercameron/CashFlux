@@ -369,6 +369,7 @@ func budgetAddIdentity(p budgetAddViewProps) ui.Node {
 					OnChange:  p.Actions.Direction,
 					AriaLabel: uistate.T("budgets.directionLabel"),
 					TestID:    "budget-direction",
+					SyncValue: true,
 				}))),
 		If(p.Preview.Saving,
 			P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-direction-hint"),
