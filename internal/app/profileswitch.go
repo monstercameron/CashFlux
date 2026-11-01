@@ -117,6 +117,8 @@ func ProfileSwitchHost() uic.Node {
 	// hook 6: PIN text-input handler
 	onPinInput := uic.UseEvent(func(v string) { pinInput.Set(v) })
 
+	// pick is the card the reader has selected in the picker ("" = none yet).
+	pick := state.UseAtom("cf:ps-pick", "")
 	// closeAll resets all ephemeral state; plain func so it can be handed to the
 	// FlipPanel's OnClose (header ✕ / Escape / backdrop) as well as wrapped in the
 	// hook below for the body's own Cancel button.
@@ -125,9 +127,26 @@ func ProfileSwitchHost() uic.Node {
 		pendingID.Set("")
 		pinInput.Set("")
 		pinErr.Set("")
+		pick.Set("")
 	}
 	// hook 7: close / cancel — resets all ephemeral state
 	doClose := uic.UseEvent(closeAll)
+	// hook 10: Switch — switch to the picked member, or ask for its PIN first
+	onSwitch := uic.UseEvent(func() {
+		target := profileSwitchTarget(pick.Get(), scopeAtom.Get())
+		if target == "" || profileCallerIsOwner() || !MemberHasPIN(target) {
+			switchToMember(target)
+			open.Set(false)
+			pendingID.Set("")
+			pinInput.Set("")
+			pinErr.Set("")
+			pick.Set("")
+			return
+		}
+		pendingID.Set(target)
+		pinInput.Set("")
+		pinErr.Set("")
+	})
 
 	// hook 8: PIN submit — verify then switch or show error
 	onPinSubmit := uic.UseEvent(func() {
@@ -207,44 +226,22 @@ func ProfileSwitchHost() uic.Node {
 	}
 
 	// ── member-picker step ────────────────────────────────────────────────
-	cur := scopeAtom.Get()
-	curMemberID := ""
-	if len(cur.Owners) == 1 {
-		curMemberID = cur.Owners[0]
+	// A card selects; the Switch button in the actions bar commits. The selection starts on
+	// the current member, so Switch does nothing new until the reader picks a different card.
+	selected := profileSwitchSelection(pick.Get(), scopeAtom.Get())
+	selectCard := func(id string) func() {
+		return func() { pick.Set(id) }
 	}
 
-	// makeSelectHandler returns the card's click handler. Builds the handler
-	// as a plain func (not a UseEvent) so it can be called in a loop without
-	// registering a new hook each iteration (the sub-component profileCardItem
-	// owns the UseEvent that wraps this func).
-	makeSelectHandler := func(targetID string) func() {
-		return func() {
-			// Owner override or no PIN: switch immediately.
-			if targetID == "" || callerIsOwner || !MemberHasPIN(targetID) {
-				switchToMember(targetID)
-				open.Set(false)
-				pendingID.Set("")
-				pinInput.Set("")
-				pinErr.Set("")
-				return
-			}
-			// Advance to PIN challenge.
-			pendingID.Set(targetID)
-			pinInput.Set("")
-			pinErr.Set("")
-		}
-	}
-
-	// Seed cards with the CSS class first so the slice can be spread directly
-	// into Div(cards...) — Go doesn't allow mixing Div(css.Class(...), slice...).
+	// Seed cards without a class so the list can be spread into one container below.
 	cards := []any{}
 	// "Everyone (household)" card — always first in the list.
 	cards = append(cards, uic.CreateElement(profileCardItem, profileCardItemProps{
 		MemberID:   "everyone",
 		MemberName: uistate.T("profileSwitch.everyone"),
-		IsActive:   curMemberID == "",
+		IsActive:   selected == "everyone",
 		HasPIN:     false,
-		OnSelect:   makeSelectHandler(""),
+		OnSelect:   selectCard("everyone"),
 	}))
 	if app != nil {
 		for _, m := range app.Members() {
@@ -253,9 +250,9 @@ func ProfileSwitchHost() uic.Node {
 				MemberID:    m.ID,
 				MemberName:  m.Name,
 				MemberColor: m.Color,
-				IsActive:    curMemberID == m.ID,
+				IsActive:    selected == m.ID,
 				HasPIN:      MemberHasPIN(m.ID),
-				OnSelect:    makeSelectHandler(m.ID),
+				OnSelect:    selectCard(m.ID),
 			}))
 		}
 	}
@@ -274,9 +271,51 @@ func ProfileSwitchHost() uic.Node {
 			OnClose:   closeAll,
 			Back: Fragment(
 				Div(css.Class("modal-scroll"), Div(append([]any{css.Class("cf-ps-cards")}, cards...)...)),
+				Div(css.Class("modal-foot"),
+					Button(css.Class("btn"), Type("button"), OnClick(doClose),
+						uistate.T("profileSwitch.cancel")),
+					Button(css.Class("btn btn-primary"), Type("button"), OnClick(onSwitch),
+						uistate.T("profileSwitch.switchAction")),
+				),
 			),
 		}),
 	)
+}
+
+// profileSwitchSelection is the card the reader has on: the picked one, or the current member
+// until a pick is made. The household view's card id is "everyone".
+func profileSwitchSelection(picked string, cur scope.ReportScope) string {
+	if picked != "" {
+		return picked
+	}
+	if len(cur.Owners) == 1 {
+		return cur.Owners[0]
+	}
+	return "everyone"
+}
+
+// profileSwitchTarget is the member to switch to for a picked card: "" is the household view.
+func profileSwitchTarget(picked string, cur scope.ReportScope) string {
+	if id := profileSwitchSelection(picked, cur); id != "everyone" {
+		return id
+	}
+	return ""
+}
+
+// profileCallerIsOwner reports whether the signed-in identity is an Owner, who may switch
+// without a member's PIN.
+func profileCallerIsOwner() bool {
+	app := appstate.Default
+	if app == nil {
+		return false
+	}
+	callerID := uistate.ActiveIdentityID()
+	for _, m := range app.Members() {
+		if m.ID == callerID && memberrole.Resolve(m) == domain.RoleOwner {
+			return true
+		}
+	}
+	return false
 }
 
 // switchToMember changes the active scope to the given member (or the Everyone

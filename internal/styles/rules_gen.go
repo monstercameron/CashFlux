@@ -2993,6 +2993,14 @@ func registerGenerated() {
 	)
 	// The footer colours come from the theme tokens, so the light theme reads as well as the
 	// dark one. The old literals were dark-only: grey on white in light mode.
+	// The flush-body rule makes every direct child a column, which stretched a footer's buttons
+	// across the bar. A direct-child footer is a row again, so its buttons keep their natural width
+	// at the end, like the Accounts footers.
+	rule(".set-body-flush > .modal-foot",
+		flexDirection("row"),
+		alignItems("center"),
+		justifyContent("flex-end"),
+	)
 	rule(".modal-foot .btn, .modal-sticky-foot .btn",
 		background("transparent"),
 		border("1px solid var(--border)"),
