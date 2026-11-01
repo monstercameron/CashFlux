@@ -3222,7 +3222,7 @@ func registerGenerated() {
 		background("color-mix(in srgb, var(--warn, #d97706) 12%, var(--bg-elev))"),
 	)
 	// A modal-opening toolbar button stays highlighted while its flip modal is showing.
-	rule(".btn-tool.is-open",
+	rule(".btn-tool.is-open, .btn-tool.active",
 		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
 		background("color-mix(in srgb, var(--accent) 12%, var(--bg-elev))"),
 		color("var(--text)"),

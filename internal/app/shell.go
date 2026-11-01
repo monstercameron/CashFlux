@@ -1751,7 +1751,7 @@ func MuzakToggle() uic.Node {
 		titleKey = "muzak.turnOn"
 		glyph = icon.VolumeMute
 	}
-	return ui.ToolButton(ui.ToolButtonProps{Icon: glyph, Title: uistate.T(titleKey), Class: cls},
+	return ui.ToolButton(ui.ToolButtonProps{Icon: glyph, Title: uistate.T(titleKey), Class: cls, Active: enabled},
 		Attr("aria-pressed", fmt.Sprintf("%v", enabled)), OnClick(toggle),
 	)
 }

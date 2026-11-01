@@ -24,9 +24,13 @@ type ToolButtonProps struct {
 	// Variant picks a tint: "" for the standard tool button, "primary" for the main action of a
 	// toolbar, "stale" for an action that needs attention.
 	Variant string
-	// Active marks a button whose filter or choice is applied.
+	// Active marks a button whose filter or choice is applied. It takes the same accent look as Open
+	// (.btn-tool.active shares .btn-tool.is-open in internal/styles/rules_gen.go). Do not restyle an
+	// active button on a page: set Active and the look follows, on every page.
 	Active bool
-	// Open marks a button whose menu or panel is showing.
+	// Open marks a button whose menu or panel is showing. It takes the accent look that the Accounts
+	// Filters button shows while its panel is open (.btn-tool.is-open). Set it from the component that
+	// owns the panel, and never restyle it per page.
 	Open bool
 	// Title is the tooltip. It defaults to Label.
 	Title string
@@ -40,6 +44,11 @@ type ToolButtonProps struct {
 	Href string
 }
 
+// ACTIVE AND OPEN LOOK: a ToolButton in its active or open state uses one shared accent look,
+// the same tokens as the Accounts Filters button (.btn-tool.is-open and .btn-tool.active, defined
+// in internal/styles/rules_gen.go). Every page and the top bar rely on it. Do not add a per-page
+// rule that changes an active or open ToolButton; change the shared rule instead, so all of them
+// stay the same.
 // ToolButton is the one button for page actions. The Filters button is the reference: a
 // `btn btn-tool` with an optional leading glyph, a label, and an accent badge for a count.
 // Every toolbar and row action on a page is built with it, so they share one size, radius,
