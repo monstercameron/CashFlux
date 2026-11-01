@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The switch profile button moves out of the member switcher to the top bar, beside the + button.
 - Menus close at once with no leftover fade-out, and the Updated stamp closes the More menu before it navigates.
 - The More menu closes when its Updated stamp or any other control navigates, because it follows the active route it was rendered for.
 - The Sample data status chip is removed from the top bar, and its component and test are deleted.

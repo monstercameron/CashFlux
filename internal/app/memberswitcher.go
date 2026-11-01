@@ -47,10 +47,6 @@ func MemberSwitcher() uic.Node {
 	// MIA-extend (#445-8): read the active scope so the switcher preserves all
 	// non-owner dimensions (Institutions, Types, AccountIDs) when changing members.
 	scopeAtom := uistate.UseActiveScope()
-	// C274: "Switch profile…" button opens the "Who's using CashFlux?" modal.
-	// UseEvent registered here (at a stable position, not inside a loop) so
-	// the hook depth is always constant regardless of the member count.
-	openSwitch := uic.UseEvent(func() { openProfileSwitch() })
 	cur := scopeAtom.Get()
 	current := ""
 	if len(cur.Owners) == 1 {
@@ -112,7 +108,6 @@ func MemberSwitcher() uic.Node {
 			If(roleLine != "", Span(css.Class("member-switcher-role", tw.TextDim), Attr("data-testid", "member-switcher-role"),
 				Style(map[string]string{"display": "block", "fontSize": "11px", "lineHeight": "1.2"}), roleLine)),
 		),
-		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Users, Title: uistate.T("profileSwitch.switchBtn"), TestID: "profile-switch-btn"}, OnClick(openSwitch)),
 	)
 }
 
@@ -126,4 +121,11 @@ func memberSwitcherRole(current string, members []domain.Member) string {
 		}
 	}
 	return ""
+}
+
+// ProfileSwitchButton opens the "Who's using CashFlux?" modal. It sits in the top bar's actions,
+// beside the add (+) button, as a shared ToolButton.
+func ProfileSwitchButton() uic.Node {
+	openSwitch := uic.UseEvent(func() { openProfileSwitch() })
+	return ui.ToolButton(ui.ToolButtonProps{Icon: icon.Users, Title: uistate.T("profileSwitch.switchBtn"), TestID: "profile-switch-btn"}, OnClick(openSwitch))
 }
