@@ -1682,9 +1682,13 @@ func NotifyBell() uic.Node {
 	// The bell opens a preview panel of what needs the user, with a button to the full
 	// Notifications page. The panel is the shared popover, anchored to the bell.
 	open := uic.UseState(false)
-	bellID := uic.UseId()
+	wrapID := uic.UseId()
 	closePanel := func() { open.Set(false) }
 	toggle := uic.UseEvent(func() { open.Set(!open.Get()) })
+	// Outside presses and Escape close the panel; a press on the bell itself is part of the
+	// wrapper, so the bell's click toggles it. The panel lives inside the wrapper, not in a
+	// portal, so a press inside it does not count as outside.
+	ui.DismissPopover(open.Get(), wrapID, closePanel)
 	const previewRows = 5
 	rows := make([]uic.Node, 0, previewRows)
 	for i, item := range needsYou {
@@ -1696,21 +1700,21 @@ func NotifyBell() uic.Node {
 			IfElse(item.Body != "", Span(css.Class("notify-preview-body t-caption"), item.Body), Fragment()),
 		))
 	}
-	body := Div(css.Class("notify-preview-list"), rows,
-		If(len(rows) == 0, P(css.Class("t-caption"), uistate.T("notifications.empty"))),
-	)
 	footer := ui.ToolButton(ui.ToolButtonProps{Label: uistate.T("notifications.openPage"), Href: uistate.RoutePath("/notifications"), Variant: "primary", TestID: "notify-open-page"})
 
-	return Fragment(
+	return Div(css.Class("notify-wrap"), Attr("id", wrapID),
 		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Bell, Title: uistate.T("nav.notifications"), Open: open.Get(), Class: "notify-bell", TestID: "notify-bell"},
 			badge,
-			Attr("id", bellID),
 			Attr("aria-haspopup", "dialog"),
 			Attr("aria-expanded", strconv.FormatBool(open.Get())),
 			OnClick(toggle),
 		),
-		ui.Overlay(ui.OverlayProps{Open: open.Get(), Kind: ui.OverlayPopover, AnchorID: bellID, Title: uistate.T("nav.notifications"),
-			OnClose: closePanel, Body: body, Footer: footer, TestID: "notify-preview"}),
+		If(open.Get(), Div(css.Class("notify-panel"), Attr("role", "dialog"), Attr("aria-label", uistate.T("nav.notifications")), Attr("data-testid", "notify-preview"),
+			Div(css.Class("notify-preview-list"), rows,
+				If(len(rows) == 0, P(css.Class("t-caption"), uistate.T("notifications.empty"))),
+			),
+			Div(css.Class("notify-panel-foot"), footer),
+		)),
 	)
 }
 

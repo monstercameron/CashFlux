@@ -11919,6 +11919,29 @@ func registerGenerated() {
 	rule(".muzak-btn.relative",
 		position("relative"),
 	)
+	// The bell and its preview panel share one wrapper, so the panel anchors under the bell and
+	// the dismissal helper treats a press on either as inside.
+	rule(".notify-wrap",
+		position("relative"),
+		display("inline-flex"),
+	)
+	rule(".notify-panel",
+		position("absolute"),
+		top("calc(100% + 6px)"),
+		right("0"),
+		zIndex("var(--z-dropdown)"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		padding("0.9rem"),
+		boxShadow("var(--shadow-menu)"),
+		display("grid"),
+		gap("0.75rem"),
+	)
+	rule(".notify-panel-foot",
+		display("flex"),
+		justifyContent("flex-end"),
+	)
 	// The bell's preview panel lists the items that need the user, one title and body per row.
 	rule(".notify-preview-list",
 		display("grid"),
