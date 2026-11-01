@@ -73,6 +73,12 @@ func AddMenu() uic.Node {
 	// inside the topbar's sticky (z-index:5) stacking context, so it doesn't paint
 	// over the page content; the helper uses a stacking-immune document listener.
 	ui.DismissPopover(open.Get(), menuID, closeMenu)
+	// A route change closes the menu, so it never stays open over the page it navigated to.
+	path := router.UseLocation().Path
+	uic.UseEffect(func() func() {
+		open.Set(false)
+		return nil
+	}, path)
 
 	hidden := ""
 	if !open.Get() {

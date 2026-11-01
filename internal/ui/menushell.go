@@ -4,7 +4,10 @@
 
 package ui
 
-import uic "github.com/monstercameron/GoWebComponents/v7/ui"
+import (
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+)
 
 // MenuControl is what a popover menu renders from: whether it is open, whether it is on screen
 // (which includes the fade-out after it closes), the flip classes the anchor picked for it, and
@@ -26,6 +29,13 @@ func UseMenu(id string) MenuControl {
 	shown := UsePanelFade(open.Get())
 	placement := uic.UseState("")
 	DismissPopover(open.Get(), id, func() { open.Set(false) })
+	// A route change closes the menu. A link that navigates does not always reach the menu's own
+	// close, and the menu must not stay open over the new page, so it follows the route itself.
+	path := router.UseLocation().Path
+	uic.UseEffect(func() func() {
+		open.Set(false)
+		return nil
+	}, path)
 	anchorOverflowMenu(open.Get(), id, placement.Set)
 	return MenuControl{
 		Open:      open.Get(),

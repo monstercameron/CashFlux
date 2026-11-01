@@ -1689,6 +1689,12 @@ func NotifyBell() uic.Node {
 	// wrapper, so the bell's click toggles it. The panel lives inside the wrapper, not in a
 	// portal, so a press inside it does not count as outside.
 	ui.DismissPopover(open.Get(), wrapID, closePanel)
+	// A route change closes the preview, so it never stays open over the page it navigated to.
+	path := router.UseLocation().Path
+	uic.UseEffect(func() func() {
+		open.Set(false)
+		return nil
+	}, path)
 	const previewRows = 5
 	rows := make([]uic.Node, 0, previewRows)
 	for i, item := range needsYou {
