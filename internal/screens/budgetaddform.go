@@ -32,7 +32,17 @@ func budgetAddNameForCategory(current, previous, next string) string {
 	return budgetform.NameForCategory(current, previous, next)
 }
 
-func budgetAddCategoryOptions(categories []domain.Category, budgets []domain.Budget, period, owner string) []uiw.PickerOption {
+func budgetAddCategoryOptions(categories []domain.Category, budgets []domain.Budget, period, owner string, direction domain.BudgetDirection) []uiw.PickerOption {
+	if direction != domain.DirectionSave {
+		// A spending budget measures outflows, so an income category can never accrue to it.
+		spending := make([]domain.Category, 0, len(categories))
+		for _, c := range categories {
+			if c.Kind != domain.KindIncome {
+				spending = append(spending, c)
+			}
+		}
+		categories = spending
+	}
 	options := budgetform.CategoryOptions(categories, budgets, period, owner)
 	out := make([]uiw.PickerOption, 0, len(options))
 	for _, o := range options {
@@ -271,7 +281,7 @@ func budgetAddMessages(p budgetAddViewProps) budgetAddViewProps {
 	if p.Suggestion.ScopePath != "" {
 		p.SuggestScope = uistate.T("budgets.suggestScoped", uistate.T("budgets.scopeNoteCats", p.Suggestion.ScopePath))
 	}
-	p.CategoryOptions = budgetAddCategoryOptions(v.Categories, p.Budgets, p.Draft.Period, p.Draft.Owner)
+	p.CategoryOptions = budgetAddCategoryOptions(v.Categories, p.Budgets, p.Draft.Period, p.Draft.Owner, domain.BudgetDirection(p.Draft.Direction))
 	p.CopyOptions = []uiw.SelectOption{{Value: "", Label: uistate.T("budgets.copyExisting")}}
 	for _, b := range p.Budgets {
 		p.CopyOptions = append(p.CopyOptions, uiw.SelectOption{Value: b.ID, Label: b.Name})

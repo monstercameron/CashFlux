@@ -69,7 +69,7 @@ func TestBudgetAddCategoryOptionsDisableExistingPeriodBudgets(t *testing.T) {
 	if err := app.PutBudget(b); err != nil {
 		t.Fatal(err)
 	}
-	options := budgetAddCategoryOptions(app.Categories(), app.Budgets(), string(domain.PeriodMonthly), domain.GroupOwnerID)
+	options := budgetAddCategoryOptions(app.Categories(), app.Budgets(), string(domain.PeriodMonthly), domain.GroupOwnerID, domain.DirectionSpend)
 	for _, option := range options {
 		if option.Value != "c-transport" {
 			continue

@@ -146,7 +146,8 @@ func budgetBaseCurrency(base string) string {
 	return base
 }
 
-func budgetNow() time.Time { return budgetNowAt(time.Now()) }
+// budgetNow is the clock for budget periods. Tests replace it to pin a date.
+var budgetNow = func() time.Time { return budgetNowAt(time.Now()) }
 
 func budgetNowAt(now time.Time) time.Time { return dateutil.WallClockUTC(now) }
 

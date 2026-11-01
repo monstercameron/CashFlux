@@ -19,8 +19,13 @@ import (
 )
 
 func TestBR2SUGOverPaceRecommendationDoesNotCutBelowProjection(t *testing.T) {
+	// Pin the clock to mid-month so the projection does not extrapolate from the first hours of a month.
+	now0 := time.Now()
+	midMonth := time.Date(now0.Year(), now0.Month(), 15, 12, 0, 0, 0, time.UTC)
+	budgetNow = func() time.Time { return midMonth }
+	t.Cleanup(func() { budgetNow = func() time.Time { return budgetNowAt(time.Now()) } })
 	app := br2sugTestApp(t)
-	now := time.Now()
+	now := midMonth
 	budget := domain.Budget{ID: "transport", Name: "Transportation", CategoryID: "transport-cat", OwnerID: domain.GroupOwnerID,
 		Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: money.New(100000, "USD")}
 	if err := app.PutBudget(budget); err != nil {

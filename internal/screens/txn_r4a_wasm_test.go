@@ -116,7 +116,7 @@ func TestR4AFutureScheduledRowsUseLedgerCells(t *testing.T) {
 
 func TestR4AFutureCountLineStaysVisibleWithoutPostedRows(t *testing.T) {
 	setupTxnCountCashflowFixture(t)
-	period := txnfilter.Criteria{From: "2026-11-01", To: "2026-11-30", PeriodPreset: txnfilter.MonthPeriodPreset(2026, time.November)}
+	period := txnfilter.Criteria{From: "2099-11-01", To: "2099-11-30", PeriodPreset: txnfilter.MonthPeriodPreset(2099, time.November)}
 	uistate.PersistTxFilter(period)
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 0, Total: 0}))

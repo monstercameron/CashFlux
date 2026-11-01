@@ -24,8 +24,10 @@ func TestBudgetBC4InlineLimitWritesHistory(t *testing.T) {
 			a := guardTestApp(t)
 			b := quickFillFixtureBudget()
 			b.Limit = money.New(30000, "USD")
-			sep := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
-			oct := sep.AddDate(0, 1, 0)
+			// Anchor on the current month so the new limit is in effect for this month's date.
+			now := budgetNow()
+			oct := time.Date(now.Year(), now.Month(), 19, 0, 0, 0, 0, time.UTC)
+			sep := oct.AddDate(0, -1, 0)
 			if err := a.PutBudgetAt(b, sep); err != nil {
 				t.Fatal(err)
 			}

@@ -119,7 +119,7 @@ func TestUntrackedApplyWritesNewAndRaisedBudgetsWithHistory(t *testing.T) {
 func TestFlexShowsReadableErrorWhenCurrencyCannotBeConverted(t *testing.T) {
 	app := guardTestApp(t)
 	if err := app.PutTransaction(domain.Transaction{
-		ID: "bc4b3-unpriced", AccountID: "a", CategoryID: "c-gas", Desc: "Unpriced purchase", Date: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC),
+		ID: "bc4b3-unpriced", AccountID: "a", CategoryID: "c-gas", Desc: "Unpriced purchase", Date: time.Date(budgetNow().Year(), budgetNow().Month(), 10, 0, 0, 0, 0, time.UTC),
 		Amount: money.New(-5000, "EUR"),
 	}); err != nil {
 		t.Fatal(err)
