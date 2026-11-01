@@ -55,7 +55,7 @@ for (const width of [1440, 1280, 1100, 900]) {
   }
 
   const muzakVisible = await page.evaluate(() => {
-    const b = document.querySelector(".topbar .muzak-btn");
+    const b = document.querySelector(".topbar .audio-toggle");
     return b ? getComputedStyle(b).display !== "none" : false;
   });
   check(width > 1280 ? muzakVisible : !muzakVisible,

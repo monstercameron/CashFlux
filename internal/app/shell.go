@@ -1700,7 +1700,10 @@ func NotifyBell() uic.Node {
 			IfElse(item.Body != "", Span(css.Class("notify-preview-body t-caption"), item.Body), Fragment()),
 		))
 	}
-	footer := ui.ToolButton(ui.ToolButtonProps{Label: uistate.T("notifications.openPage"), Href: uistate.RoutePath("/notifications"), Variant: "primary", TestID: "notify-open-page"})
+	nav := router.UseNavigate()
+	footer := ui.ToolButton(ui.ToolButtonProps{Label: uistate.T("notifications.openPage"), Variant: "primary", TestID: "notify-open-page"},
+		OnClick(func() { closePanel(); nav.Navigate(uistate.RoutePath("/notifications")) }),
+	)
 
 	return Div(css.Class("notify-wrap"), Attr("id", wrapID),
 		ui.ToolButton(ui.ToolButtonProps{Icon: icon.Bell, Title: uistate.T("nav.notifications"), Open: open.Get(), Class: "notify-bell", TestID: "notify-bell"},
@@ -1743,11 +1746,11 @@ func MuzakToggle() uic.Node {
 		checkpointMusic() // mirror the on/off choice into the dataset
 	}
 
-	cls := "muzak-btn"
+	cls := "audio-toggle"
 	titleKey := "muzak.turnOff"
 	glyph := icon.Volume
 	if !enabled {
-		cls += " is-off"
+		cls += " is-disabled"
 		titleKey = "muzak.turnOn"
 		glyph = icon.VolumeMute
 	}

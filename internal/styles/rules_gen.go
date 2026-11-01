@@ -3221,6 +3221,11 @@ func registerGenerated() {
 	rule(".btn-tool.bt-stale:hover",
 		background("color-mix(in srgb, var(--warn, #d97706) 12%, var(--bg-elev))"),
 	)
+	// A muted or disabled ToolButton (the audio toggle while sound is off) uses the disabled tokens.
+	rule(".btn-tool.is-disabled",
+		color("var(--tool-disabled-fg)"),
+		borderColor("var(--tool-disabled-border)"),
+	)
 	// A modal-opening toolbar button stays highlighted while its flip modal is showing.
 	rule(".btn-tool.is-open, .btn-tool.active",
 		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
@@ -4720,6 +4725,10 @@ func registerGenerated() {
 		customProp("--hover-tint", "color-mix(in srgb, var(--interactive) 8%, transparent)"),
 		customProp("--pressed-scale", "0.985"),
 		customProp("--disabled-opacity", "0.6"),
+		// Tool-button disabled look (a muted or unavailable control): a faint foreground and a
+		// quiet border, so an off toggle reads as off without fading the whole footprint.
+		customProp("--tool-disabled-fg", "color-mix(in srgb, var(--text-faint) 85%, transparent)"),
+		customProp("--tool-disabled-border", "color-mix(in srgb, var(--text-faint) 30%, var(--border))"),
 		// v1.2.3 motion spec — the only duration scale. Legacy names (base/medium/
 		// slow) alias onto the spec tokens so older rules inherit the scale.
 		customProp("--motion-instant", "0ms"),
