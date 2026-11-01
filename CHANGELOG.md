@@ -21,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The Sample data status chip is removed from the top bar, and its component and test are deleted.
 - Menus and the notification preview close when the route changes, so a menu no longer stays open over the page it navigated to.
 - The audio toggle is the standard tool button with a new disabled token for its muted state. Open notifications closes the bell panel and navigates through the router.
 - Active ToolButtons (including the top-bar mute while sound is on) share the Accounts Filters button's accent look, and the shared ToolButton documents this so pages do not restyle it.

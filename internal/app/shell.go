@@ -1533,9 +1533,6 @@ func TopBar(props topBarProps) uic.Node {
 				Window:      viewedPeriod,
 			}),
 			uic.CreateElement(OfflineIndicator),
-			// Sample-data status chip (audit P0): lives in the bar's context zone —
-			// "Sample data · Start fresh" — instead of a banner row above content.
-			uic.CreateElement(SampleDataBanner),
 			// DP-header refinement (2026-07-19): the freshness/activity stamp is a
 			// low-frequency, ambient control — relocated into the ⋯ More overflow so
 			// the context strip reads as just scope + period. Still mounted (its ticker

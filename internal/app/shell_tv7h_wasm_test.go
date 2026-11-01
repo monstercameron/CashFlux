@@ -10,37 +10,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
-
-func TestTV7HSampleChipKeepsOneStableTopbarSlotAcrossRouteChanges(t *testing.T) {
-	uistate.SetSampleActive(true)
-	t.Cleanup(func() { uistate.SetSampleActive(false) })
-	f := render.New(t)
-	t.Cleanup(f.Cleanup)
-	for _, periodAware := range []bool{true, false, true, false, true} {
-		f.Render(uic.CreateElement(tv7hTopbarSlotTest, shellResolutionSlotProps{PeriodAware: periodAware}))
-		f.Stabilize()
-		count := 0
-		for _, node := range f.AllByTag("div") {
-			if node.Attr("data-testid") == "sample-data-banner" {
-				count++
-			}
-		}
-		if count != 1 {
-			t.Fatalf("sample chip slot count after periodAware=%t: %d, want one", periodAware, count)
-		}
-	}
-}
-
-func tv7hTopbarSlotTest(props shellResolutionSlotProps) uic.Node {
-	return Div(
-		uic.CreateElement(shellResolutionSlot, props),
-		uic.CreateElement(SampleDataBanner, nil),
-	)
-}
 
 func TestTV7HThemeToggleLabelTracksAppliedTheme(t *testing.T) {
 	var atom interface{ Set(prefs.Prefs) }
