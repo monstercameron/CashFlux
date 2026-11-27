@@ -22,10 +22,20 @@ import (
 
 // BlobSyncService provides tenant-scoped, ciphertext-only change storage.
 type BlobSyncService struct {
-	store   *Store
-	cfg     Config
-	mu      sync.Mutex
-	buckets map[string]blobSyncBucket
+	store     *Store
+	cfg       Config
+	mu        sync.Mutex
+	buckets   map[string]blobSyncBucket
+	lastSweep time.Time
+
+	watchMu        sync.Mutex
+	watchers       map[blobWatchKey]map[chan int64]struct{}
+	streamsPerUser map[string]int
+}
+
+type blobWatchKey struct {
+	userID      string
+	workspaceID string
 }
 
 type blobSyncBucket struct {
@@ -37,9 +47,85 @@ const defaultBlobSyncPairingMaxBytes int64 = 64 << 10
 
 const maxBlobSyncRateBuckets = 10_000
 
+const blobSyncRateSweepInterval = 30 * time.Second
+
 // NewBlobSyncService creates the v2 blind sync service.
 func NewBlobSyncService(store *Store, cfg Config) *BlobSyncService {
-	return &BlobSyncService{store: store, cfg: cfg, buckets: make(map[string]blobSyncBucket)}
+	return &BlobSyncService{
+		store:          store,
+		cfg:            cfg,
+		buckets:        make(map[string]blobSyncBucket),
+		watchers:       make(map[blobWatchKey]map[chan int64]struct{}),
+		streamsPerUser: make(map[string]int),
+	}
+}
+
+func (s *BlobSyncService) notifyWatchers(userID, workspaceID string, head int64) {
+	if s == nil {
+		return
+	}
+	s.watchMu.Lock()
+	subs := s.watchers[blobWatchKey{userID: userID, workspaceID: workspaceID}]
+	for ch := range subs {
+		select {
+		case ch <- head:
+		default:
+			// Coalesce latest head into buffered channel so fast writers
+			// never block and slow watchers never miss the newest head.
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- head:
+			default:
+			}
+		}
+	}
+	s.watchMu.Unlock()
+}
+
+func (s *BlobSyncService) subscribeWatcher(userID, workspaceID string) (chan int64, func(), error) {
+	maxStreams := s.cfg.GRPCMaxStreamsPerUser
+	if maxStreams <= 0 {
+		maxStreams = 8
+	}
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	if s.streamsPerUser[userID] >= maxStreams {
+		return nil, nil, status.Error(codes.ResourceExhausted, "too many concurrent watch streams for this account")
+	}
+	if s.watchers == nil {
+		s.watchers = make(map[blobWatchKey]map[chan int64]struct{})
+	}
+	if s.streamsPerUser == nil {
+		s.streamsPerUser = make(map[string]int)
+	}
+	key := blobWatchKey{userID: userID, workspaceID: workspaceID}
+	if s.watchers[key] == nil {
+		s.watchers[key] = make(map[chan int64]struct{})
+	}
+	ch := make(chan int64, 1)
+	s.watchers[key][ch] = struct{}{}
+	s.streamsPerUser[userID]++
+	cancel := func() {
+		s.watchMu.Lock()
+		defer s.watchMu.Unlock()
+		if subs := s.watchers[key]; subs != nil {
+			if _, ok := subs[ch]; ok {
+				delete(subs, ch)
+				if len(subs) == 0 {
+					delete(s.watchers, key)
+				}
+				if s.streamsPerUser[userID] > 1 {
+					s.streamsPerUser[userID]--
+				} else {
+					delete(s.streamsPerUser, userID)
+				}
+			}
+		}
+	}
+	return ch, cancel, nil
 }
 
 func (s *BlobSyncService) caller(ctx context.Context) (AuthUser, error) {
@@ -50,10 +136,31 @@ func (s *BlobSyncService) caller(ctx context.Context) (AuthUser, error) {
 	if s == nil || s.store == nil {
 		return AuthUser{}, status.Error(codes.FailedPrecondition, "blob sync store is not configured")
 	}
+	if deleted, err := s.store.AccountDeleted(u.ID); err != nil {
+		return AuthUser{}, status.Error(codes.Internal, "account status check failed")
+	} else if deleted {
+		return AuthUser{}, status.Error(codes.Unauthenticated, "account has been deleted")
+	}
+	if suspended, err := s.store.IsUserSuspended(u.ID); err != nil {
+		return AuthUser{}, status.Error(codes.Internal, "account suspension check failed")
+	} else if suspended {
+		return AuthUser{}, status.Error(codes.PermissionDenied, "account is suspended")
+	}
 	if err := s.allow(u.ID); err != nil {
 		return AuthUser{}, err
 	}
 	return u, nil
+}
+
+func (s *BlobSyncService) requireWriter(userID string) error {
+	role, err := s.store.UserRole(userID)
+	if err != nil {
+		return status.Error(codes.Internal, "account role check failed")
+	}
+	if role == RoleViewer {
+		return status.Error(codes.PermissionDenied, "viewer role is read-only")
+	}
+	return nil
 }
 
 func (s *BlobSyncService) allow(userID string) error {
@@ -65,10 +172,13 @@ func (s *BlobSyncService) allow(userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	idleWindow := blobSyncBucketIdleWindow(rate, burst)
-	for id, bucket := range s.buckets {
-		if now.Sub(bucket.at) > idleWindow {
-			delete(s.buckets, id)
+	if len(s.buckets) <= 100 || len(s.buckets) >= maxBlobSyncRateBuckets || s.lastSweep.IsZero() || now.Sub(s.lastSweep) >= blobSyncRateSweepInterval {
+		for id, bucket := range s.buckets {
+			if now.Sub(bucket.at) > idleWindow {
+				delete(s.buckets, id)
+			}
 		}
+		s.lastSweep = now
 	}
 	b, ok := s.buckets[userID]
 	if !ok {
@@ -111,6 +221,9 @@ func (s *BlobSyncService) AppendChanges(ctx context.Context, req backendrpc.Appe
 	if err != nil {
 		return backendrpc.AppendChangesResponse{}, err
 	}
+	if err := s.requireWriter(u.ID); err != nil {
+		return backendrpc.AppendChangesResponse{}, err
+	}
 	ws := strings.TrimSpace(req.Workspace)
 	if ws == "" || len(req.Changes) == 0 {
 		return backendrpc.AppendChangesResponse{}, status.Error(codes.InvalidArgument, "workspace and at least one change are required")
@@ -136,6 +249,9 @@ func (s *BlobSyncService) AppendChanges(ctx context.Context, req backendrpc.Appe
 	seqs, err := s.store.appendBlobChanges(ctx, u.ID, ws, batch, time.Now().UTC())
 	if err != nil {
 		return backendrpc.AppendChangesResponse{}, mapBlobSyncError(err)
+	}
+	if len(seqs) > 0 {
+		s.notifyWatchers(u.ID, ws, seqs[len(seqs)-1])
 	}
 	return backendrpc.AppendChangesResponse{Seqs: seqs}, nil
 }
@@ -171,6 +287,9 @@ func (s *BlobSyncService) PutSnapshot(ctx context.Context, req backendrpc.PutSna
 	if err != nil {
 		return backendrpc.PutSnapshotResponse{}, err
 	}
+	if err := s.requireWriter(u.ID); err != nil {
+		return backendrpc.PutSnapshotResponse{}, err
+	}
 	max := s.cfg.BlobSyncSnapshotMaxBytes
 	if max <= 0 {
 		max = 32 << 20
@@ -198,10 +317,17 @@ func (s *BlobSyncService) GetSnapshot(ctx context.Context, req backendrpc.GetSna
 	if err != nil {
 		return backendrpc.GetSnapshotResponse{}, err
 	}
-	if strings.TrimSpace(req.Workspace) == "" {
+	ws := strings.TrimSpace(req.Workspace)
+	if ws == "" {
 		return backendrpc.GetSnapshotResponse{}, status.Error(codes.InvalidArgument, "workspace is required")
 	}
-	seq, b, ok, err := s.store.getBlobSnapshot(ctx, u.ID, strings.TrimSpace(req.Workspace))
+	var deleted string
+	if scanErr := s.store.db.QueryRowContext(ctx, `SELECT deleted_at FROM ws_head WHERE user_id=? AND workspace_id=?`, u.ID, ws).Scan(&deleted); scanErr == nil && deleted != "" {
+		return backendrpc.GetSnapshotResponse{}, status.Error(codes.FailedPrecondition, "workspace has been deleted")
+	} else if scanErr != nil && scanErr != sql.ErrNoRows {
+		return backendrpc.GetSnapshotResponse{}, status.Error(codes.Internal, "workspace scope could not be checked")
+	}
+	seq, b, ok, err := s.store.getBlobSnapshot(ctx, u.ID, ws)
 	if err != nil {
 		return backendrpc.GetSnapshotResponse{}, status.Error(codes.Internal, err.Error())
 	}
@@ -231,6 +357,9 @@ func (s *BlobSyncService) GetKeyring(ctx context.Context, req backendrpc.GetKeyr
 func (s *BlobSyncService) PutKeyring(ctx context.Context, req backendrpc.PutKeyringRequest) (backendrpc.PutKeyringResponse, error) {
 	u, err := s.caller(ctx)
 	if err != nil {
+		return backendrpc.PutKeyringResponse{}, err
+	}
+	if err := s.requireWriter(u.ID); err != nil {
 		return backendrpc.PutKeyringResponse{}, err
 	}
 	if strings.TrimSpace(req.Workspace) == "" || req.ExpectedVersion < 0 {
@@ -274,12 +403,19 @@ func (s *BlobSyncService) DeleteWorkspace(ctx context.Context, req backendrpc.Bl
 	if err != nil {
 		return backendrpc.BlobSyncDeleteWorkspaceResponse{}, err
 	}
-	if strings.TrimSpace(req.Workspace) == "" {
+	if err := s.requireWriter(u.ID); err != nil {
+		return backendrpc.BlobSyncDeleteWorkspaceResponse{}, err
+	}
+	ws := strings.TrimSpace(req.Workspace)
+	if ws == "" {
 		return backendrpc.BlobSyncDeleteWorkspaceResponse{}, status.Error(codes.InvalidArgument, "workspace is required")
 	}
-	ok, err := s.store.deleteBlobWorkspace(ctx, u.ID, strings.TrimSpace(req.Workspace), time.Now())
+	ok, err := s.store.deleteBlobWorkspace(ctx, u.ID, ws, time.Now())
 	if err != nil {
 		return backendrpc.BlobSyncDeleteWorkspaceResponse{}, status.Error(codes.Internal, err.Error())
+	}
+	if ok {
+		s.notifyWatchers(u.ID, ws, -1)
 	}
 	return backendrpc.BlobSyncDeleteWorkspaceResponse{Deleted: ok}, nil
 }
@@ -317,7 +453,7 @@ func (s *BlobSyncService) CreatePairing(ctx context.Context, req backendrpc.Crea
 	if err := s.store.sweepPairingRelay(ctx, now); err != nil {
 		return backendrpc.CreatePairingResponse{}, status.Error(codes.Internal, err.Error())
 	}
-	result, err := s.store.db.ExecContext(ctx, `INSERT OR IGNORE INTO pairing_relay(user_id,id,created_at,expires_at,blob) VALUES(?,?,?,?,?)`, u.ID, id, now.Format(time.RFC3339Nano), expires.Format(time.RFC3339Nano), req.Blob)
+	result, err := s.store.db.ExecContext(ctx, `INSERT OR IGNORE INTO pairing_relay(user_id,id,created_at,expires_at,blob) VALUES(?,?,?,?,?)`, u.ID, id, formatSortableTime(now), formatSortableTime(expires), req.Blob)
 	if err != nil {
 		return backendrpc.CreatePairingResponse{}, status.Error(codes.Internal, "pairing relay could not be stored")
 	}
@@ -328,7 +464,7 @@ func (s *BlobSyncService) CreatePairing(ctx context.Context, req backendrpc.Crea
 	if inserted == 0 {
 		return backendrpc.CreatePairingResponse{}, status.Error(codes.AlreadyExists, "pairing id is already in use")
 	}
-	return backendrpc.CreatePairingResponse{ID: id, ExpiresAt: expires.Format(time.RFC3339Nano)}, nil
+	return backendrpc.CreatePairingResponse{ID: id, ExpiresAt: formatSortableTime(expires)}, nil
 }
 
 // ClaimPairing consumes a relay envelope belonging to the authenticated user.
@@ -340,25 +476,35 @@ func (s *BlobSyncService) ClaimPairing(ctx context.Context, req backendrpc.Claim
 	if err := s.store.sweepPairingRelay(ctx, time.Now()); err != nil {
 		return backendrpc.ClaimPairingResponse{}, status.Error(codes.Internal, err.Error())
 	}
-	tx, err := s.store.db.BeginTx(ctx, nil)
+	conn, err := s.store.db.Conn(ctx)
 	if err != nil {
+		return backendrpc.ClaimPairingResponse{}, status.Error(codes.Internal, "pairing relay connection unavailable")
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
 		return backendrpc.ClaimPairingResponse{}, status.Error(codes.Internal, "pairing relay transaction unavailable")
 	}
-	defer func() { _ = tx.Rollback() }()
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
 	var blob []byte
-	err = tx.QueryRowContext(ctx, `SELECT blob FROM pairing_relay WHERE id=? AND user_id=?`, strings.TrimSpace(req.ID), u.ID).Scan(&blob)
+	err = conn.QueryRowContext(ctx, `SELECT blob FROM pairing_relay WHERE id=? AND user_id=?`, strings.TrimSpace(req.ID), u.ID).Scan(&blob)
 	if err == sql.ErrNoRows {
 		return backendrpc.ClaimPairingResponse{Found: false}, nil
 	}
 	if err != nil {
 		return backendrpc.ClaimPairingResponse{}, status.Error(codes.Internal, err.Error())
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM pairing_relay WHERE id=? AND user_id=?`, strings.TrimSpace(req.ID), u.ID); err != nil {
+	if _, err := conn.ExecContext(ctx, `DELETE FROM pairing_relay WHERE id=? AND user_id=?`, strings.TrimSpace(req.ID), u.ID); err != nil {
 		return backendrpc.ClaimPairingResponse{}, status.Error(codes.Internal, "pairing relay could not be consumed")
 	}
-	if err := tx.Commit(); err != nil {
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return backendrpc.ClaimPairingResponse{}, status.Error(codes.Internal, "pairing relay consumption was not committed")
 	}
+	committed = true
 	return backendrpc.ClaimPairingResponse{Found: true, Blob: blob}, nil
 }
 

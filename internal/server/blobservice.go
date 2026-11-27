@@ -84,6 +84,11 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 	if !ok || strings.TrimSpace(user.ID) == "" {
 		return status.Error(codes.Unauthenticated, "authenticated user is required")
 	}
+	if role, err := s.store.UserRole(user.ID); err != nil {
+		return status.Error(codes.Internal, "account role check failed")
+	} else if role == RoleViewer {
+		return status.Error(codes.PermissionDenied, "viewer role is read-only")
+	}
 
 	var first backendrpc.UploadBlobChunk
 	if err := stream.RecvMsg(&first); err != nil {
@@ -110,10 +115,12 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 	if workspaceID == "" {
 		return status.Error(codes.InvalidArgument, "workspace id is required")
 	}
-	if _, ok, err := s.store.GetWorkspace(user.ID, workspaceID); err != nil {
+	if ws, ok, err := s.store.GetWorkspace(user.ID, workspaceID); err != nil {
 		return status.Error(codes.Internal, "workspace lookup failed")
 	} else if !ok {
 		return status.Error(codes.NotFound, "workspace not found")
+	} else if ws.Deleted {
+		return status.Error(codes.FailedPrecondition, "workspace has been deleted")
 	}
 	declaredSize := first.Header.DeclaredSizeBytes
 	if declaredSize < 0 {
@@ -139,6 +146,7 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 	}
 	defer cleanup()
 
+	errBlobExceedsLimit := fmt.Errorf("blob exceeds limit")
 	hasher := sha256.New()
 	var total int64
 	writeErr := func() error {
@@ -161,7 +169,7 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 			}
 			total += int64(len(chunk.Data))
 			if s.cfg.BlobMaxBytes > 0 && total > s.cfg.BlobMaxBytes {
-				return fmt.Errorf("blob exceeds limit %d bytes", s.cfg.BlobMaxBytes)
+				return errBlobExceedsLimit
 			}
 			if _, err := f.Write(chunk.Data); err != nil {
 				return err
@@ -170,7 +178,16 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 		}
 	}()
 	if writeErr != nil {
-		return status.Error(codes.ResourceExhausted, "blob upload exceeded the size limit")
+		if writeErr == errBlobExceedsLimit {
+			return status.Error(codes.ResourceExhausted, "blob upload exceeded the size limit")
+		}
+		if _, ok := status.FromError(writeErr); ok {
+			return writeErr
+		}
+		if err := stream.Context().Err(); err != nil {
+			return status.FromContextError(err).Err()
+		}
+		return status.Error(codes.Internal, "blob upload stream failed")
 	}
 
 	sum := hex.EncodeToString(hasher.Sum(nil))
@@ -231,10 +248,12 @@ func (s *blobServer) DownloadBlob(req backendrpc.DownloadBlobRequest, stream grp
 	if workspaceID == "" {
 		return status.Error(codes.InvalidArgument, "workspace id is required")
 	}
-	if _, ok, err := s.store.GetWorkspace(user.ID, workspaceID); err != nil {
+	if ws, ok, err := s.store.GetWorkspace(user.ID, workspaceID); err != nil {
 		return status.Error(codes.Internal, "workspace lookup failed")
 	} else if !ok {
 		return status.Error(codes.NotFound, "workspace not found")
+	} else if ws.Deleted {
+		return status.Error(codes.FailedPrecondition, "workspace has been deleted")
 	}
 	if linked, err := s.store.UserWorkspaceBlob(user.ID, workspaceID, hash); err != nil {
 		return status.Error(codes.Internal, "blob link lookup failed")

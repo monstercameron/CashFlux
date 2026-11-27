@@ -203,7 +203,7 @@ func FromEnv() (Config, error) {
 	cfg.StorageMaxBytes = envInt64("CASHFLUX_SERVER_STORAGE_MAX_BYTES", 0)
 	cfg.StorageWarnBytes = envInt64("CASHFLUX_SERVER_STORAGE_WARN_BYTES", 0)
 	cfg.StoragePlanBytesOverride = envPlanBytesMap("CASHFLUX_SERVER_STORAGE_PLAN_BYTES")
-	cfg.GRPCReadLimitBytes = envInt64("CASHFLUX_SERVER_GRPC_READ_LIMIT_BYTES", 16<<20)
+	cfg.GRPCReadLimitBytes = envInt64("CASHFLUX_SERVER_GRPC_READ_LIMIT_BYTES", 48<<20)
 	cfg.GRPCKeepaliveInterval = envDuration("CASHFLUX_SERVER_GRPC_KEEPALIVE_INTERVAL", 30*time.Second)
 	cfg.GRPCIdleTimeout = envDuration("CASHFLUX_SERVER_GRPC_IDLE_TIMEOUT", 90*time.Second)
 	cfg.GRPCMaxActiveConnections = int(envInt64("CASHFLUX_SERVER_GRPC_MAX_ACTIVE_CONNECTIONS", 128))

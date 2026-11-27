@@ -71,6 +71,10 @@ func Target(serverURL string) (string, error) {
 	return u.String(), nil
 }
 
+// DefaultMaxMessageBytes raises gRPC's 4 MiB default so 16–32 MiB encrypted
+// snapshots (including +33% base64 JSON expansion) transfer cleanly.
+const DefaultMaxMessageBytes = 48 << 20
+
 // TunnelConfig returns the typed GoGRPCBridge config plus auth interceptors.
 func TunnelConfig(cfg Config, extra ...grpc.DialOption) (grpctunnel.TunnelConfig, error) {
 	target, err := Target(cfg.ServerURL)
@@ -84,6 +88,10 @@ func TunnelConfig(cfg Config, extra ...grpc.DialOption) (grpctunnel.TunnelConfig
 	opts := append([]grpc.DialOption{}, extra...)
 	opts = grpctunnel.ApplyTunnelInsecureCredentials(opts)
 	opts = append(opts,
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(DefaultMaxMessageBytes),
+			grpc.MaxCallSendMsgSize(DefaultMaxMessageBytes),
+		),
 		grpc.WithUnaryInterceptor(UnaryBearerInterceptor(token)),
 		grpc.WithStreamInterceptor(StreamBearerInterceptor(token)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -93,6 +101,41 @@ func TunnelConfig(cfg Config, extra ...grpc.DialOption) (grpctunnel.TunnelConfig
 		}),
 	)
 	return grpctunnel.TunnelConfig{Target: target, GRPCOptions: opts}, nil
+}
+
+// DialEndpoint opens a reusable per-endpoint gRPC ClientConn without baking a
+// rotating bearer token into the connection. Callers attach per-RPC auth via
+// WithBearerToken so 15-minute token rotations never leak WebSockets or cancel
+// sibling RPCs.
+func DialEndpoint(ctx context.Context, serverURL string, extra ...grpc.DialOption) (*grpc.ClientConn, error) {
+	target, err := Target(serverURL)
+	if err != nil {
+		return nil, err
+	}
+	opts := append([]grpc.DialOption{}, extra...)
+	opts = grpctunnel.ApplyTunnelInsecureCredentials(opts)
+	opts = append(opts,
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(DefaultMaxMessageBytes),
+			grpc.MaxCallSendMsgSize(DefaultMaxMessageBytes),
+		),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                clientKeepaliveInterval,
+			Timeout:             clientKeepaliveTimeout,
+			PermitWithoutStream: false,
+		}),
+	)
+	return grpctunnel.BuildTunnelConn(ctx, grpctunnel.TunnelConfig{Target: target, GRPCOptions: opts})
+}
+
+// WithBearerToken attaches per-RPC Authorization metadata to ctx when token is
+// non-empty.
+func WithBearerToken(ctx context.Context, token string) context.Context {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
 }
 
 // Dial opens a gRPC ClientConn through the backend websocket bridge.

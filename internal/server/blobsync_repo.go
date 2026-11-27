@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+// formatSortableTime formats UTC timestamps with fixed-width nanoseconds so
+// SQLite TEXT < / <= comparisons always match chronological order (unlike
+// time.RFC3339Nano, which omits fractional digits on whole seconds and sorts
+// ".5Z" before "Z").
+const blobSyncTimeFormat = "2006-01-02T15:04:05.000000000Z"
+
+func formatSortableTime(t time.Time) string {
+	return t.UTC().Format(blobSyncTimeFormat)
+}
+
 type storedChange struct {
 	ChangeID, DeviceID string
 	Seq                int64
@@ -62,7 +72,7 @@ func (s *Store) appendBlobChanges(ctx context.Context, userID, workspaceID strin
 			return nil, fmt.Errorf("blob sync: check idempotency key: %w", err)
 		}
 		seq = nextSeq
-		if _, err := conn.ExecContext(ctx, `INSERT INTO change_log(user_id,workspace_id,seq,change_id,device_id,size,created_at,blob) VALUES(?,?,?,?,?,?,?,?)`, userID, workspaceID, seq, change.ChangeID, change.DeviceID, len(change.Blob), now.UTC().Format(time.RFC3339Nano), change.Blob); err != nil {
+		if _, err := conn.ExecContext(ctx, `INSERT INTO change_log(user_id,workspace_id,seq,change_id,device_id,size,created_at,blob) VALUES(?,?,?,?,?,?,?,?)`, userID, workspaceID, seq, change.ChangeID, change.DeviceID, len(change.Blob), formatSortableTime(now), change.Blob); err != nil {
 			return nil, fmt.Errorf("blob sync: append change: %w", err)
 		}
 		nextSeq++
@@ -116,14 +126,23 @@ func (s *Store) listBlobChanges(ctx context.Context, userID, workspaceID string,
 }
 
 func (s *Store) putBlobSnapshot(ctx context.Context, userID, workspaceID string, covers int64, blob []byte, retention time.Duration, now time.Time) (bool, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	conn, err := s.db.Conn(ctx)
 	if err != nil {
+		return false, fmt.Errorf("blob sync: acquire snapshot connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
 		return false, fmt.Errorf("blob sync: begin snapshot: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
 	var head int64
 	var deleted string
-	err = tx.QueryRowContext(ctx, `SELECT next_seq-1,deleted_at FROM ws_head WHERE user_id=? AND workspace_id=?`, userID, workspaceID).Scan(&head, &deleted)
+	err = conn.QueryRowContext(ctx, `SELECT next_seq-1,deleted_at FROM ws_head WHERE user_id=? AND workspace_id=?`, userID, workspaceID).Scan(&head, &deleted)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -134,28 +153,29 @@ func (s *Store) putBlobSnapshot(ctx context.Context, userID, workspaceID string,
 		return false, errWorkspaceDeleted
 	}
 	var max int64
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(covers_seq),0) FROM ws_snapshot WHERE user_id=? AND workspace_id=?`, userID, workspaceID).Scan(&max)
+	err = conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(covers_seq),0) FROM ws_snapshot WHERE user_id=? AND workspace_id=?`, userID, workspaceID).Scan(&max)
 	if err != nil {
 		return false, fmt.Errorf("blob sync: read snapshot cursor: %w", err)
 	}
 	if covers <= max || covers > head {
 		return false, nil
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO ws_snapshot(user_id,workspace_id,covers_seq,created_at,blob) VALUES(?,?,?,?,?)`, userID, workspaceID, covers, now.UTC().Format(time.RFC3339Nano), blob); err != nil {
+	if _, err := conn.ExecContext(ctx, `INSERT INTO ws_snapshot(user_id,workspace_id,covers_seq,created_at,blob) VALUES(?,?,?,?,?)`, userID, workspaceID, covers, formatSortableTime(now), blob); err != nil {
 		return false, fmt.Errorf("blob sync: put snapshot: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM ws_snapshot WHERE user_id=? AND workspace_id=? AND covers_seq NOT IN (SELECT covers_seq FROM ws_snapshot WHERE user_id=? AND workspace_id=? ORDER BY covers_seq DESC LIMIT 3)`, userID, workspaceID, userID, workspaceID); err != nil {
+	if _, err := conn.ExecContext(ctx, `DELETE FROM ws_snapshot WHERE user_id=? AND workspace_id=? AND covers_seq NOT IN (SELECT covers_seq FROM ws_snapshot WHERE user_id=? AND workspace_id=? ORDER BY covers_seq DESC LIMIT 3)`, userID, workspaceID, userID, workspaceID); err != nil {
 		return false, fmt.Errorf("blob sync: prune snapshots: %w", err)
 	}
 	if retention > 0 {
-		cutoff := now.Add(-retention).UTC().Format(time.RFC3339Nano)
-		if _, err := tx.ExecContext(ctx, `DELETE FROM change_log WHERE user_id=? AND workspace_id=? AND seq<=? AND created_at<?`, userID, workspaceID, covers, cutoff); err != nil {
+		cutoff := formatSortableTime(now.Add(-retention))
+		if _, err := conn.ExecContext(ctx, `DELETE FROM change_log WHERE user_id=? AND workspace_id=? AND seq<=? AND created_at<?`, userID, workspaceID, covers, cutoff); err != nil {
 			return false, fmt.Errorf("blob sync: prune changes: %w", err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return false, fmt.Errorf("blob sync: commit snapshot: %w", err)
 	}
+	committed = true
 	return true, nil
 }
 
@@ -186,13 +206,22 @@ func (s *Store) getBlobKeyring(ctx context.Context, userID, workspaceID string) 
 }
 
 func (s *Store) putBlobKeyring(ctx context.Context, userID, workspaceID string, expected int64, blob []byte) (int64, bool, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	conn, err := s.db.Conn(ctx)
 	if err != nil {
+		return 0, false, fmt.Errorf("blob sync: acquire keyring connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
 		return 0, false, fmt.Errorf("blob sync: begin keyring: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
 	var current int64
-	err = tx.QueryRowContext(ctx, `SELECT version FROM keyring WHERE user_id=? AND workspace_id=?`, userID, workspaceID).Scan(&current)
+	err = conn.QueryRowContext(ctx, `SELECT version FROM keyring WHERE user_id=? AND workspace_id=?`, userID, workspaceID).Scan(&current)
 	if err != nil && err != sql.ErrNoRows {
 		return 0, false, fmt.Errorf("blob sync: read keyring version: %w", err)
 	}
@@ -204,21 +233,22 @@ func (s *Store) putBlobKeyring(ctx context.Context, userID, workspaceID string, 
 	}
 	next := current + 1
 	if current == 0 {
-		_, err = tx.ExecContext(ctx, `INSERT INTO keyring(user_id,workspace_id,version,blob) VALUES(?,?,?,?)`, userID, workspaceID, next, blob)
+		_, err = conn.ExecContext(ctx, `INSERT INTO keyring(user_id,workspace_id,version,blob) VALUES(?,?,?,?)`, userID, workspaceID, next, blob)
 	} else {
-		_, err = tx.ExecContext(ctx, `UPDATE keyring SET version=?,blob=? WHERE user_id=? AND workspace_id=? AND version=?`, next, blob, userID, workspaceID, current)
+		_, err = conn.ExecContext(ctx, `UPDATE keyring SET version=?,blob=? WHERE user_id=? AND workspace_id=? AND version=?`, next, blob, userID, workspaceID, current)
 	}
 	if err != nil {
 		return 0, false, fmt.Errorf("blob sync: update keyring: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return 0, false, fmt.Errorf("blob sync: commit keyring: %w", err)
 	}
+	committed = true
 	return next, true, nil
 }
 
 func (s *Store) deleteBlobWorkspace(ctx context.Context, userID, workspaceID string, now time.Time) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE ws_head SET deleted_at=? WHERE user_id=? AND workspace_id=? AND deleted_at=''`, now.UTC().Format(time.RFC3339Nano), userID, workspaceID)
+	res, err := s.db.ExecContext(ctx, `UPDATE ws_head SET deleted_at=? WHERE user_id=? AND workspace_id=? AND deleted_at=''`, formatSortableTime(now), userID, workspaceID)
 	if err != nil {
 		return false, fmt.Errorf("blob sync: tombstone workspace: %w", err)
 	}
@@ -227,7 +257,7 @@ func (s *Store) deleteBlobWorkspace(ctx context.Context, userID, workspaceID str
 }
 
 func (s *Store) sweepPairingRelay(ctx context.Context, now time.Time) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM pairing_relay WHERE expires_at<=?`, now.UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM pairing_relay WHERE expires_at<=?`, formatSortableTime(now)); err != nil {
 		return fmt.Errorf("blob sync: sweep pairings: %w", err)
 	}
 	return nil

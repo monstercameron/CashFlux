@@ -81,7 +81,10 @@ func blobSyncWatchHandler(s any, stream grpc.ServerStream) error {
 	return s.(blobSyncServer).Watch(req, stream)
 }
 
-// Watch emits the current head and then polls for changes until the client disconnects.
+// Watch subscribes to instant head-advance notifications for a workspace,
+// emitting immediately when head > req.Since and waking on AppendChanges or
+// DeleteWorkspace without polling SQLite every second. Account deletion and
+// suspension are re-checked periodically so revoked sessions are evicted.
 func (s *BlobSyncService) Watch(req backendrpc.WatchRequest, stream grpc.ServerStream) error {
 	user, err := s.caller(stream.Context())
 	if err != nil {
@@ -90,10 +93,16 @@ func (s *BlobSyncService) Watch(req backendrpc.WatchRequest, stream grpc.ServerS
 	if req.Workspace == "" {
 		return status.Error(codes.InvalidArgument, "workspace is required")
 	}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	// Subscribe BEFORE reading initial head so no append between the initial
+	// check and subscription can be missed.
+	notifyCh, unsubscribe, err := s.subscribeWatcher(user.ID, req.Workspace)
+	if err != nil {
+		return err
+	}
+	defer unsubscribe()
+
 	cursor := req.Since
-	for {
+	emitIfAdvanced := func() error {
 		_, head, err := s.store.listBlobChanges(stream.Context(), user.ID, req.Workspace, cursor, 1)
 		if err != nil {
 			return mapBlobSyncError(err)
@@ -104,10 +113,42 @@ func (s *BlobSyncService) Watch(req backendrpc.WatchRequest, stream grpc.ServerS
 			}
 			cursor = head
 		}
+		return nil
+	}
+	if err := emitIfAdvanced(); err != nil {
+		return err
+	}
+
+	recheck := time.NewTicker(15 * time.Second)
+	defer recheck.Stop()
+	for {
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case <-ticker.C:
+		case head := <-notifyCh:
+			if head < 0 {
+				return status.Error(codes.FailedPrecondition, "workspace has been deleted")
+			}
+			if head > cursor {
+				if err := stream.SendMsg(&backendrpc.WatchEvent{Workspace: req.Workspace, Head: head}); err != nil {
+					return err
+				}
+				cursor = head
+			}
+		case <-recheck.C:
+			if deleted, err := s.store.AccountDeleted(user.ID); err != nil {
+				return status.Error(codes.Internal, "account status check failed")
+			} else if deleted {
+				return status.Error(codes.Unauthenticated, "account has been deleted")
+			}
+			if suspended, err := s.store.IsUserSuspended(user.ID); err != nil {
+				return status.Error(codes.Internal, "account suspension check failed")
+			} else if suspended {
+				return status.Error(codes.PermissionDenied, "account is suspended")
+			}
+			if err := emitIfAdvanced(); err != nil {
+				return err
+			}
 		}
 	}
 }

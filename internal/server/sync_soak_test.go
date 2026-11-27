@@ -248,7 +248,7 @@ func TestSoakSyncConflictFanout(t *testing.T) {
 	defer readConn.Close()
 	var getResp backendrpc.GetWorkspaceResponse
 	if err := readConn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace,
-		backendrpc.GetWorkspaceRequest{WorkspaceID: wsID}, &getResp, backendrpc.JSONCallOptions()...); err != nil {
+		backendrpc.GetWorkspaceRequest{ID: wsID}, &getResp, backendrpc.JSONCallOptions()...); err != nil {
 		t.Fatalf("get workspace: %v", err)
 	}
 	if getResp.Workspace.ID != wsID {

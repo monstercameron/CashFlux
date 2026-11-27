@@ -65,6 +65,18 @@ func syncTransferInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
+// grpcMaxMessageBytes returns the gRPC send/receive ceiling. Because CashFlux's
+// JSON gRPC codec base64-encodes binary snapshots (+33% expansion), the default
+// gRPC limit (4 MiB) previously rejected snapshots above ~3 MiB even when
+// GRPCReadLimitBytes and BlobSyncSnapshotMaxBytes allowed 16–32 MiB.
+func grpcMaxMessageBytes(cfg Config) int {
+	limit := int(cfg.GRPCReadLimitBytes)
+	if limit < 48<<20 {
+		limit = 48 << 20
+	}
+	return limit
+}
+
 func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	var store *Store
 	if len(stores) > 0 {
@@ -80,27 +92,31 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	} else if cfg.Logger != nil {
 		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
 	}
+	maxMsg := grpcMaxMessageBytes(cfg)
 	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsg),
+		grpc.MaxSendMsgSize(maxMsg),
 		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg, store)), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
 		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg, store)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
-		// Permit the client's ~40s keepalive PINGs (syncbridge clientKeepaliveInterval)
-		// during an active watch stream so a half-open connection is detected
-		// client-side, without earning a GOAWAY. MinTime is set below that interval;
-		// pings without an active stream are still not permitted.
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             20 * time.Second,
 			PermitWithoutStream: false,
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
+	RegisterBlobSyncServiceServer(grpcServer, NewBlobSyncService(store, cfg))
 	RegisterAIServiceServer(grpcServer, newAIService(store, cfg))
 	RegisterAuthServiceServer(grpcServer, authServiceForRegistrationPolicy(store, cfg))
 	RegisterAccountServiceServer(grpcServer, newAccountService(store, cfg))
 	RegisterBillingServiceServer(grpcServer, newBillingService(store, cfg))
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
+	readLimit := cfg.GRPCReadLimitBytes
+	if readLimit <= 0 {
+		readLimit = int64(maxMsg)
+	}
 	return grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return grpcBridgeOriginAllowed(r, cfg) }),
-		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
+		grpctunnel.WithReadLimitBytes(readLimit),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
 		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
 		grpctunnel.WithMaxConnectionsPerClient(cfg.GRPCMaxConnectionsPerClient),
@@ -128,7 +144,10 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	} else if cfg.Logger != nil {
 		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
 	}
+	maxMsg := grpcMaxMessageBytes(cfg)
 	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsg),
+		grpc.MaxSendMsgSize(maxMsg),
 		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg, store)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
 		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg, store)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
@@ -137,10 +156,15 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
-	const customAuthEnabled = false // SyncService only — no AuthServiceServer registered on this bridge
+	RegisterBlobSyncServiceServer(grpcServer, NewBlobSyncService(store, cfg))
+	const customAuthEnabled = false // SyncService + BlobSync only — no AuthServiceServer registered on this bridge
+	readLimit := cfg.GRPCReadLimitBytes
+	if readLimit <= 0 {
+		readLimit = int64(maxMsg)
+	}
 	tunnel := grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return grpcBridgeOriginAllowed(r, cfg) }),
-		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
+		grpctunnel.WithReadLimitBytes(readLimit),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
 		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
 		grpctunnel.WithMaxConnectionsPerClient(cfg.GRPCMaxConnectionsPerClient),
@@ -230,7 +254,10 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	} else if cfg.Logger != nil {
 		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
 	}
+	maxMsg := grpcMaxMessageBytes(cfg)
 	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(maxMsg),
+		grpc.MaxSendMsgSize(maxMsg),
 		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg, store)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
 		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg, store)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
@@ -239,11 +266,16 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
+	RegisterBlobSyncServiceServer(grpcServer, NewBlobSyncService(store, cfg))
 	RegisterAuthServiceServer(grpcServer, pairingOnlyAuthServer{newAuthService(store, cfg)})
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
+	readLimit := cfg.GRPCReadLimitBytes
+	if readLimit <= 0 {
+		readLimit = int64(maxMsg)
+	}
 	tunnel := grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return grpcBridgeOriginAllowed(r, cfg) }),
-		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
+		grpctunnel.WithReadLimitBytes(readLimit),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
 		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
 		grpctunnel.WithMaxConnectionsPerClient(cfg.GRPCMaxConnectionsPerClient),

@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -243,6 +244,11 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 		`DELETE FROM snapshots WHERE user_id = ?`,
 		`DELETE FROM workspace_blobs WHERE user_id = ?`,
 		`DELETE FROM workspaces WHERE user_id = ?`,
+		`DELETE FROM change_log WHERE user_id = ?`,
+		`DELETE FROM ws_snapshot WHERE user_id = ?`,
+		`DELETE FROM keyring WHERE user_id = ?`,
+		`DELETE FROM pairing_relay WHERE user_id = ?`,
+		`DELETE FROM ws_head WHERE user_id = ?`,
 		`DELETE FROM ai_keys WHERE user_id = ?`,
 		`DELETE FROM usage WHERE user_id = ?`,
 		`DELETE FROM refresh_tokens WHERE user_id = ?`,
@@ -1378,17 +1384,54 @@ func (s *Store) putBlobContext(ctx context.Context, root string, data []byte, mi
 	if err := confinedRoot.MkdirAll(filepath.Dir(relativePath), 0o700); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
+	}
+	// Pre-check workspace scope before touching disk so deleted or missing
+	// workspaces fail fast without writing up to 32 MiB to disk.
+	if userID != "" {
+		var deleted int
+		if err := s.db.QueryRowContext(ctx, `SELECT deleted FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID).Scan(&deleted); err != nil {
+			return Blob{}, fmt.Errorf("server store: blob workspace: %w", err)
+		}
+		if deleted != 0 {
+			return Blob{}, fmt.Errorf("server store: blob workspace is deleted")
+		}
+	}
+	// Stage the blob payload to a temp file (non-hex name, ignored by orphan GC)
+	// OUTSIDE SQLite BEGIN IMMEDIATE so up to 32 MiB of disk I/O cannot stall
+	// the single SQLite connection. Inside the brief BEGIN IMMEDIATE transaction
+	// (serialized against SweepOrphanBlobFiles), we atomically rename the staged
+	// file into the final content-addressed path only when absent.
+	tmpPath := relativePath + ".tmp." + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if err := confinedRoot.WriteFile(tmpPath, data, 0o600); err != nil {
+		_ = confinedRoot.Remove(tmpPath)
+		return Blob{}, fmt.Errorf("server store: blob write: %w", err)
+	}
+	cleanupTmp := func() {
+		if tmpPath != "" {
+			_ = confinedRoot.Remove(tmpPath)
+			tmpPath = ""
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		cleanupTmp()
+		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
+	}
 	conn, err := s.db.Conn(ctx)
 	if err != nil {
+		cleanupTmp()
 		return Blob{}, fmt.Errorf("server store: blob connection: %w", err)
 	}
 	defer conn.Close()
 	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		cleanupTmp()
 		return Blob{}, fmt.Errorf("server store: begin blob write: %w", err)
 	}
 	committed, created, commitAttempted := false, false, false
 	defer func() {
 		if !committed {
+			cleanupTmp()
 			if created && !commitAttempted {
 				_ = confinedRoot.Remove(relativePath)
 			}
@@ -1404,16 +1447,14 @@ func (s *Store) putBlobContext(ctx context.Context, root string, data []byte, mi
 			return Blob{}, fmt.Errorf("server store: blob workspace is deleted")
 		}
 	}
-	if err := ctx.Err(); err != nil {
-		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
-	}
-	if _, err := confinedRoot.Stat(relativePath); errors.Is(err, os.ErrNotExist) {
-		created = true // Remove a partial new file if WriteFile itself fails.
-		if err := confinedRoot.WriteFile(relativePath, data, 0o600); err != nil {
-			return Blob{}, fmt.Errorf("server store: blob write: %w", err)
+	if _, statErr := confinedRoot.Stat(relativePath); errors.Is(statErr, os.ErrNotExist) {
+		if err := confinedRoot.Rename(tmpPath, relativePath); err != nil {
+			return Blob{}, fmt.Errorf("server store: blob rename: %w", err)
 		}
-	} else if err != nil {
-		return Blob{}, fmt.Errorf("server store: blob stat: %w", err)
+		tmpPath = ""
+		created = true
+	} else if statErr != nil {
+		return Blob{}, fmt.Errorf("server store: blob stat: %w", statErr)
 	} else {
 		existing, err := confinedRoot.ReadFile(relativePath)
 		if err != nil {
@@ -1422,14 +1463,12 @@ func (s *Store) putBlobContext(ctx context.Context, root string, data []byte, mi
 		if sum := sha256.Sum256(existing); hex.EncodeToString(sum[:]) != hash {
 			return Blob{}, fmt.Errorf("server store: existing blob hash mismatch")
 		}
-	}
-	if err := ctx.Err(); err != nil {
-		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
+		cleanupTmp()
 	}
 	if _, err := conn.ExecContext(ctx, `
 INSERT INTO blobs(hash, size, mime, created_at)
 VALUES(?, ?, ?, ?)
-ON CONFLICT(hash) DO UPDATE SET size = excluded.size, mime = excluded.mime`,
+ON CONFLICT(hash) DO NOTHING`,
 		blob.Hash, blob.Size, blob.Mime, formatTime(blob.CreatedAt)); err != nil {
 		return Blob{}, fmt.Errorf("server store: put blob metadata: %w", err)
 	}
