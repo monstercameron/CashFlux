@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"sync"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
@@ -66,25 +67,64 @@ func cryptoGetRandomValues(dst []byte) error {
 //
 // Keyed by salt AND passcode: the salt alone would return a stale key after the
 // user changes their passcode, which would silently encrypt with the old one.
-var datasetKeyCache = map[string]js.Value{}
+var (
+	datasetKeyCacheMu   sync.Mutex
+	datasetKeyCache     = map[string]js.Value{}
+	sessionDatasetSalt  string
+)
 
-// clearDatasetKeyCache drops every derived key. Called when the lock is enabled,
-// changed, or removed — any moment the passcode that keys this cache stops being
-// the right one.
+// clearDatasetKeyCache drops every derived key and rotates the per-session
+// encryption salt. Called when the lock is enabled, changed, or removed — any
+// moment the passcode that keys this cache stops being the right one.
 func clearDatasetKeyCache() {
+	datasetKeyCacheMu.Lock()
 	datasetKeyCache = map[string]js.Value{}
+	sessionDatasetSalt = ""
+	datasetKeyCacheMu.Unlock()
+}
+
+// currentSessionDatasetSalt returns a stable per-session 16-byte base64 salt so
+// PBKDF2 (600,000 iterations) is paid once per session instead of on every
+// encrypt call. Every encryptDataset call still generates a fresh random
+// 12-byte AES-GCM IV, preserving full semantic security and envelope format.
+func currentSessionDatasetSalt() (string, error) {
+	datasetKeyCacheMu.Lock()
+	if sessionDatasetSalt != "" {
+		s := sessionDatasetSalt
+		datasetKeyCacheMu.Unlock()
+		return s, nil
+	}
+	datasetKeyCacheMu.Unlock()
+
+	salt := make([]byte, 16)
+	if err := cryptoGetRandomValues(salt); err != nil {
+		return "", fmt.Errorf("cryptobox: salt generation failed: %w", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(salt)
+	datasetKeyCacheMu.Lock()
+	if sessionDatasetSalt == "" {
+		sessionDatasetSalt = b64
+	}
+	s := sessionDatasetSalt
+	datasetKeyCacheMu.Unlock()
+	return s, nil
 }
 
 func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err error)) {
 	cacheKey := saltB64 + "|" + passcode
-	if k, ok := datasetKeyCache[cacheKey]; ok {
+	datasetKeyCacheMu.Lock()
+	k, ok := datasetKeyCache[cacheKey]
+	datasetKeyCacheMu.Unlock()
+	if ok {
 		onDone(k, nil)
 		return
 	}
 	inner := onDone
 	onDone = func(key js.Value, err error) {
 		if err == nil && !key.IsUndefined() && !key.IsNull() {
+			datasetKeyCacheMu.Lock()
 			datasetKeyCache[cacheKey] = key
+			datasetKeyCacheMu.Unlock()
 		}
 		inner(key, err)
 	}
@@ -110,10 +150,14 @@ func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err er
 	saltArr := js.Global().Get("Uint8Array").New(len(saltBytes))
 	js.CopyBytesToJS(saltArr, saltBytes)
 
-	var importDone, deriveDone js.Func
+	var importDone, importRej js.Func
+	releaseImport := func() {
+		importDone.Release()
+		importRej.Release()
+	}
 
 	importDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		importDone.Release()
+		releaseImport()
 		if len(args) == 0 {
 			onDone(js.Undefined(), errors.New("cryptobox: importKey promise rejected"))
 			return nil
@@ -137,8 +181,13 @@ func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err er
 			[]any{"encrypt", "decrypt"},
 		)
 
-		deriveDone = js.FuncOf(func(_ js.Value, dArgs []js.Value) any {
+		var deriveDone, deriveRej js.Func
+		releaseDerive := func() {
 			deriveDone.Release()
+			deriveRej.Release()
+		}
+		deriveDone = js.FuncOf(func(_ js.Value, dArgs []js.Value) any {
+			releaseDerive()
 			if len(dArgs) == 0 {
 				onDone(js.Undefined(), errors.New("cryptobox: deriveKey promise rejected"))
 				return nil
@@ -146,9 +195,8 @@ func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err er
 			onDone(dArgs[0], nil)
 			return nil
 		})
-		var deriveRej js.Func
 		deriveRej = js.FuncOf(func(_ js.Value, rArgs []js.Value) any {
-			deriveRej.Release()
+			releaseDerive()
 			msg := "cryptobox: deriveKey rejected"
 			if len(rArgs) > 0 {
 				msg = fmt.Sprintf("%s: %s", msg, rArgs[0].String())
@@ -160,9 +208,8 @@ func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err er
 		return nil
 	})
 
-	var importRej js.Func
 	importRej = js.FuncOf(func(_ js.Value, rArgs []js.Value) any {
-		importRej.Release()
+		releaseImport()
 		msg := "cryptobox: importKey rejected"
 		if len(rArgs) > 0 {
 			msg = fmt.Sprintf("%s: %s", msg, rArgs[0].String())
@@ -186,22 +233,20 @@ func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err er
 // serialised envelope bytes. On any failure, onDone receives a non-nil error
 // and nil bytes — the caller must keep the original plaintext in that case.
 //
-// A fresh random 16-byte salt and 12-byte IV are generated for every call so
-// that ciphertexts are non-deterministic even for identical inputs.
+// A fresh random 12-byte IV is generated for every call while reusing the
+// per-session PBKDF2 salt so ciphertexts remain non-deterministic without
+// paying 600,000 PBKDF2 iterations on every push.
 func encryptDataset(plaintext []byte, passcode string, onDone func(env []byte, err error)) {
-	// Generate salt (16 bytes) and IV (12 bytes).
-	salt := make([]byte, 16)
-	iv := make([]byte, 12)
-	if err := cryptoGetRandomValues(salt); err != nil {
-		onDone(nil, fmt.Errorf("cryptobox: salt generation failed: %w", err))
+	saltB64, err := currentSessionDatasetSalt()
+	if err != nil {
+		onDone(nil, err)
 		return
 	}
+	iv := make([]byte, 12)
 	if err := cryptoGetRandomValues(iv); err != nil {
 		onDone(nil, fmt.Errorf("cryptobox: iv generation failed: %w", err))
 		return
 	}
-
-	saltB64 := base64.StdEncoding.EncodeToString(salt)
 	ivB64 := base64.StdEncoding.EncodeToString(iv)
 
 	deriveKey(passcode, saltB64, func(key js.Value, err error) {
@@ -220,9 +265,13 @@ func encryptDataset(plaintext []byte, passcode string, onDone func(env []byte, e
 		encParams := map[string]any{"name": "AES-GCM", "iv": ivArr}
 		encPromise := subtle().Call("encrypt", encParams, key, plainArr)
 
-		var encDone js.Func
-		encDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		var encDone, encRej js.Func
+		releaseEnc := func() {
 			encDone.Release()
+			encRej.Release()
+		}
+		encDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			releaseEnc()
 			if len(args) == 0 {
 				onDone(nil, errors.New("cryptobox: encrypt promise rejected"))
 				return nil
@@ -242,9 +291,8 @@ func encryptDataset(plaintext []byte, passcode string, onDone func(env []byte, e
 			onDone(cryptobox.Marshal(env), nil)
 			return nil
 		})
-		var encRej js.Func
 		encRej = js.FuncOf(func(_ js.Value, rArgs []js.Value) any {
-			encRej.Release()
+			releaseEnc()
 			msg := "cryptobox: encrypt rejected"
 			if len(rArgs) > 0 {
 				msg = fmt.Sprintf("%s: %s", msg, rArgs[0].String())
@@ -287,9 +335,13 @@ func decryptDataset(env cryptobox.Envelope, passcode string, onDone func(plainte
 		decParams := map[string]any{"name": "AES-GCM", "iv": ivArr}
 		decPromise := subtle().Call("decrypt", decParams, key, cipherArr)
 
-		var decDone js.Func
-		decDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		var decDone, decRej js.Func
+		releaseDec := func() {
 			decDone.Release()
+			decRej.Release()
+		}
+		decDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			releaseDec()
 			if len(args) == 0 {
 				onDone(nil, errors.New("cryptobox: decrypt promise rejected"))
 				return nil
@@ -300,9 +352,8 @@ func decryptDataset(env cryptobox.Envelope, passcode string, onDone func(plainte
 			onDone(plain, nil)
 			return nil
 		})
-		var decRej js.Func
 		decRej = js.FuncOf(func(_ js.Value, rArgs []js.Value) any {
-			decRej.Release()
+			releaseDec()
 			msg := "cryptobox: decrypt rejected (wrong passcode or corrupted data)"
 			if len(rArgs) > 0 {
 				msg = fmt.Sprintf("%s: %s", msg, rArgs[0].String())

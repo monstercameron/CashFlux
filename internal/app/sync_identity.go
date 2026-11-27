@@ -69,7 +69,11 @@ func datasetServerIDForURL(serverURL string) string {
 		}
 	}
 	if serverID == "" {
-		serverID = endpoint
+		// Never cache the fallback URL string in datasetServerIDCache: if the
+		// device was merely offline during this lookup, caching the URL would
+		// permanently disagree with the real server UUID once back online and
+		// falsely flag the user's own household as foreign.
+		return endpoint
 	}
 	datasetServerIDCache.Lock()
 	datasetServerIDCache.ids[endpoint] = serverID
@@ -527,6 +531,15 @@ func beginSessionTransition() {
 	dropSharedConn()
 }
 
+// cancelSessionTransition rolls back an aborted sign-in/sign-out/server-change
+// transition when no credential change committed, so pageRefreshState.blocked
+// does not permanently brick sync for the rest of the session.
+func cancelSessionTransition() {
+	pageRefreshState.Lock()
+	pageRefreshState.blocked = false
+	pageRefreshState.Unlock()
+}
+
 func backendSessionReady() bool {
 	pageRefreshState.Lock()
 	defer pageRefreshState.Unlock()
@@ -537,6 +550,14 @@ func backendSessionReady() bool {
 // the configured server's stable identity. It never enumerates credentials or
 // uses the dataset owner to select a session.
 func bootstrapSelectedSession(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+	}
 	pr := uistate.LoadPrefs().Normalize()
 	browserstore.Reload(syncUserIDKey, authRefreshModeKey)
 	accountRaw, _, accountErr := browserstore.GetSecure(syncUserIDKey)

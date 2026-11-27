@@ -1,3 +1,12 @@
+## 2026-11-27 — Fix client sync crypto caching, incremental blob sync, and persistence seam
+
+Eliminated the client crypto, blob, and local persistence bottlenecks before wiring the thin WASM v2 sync adapter:
+
+- **PBKDF2 key cache & `js.Func` cleanup (`internal/app/datasetcrypto.go`, `artifactcrypto.go`)**: Replaced per-call random salt generation in `encryptDataset` with a per-session random salt (rotated in `clearDatasetKeyCache`) paired with a fresh random 12-byte AES-GCM IV per message so `datasetKeyCache` actually hits after the first call instead of paying 600k PBKDF2 rounds and leaking `CryptoKey`s on every push. Keyed `artifactKeyCache` by `salt|passcode`, failed closed (`errSyncDatasetLocked`) on empty passcode, guarded short salt prefixes, and released both `then` and `catch` `js.Func` callbacks across all WebCrypto promises.
+- **Incremental blob sync & OAuth listener cleanup (`internal/app/backend.go`)**: Added a session `uploadedBlobCache` so unchanged attachments aren't re-uploaded on every push, consulted local encrypted IndexedDB (`cachedLocalArtifactBytes`) before fetching blobs over the network on pull, and removed/released the `window` message listener in `startOAuthLogin`.
+- **Persistence & identity hardening (`internal/app/persist_records.go`, `sync_identity.go`)**: Cleared `mirrorErr` when rebuilding a full checkpoint so autosave cannot brick permanently, added the synchronous `onLocalDatasetCommitted` hook inside the IndexedDB commit callback so v2 change capture has zero post-commit window, stopped permanently caching offline URL fallbacks in `datasetServerIDCache`, added `cancelSessionTransition`, and bounded `bootstrapSelectedSession` with a 15-second timeout.
+- **Verification**: `GOOS=js GOARCH=wasm go vet ./internal/app/...` and WASM `go build` pass cleanly. Next: wire the thin WASM v2 `BlobSync` adapter, live in-place apply, and conflict checkpoint UI.
+
 ## 2026-11-27 — Rework services.wasm worker and rpcworker transport
 
 Fixed the recurring browser-worker transport, connection-pool, and refresh-binding failures across `cmd/cashflux-services`, `internal/rpcworker`, `internal/rpcprotocol`, and `internal/app/rpcworker.go`:

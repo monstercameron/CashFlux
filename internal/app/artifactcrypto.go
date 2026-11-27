@@ -71,10 +71,13 @@ const artifactSaltKey = "cf.artifactSalt"
 // per-install artifact salt.
 const artifactSaltStoreKey = "cashflux:artifact:salt"
 
-// artifactKeyCache caches derived js.Value CryptoKeys keyed by saltB64 so
-// that PBKDF2 key derivation (600 000 iterations) is paid at most once per
-// unique salt per session.
-var artifactKeyCache = map[string]js.Value{}
+// artifactKeyCache caches derived js.Value CryptoKeys keyed by saltB64|passcode
+// so PBKDF2 key derivation (600 000 iterations) is paid at most once per
+// unique salt+passcode pair per session and never mixes keys across passcodes.
+var (
+	artifactKeyCacheMu sync.Mutex
+	artifactKeyCache   = map[string]js.Value{}
+)
 
 var artifactSaltMu sync.Mutex
 
@@ -161,27 +164,44 @@ func removeLegacyArtifactSaltAfterVerification(expected string) error {
 	return nil
 }
 
-// cachedArtifactKey returns the cached CryptoKey for saltB64, or derives and
-// caches it if not present. It blocks the calling goroutine until the async
-// PBKDF2 derivation completes.
+func safeSaltPrefix(saltB64 string) string {
+	if len(saltB64) <= 8 {
+		return saltB64
+	}
+	return saltB64[:8]
+}
+
+// cachedArtifactKey returns the cached CryptoKey for saltB64 + activePasscode,
+// or derives and caches it if not present. Fails closed when activePasscode is
+// empty so an empty-passcode key is never derived or cached.
 func cachedArtifactKey(saltB64 string) (js.Value, error) {
-	if k, ok := artifactKeyCache[saltB64]; ok {
+	passcode := activePasscode
+	if passcode == "" {
+		return js.Undefined(), errSyncDatasetLocked
+	}
+	cacheKey := saltB64 + "|" + passcode
+	artifactKeyCacheMu.Lock()
+	if k, ok := artifactKeyCache[cacheKey]; ok {
+		artifactKeyCacheMu.Unlock()
 		return k, nil
 	}
+	artifactKeyCacheMu.Unlock()
 	type result struct {
 		key js.Value
 		err error
 	}
 	ch := make(chan result, 1)
-	deriveKey(activePasscode, saltB64, func(key js.Value, err error) {
+	deriveKey(passcode, saltB64, func(key js.Value, err error) {
 		ch <- result{key: key, err: err}
 	})
 	res := <-ch
 	if res.err != nil {
 		return js.Undefined(), fmt.Errorf("artifact key derivation: %w", res.err)
 	}
-	artifactKeyCache[saltB64] = res.key
-	slog.Debug("artifact key derived and cached", "saltB64prefix", saltB64[:8])
+	artifactKeyCacheMu.Lock()
+	artifactKeyCache[cacheKey] = res.key
+	artifactKeyCacheMu.Unlock()
+	slog.Debug("artifact key derived and cached", "saltB64prefix", safeSaltPrefix(saltB64))
 	return res.key, nil
 }
 
@@ -231,8 +251,12 @@ func encryptArtifactWithSalt(plain []byte, saltB64 string) ([]byte, error) {
 	ch := make(chan result, 1)
 
 	var encDone, encRej js.Func
-	encDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+	releaseEnc := func() {
 		encDone.Release()
+		encRej.Release()
+	}
+	encDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		releaseEnc()
 		if len(args) == 0 {
 			ch <- result{err: fmt.Errorf("encryptArtifactSync: encrypt promise rejected (no args)")}
 			return nil
@@ -244,7 +268,7 @@ func encryptArtifactWithSalt(plain []byte, saltB64 string) ([]byte, error) {
 		return nil
 	})
 	encRej = js.FuncOf(func(_ js.Value, rArgs []js.Value) any {
-		encRej.Release()
+		releaseEnc()
 		msg := "encryptArtifactSync: encrypt rejected"
 		if len(rArgs) > 0 {
 			msg = fmt.Sprintf("%s: %s", msg, rArgs[0].String())
@@ -316,8 +340,12 @@ func decryptArtifactSync(envBytes []byte) ([]byte, error) {
 	ch := make(chan result, 1)
 
 	var decDone, decRej js.Func
-	decDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+	releaseDec := func() {
 		decDone.Release()
+		decRej.Release()
+	}
+	decDone = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		releaseDec()
 		if len(args) == 0 {
 			ch <- result{err: fmt.Errorf("decryptArtifactSync: decrypt promise rejected (no args)")}
 			return nil
@@ -329,7 +357,7 @@ func decryptArtifactSync(envBytes []byte) ([]byte, error) {
 		return nil
 	})
 	decRej = js.FuncOf(func(_ js.Value, rArgs []js.Value) any {
-		decRej.Release()
+		releaseDec()
 		msg := "decryptArtifactSync: decrypt rejected (wrong passcode or corrupted data)"
 		if len(rArgs) > 0 {
 			msg = fmt.Sprintf("%s: %s", msg, rArgs[0].String())
@@ -353,5 +381,7 @@ func decryptArtifactSync(envBytes []byte) ([]byte, error) {
 // clearArtifactKeyCache evicts all cached artifact CryptoKeys. Call this when
 // the session passcode changes so stale keys are not reused.
 func clearArtifactKeyCache() {
+	artifactKeyCacheMu.Lock()
 	artifactKeyCache = map[string]js.Value{}
+	artifactKeyCacheMu.Unlock()
 }

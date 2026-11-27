@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -226,7 +227,12 @@ func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID 
 		return
 	}
 	window := js.Global().Get("window")
-	listener := js.FuncOf(func(_ js.Value, args []js.Value) any {
+	var listener js.Func
+	cleanup := func() {
+		window.Call("removeEventListener", "message", listener)
+		listener.Release()
+	}
+	listener = js.FuncOf(func(_ js.Value, args []js.Value) any {
 		if len(args) == 0 {
 			return nil
 		}
@@ -238,6 +244,7 @@ func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID 
 		if data.IsUndefined() || data.IsNull() || data.Get("type").String() != "cashflux.oauth" {
 			return nil
 		}
+		cleanup()
 		token := strings.TrimSpace(data.Get("accessToken").String())
 		csrf := strings.TrimSpace(data.Get("csrf").String())
 		userID := strings.TrimSpace(data.Get("userId").String())
@@ -253,6 +260,7 @@ func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID 
 	loginURL := endpoint + "/v1/auth/" + url.PathEscape(provider) + "?returnTo=" + url.QueryEscape(returnTo)
 	popup := window.Call("open", loginURL, "cashflux-oauth", "popup,width=520,height=720")
 	if popup.IsUndefined() || popup.IsNull() {
+		cleanup()
 		onError("The browser blocked the OAuth sign-in window.")
 	}
 }
@@ -456,6 +464,20 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
 }
 
+// uploadedBlobCache remembers content-addressed ciphertext hashes already
+// confirmed linked to (endpoint, workspaceID) during this session so repeated
+// pushes do not re-encrypt and re-upload unchanged attachments O(N) times.
+var uploadedBlobCache = struct {
+	sync.Mutex
+	sizes map[string]int
+}{sizes: make(map[string]int)}
+
+func clearUploadedBlobCache() {
+	uploadedBlobCache.Lock()
+	uploadedBlobCache.sizes = make(map[string]int)
+	uploadedBlobCache.Unlock()
+}
+
 func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
 	defer timePhase("hydrate.total")()
 	// Zero-knowledge pull: a server snapshot may be a cryptobox envelope. Decrypt it
@@ -484,6 +506,18 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		if len(ds.Artifacts[i].Bytes) > 0 || ds.Artifacts[i].BlobRef == nil || strings.TrimSpace(ds.Artifacts[i].BlobRef.Hash) == "" {
 			continue
 		}
+		// Incremental blob pull: consult local encrypted IndexedDB first before
+		// downloading from the server. When local bytes already exist and match
+		// the referenced ciphertext hash under the current install salt, reuse
+		// them with zero network traffic.
+		if cached, ok := cachedLocalArtifactBytes(ds.Artifacts[i].ID, ds.Artifacts[i].BlobRef.Hash); ok {
+			ds.Artifacts[i].Bytes = cached
+			if ds.Artifacts[i].Size == 0 {
+				ds.Artifacts[i].Size = len(cached)
+			}
+			changed = true
+			continue
+		}
 		maybeYield() // downloading and decrypting a blob is not worth a dropped frame
 		bytes, err := downloadBackendArtifactBlob(ctx, endpoint, token, workspaceID, ds.Artifacts[i].BlobRef.Hash)
 		if err != nil {
@@ -499,6 +533,28 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		return data, nil
 	}
 	return store.Export(ds)
+}
+
+func cachedLocalArtifactBytes(artifactID, expectedHash string) ([]byte, bool) {
+	if artifactID == "" || expectedHash == "" || localEncryptedArtifactStore.Raw == nil {
+		return nil, false
+	}
+	_, raw, ok, err := localEncryptedArtifactStore.Get(artifactID)
+	if err != nil || !ok || len(raw) == 0 {
+		return nil, false
+	}
+	if !datasetEncryptionActive() {
+		return nil, false
+	}
+	enc, err := encryptArtifactSync(raw)
+	if err != nil {
+		return nil, false
+	}
+	sum := sha256.Sum256(enc)
+	if !strings.EqualFold(hex.EncodeToString(sum[:]), strings.TrimSpace(expectedHash)) {
+		return nil, false
+	}
+	return raw, true
 }
 
 // uploadBackendArtifactBlob uploads an artifact's bytes over the authenticated
@@ -543,11 +599,21 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 
 	sum := sha256.Sum256(payload)
 	hash := hex.EncodeToString(sum[:])
+	cacheKey := normalizedBackendEndpoint(endpoint) + "\x00" + workspaceID + "\x00" + hash
+	uploadedBlobCache.Lock()
+	cachedSize, alreadyUploaded := uploadedBlobCache.sizes[cacheKey]
+	uploadedBlobCache.Unlock()
+	if alreadyUploaded {
+		return domain.BlobRef{Hash: hash, MIME: art.MIME, Size: cachedSize}, nil
+	}
 	pr := prefs.Prefs{ServerURL: endpoint, ServerToken: token}
 	size, err := uploadBlobStream(ctx, pr, workspaceID, hash, payload, mime, true)
 	if err != nil {
 		return domain.BlobRef{}, err
 	}
+	uploadedBlobCache.Lock()
+	uploadedBlobCache.sizes[cacheKey] = int(size)
+	uploadedBlobCache.Unlock()
 	// Store the real MIME in BlobRef so the client can render the artifact. Size
 	// reflects the on-wire payload (ciphertext) for storage accounting; the
 	// artifact domain record carries the unencrypted Size separately.

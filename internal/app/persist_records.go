@@ -317,14 +317,21 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		if datasetMyGen != writerGeneration && hydratedRecordApp == app && datasetMyGen == readDatasetGen() {
 			writerGeneration = datasetMyGen
 			checkpoint, baseHash, head, headRaw, initialized = observed, checkpointHash(observed), datasetRecordHead{}, "", false
+			mirrorErr = nil
 		}
 		if readDatasetGen() != writerGeneration || observed != checkpoint || browserstore.GetString(datasetHeadKey) != headRaw {
 			completeWaiters(app.Rev(), 0, appstate.ErrStaleDataset)
 			return
 		}
-		if snapshotErr != nil || mirrorErr != nil {
+		if snapshotErr != nil {
 			completeWaiters(app.Rev(), 0, errors.New("the saved dataset could not be prepared"))
 			return
+		}
+		// If an earlier incremental mirror update failed, force a clean full
+		// checkpoint rebuild rather than permanently bricking autosave.
+		if mirrorErr != nil {
+			initialized = false
+			mirrorErr = nil
 		}
 		if initialized && savedRevision == app.Rev() && forceVersion == savedForce {
 			cursor, err := app.Store().ChangeCursor()
@@ -511,6 +518,12 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 					}
 				}
 				completeWaiters(targetRevision, targetCursor, nil)
+				// Enqueue committed v2 record changes synchronously at the
+				// durable commit boundary so closing/reloading within the 10ms
+				// legacy snapshot window can never lose dirty tracking.
+				if onLocalDatasetCommitted != nil {
+					onLocalDatasetCommitted(workspace, full, captured, fullDataset)
+				}
 				// The legacy sync protocol still needs a portable full JSON snapshot.
 				// Assemble from committed records, never from newer live SQL rows.
 				if push != nil {
@@ -536,6 +549,11 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 }
 
 var committedPushJob uint64
+
+// onLocalDatasetCommitted is wired by the v2 sync adapter so committed record
+// transitions enter the durable v2 outbox synchronously at the IndexedDB commit
+// boundary with zero 10ms window where a fast reload could lose dirty state.
+var onLocalDatasetCommitted func(workspace string, full bool, changes []store.RecordChange, fullDataset []byte)
 
 func scheduleCommittedDatasetPush(snapshot history.Snapshot, generation string, push func([]byte, time.Time)) {
 	committedPushJob++
