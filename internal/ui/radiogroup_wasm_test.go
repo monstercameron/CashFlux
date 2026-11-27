@@ -7,7 +7,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
 )
 
 // TestRadioGroupComponent checks the radiogroup contract a screen relies on: the group

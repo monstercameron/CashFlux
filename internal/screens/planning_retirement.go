@@ -19,9 +19,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // retirementTile is the long-horizon projection card on /planning (FP-T1a,

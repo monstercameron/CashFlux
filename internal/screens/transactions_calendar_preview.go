@@ -11,9 +11,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // The hover preview on a calendar day. Pointing at a day waits txnCalPreviewDelayMs before its

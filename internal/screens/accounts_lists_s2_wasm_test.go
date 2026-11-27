@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // TestAccountDocsDrawerOpensToTheDocumentRowsAndAttachForm checks the documents disclosure: closed it

@@ -17,11 +17,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/state"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/state"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestPrimaryNetWorthExclusionEditorKeepsHeadlinesTrendAndDeltaTogether(t *testing.T) {

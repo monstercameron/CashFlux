@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
 )
 
 // setBalanceNote is the one line under the Update balance field. Figures are in the

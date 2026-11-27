@@ -10,8 +10,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/accountedit"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // inputWithID returns the rendered input with the id, or nil when it is not rendered.

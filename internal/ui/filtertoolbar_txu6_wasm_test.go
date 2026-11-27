@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestTXU6FilterToolbarPrimaryRowAndKeyboardOrder(t *testing.T) {

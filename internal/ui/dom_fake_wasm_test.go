@@ -7,7 +7,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/interop"
+	"github.com/monstercameron/GoWebComponents/v8/interop"
 )
 
 // fakeObject returns a bare JavaScript object (Object.create(null)) so a test can stand in for

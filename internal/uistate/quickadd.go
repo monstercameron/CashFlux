@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v7/state"
+import "github.com/monstercameron/GoWebComponents/v8/state"
 
 const quickAddAtomID = "quickadd:open"
 

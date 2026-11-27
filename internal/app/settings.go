@@ -39,10 +39,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/router"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/router"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // backendHost extracts the lowercased host[:port] from a server URL, ignoring

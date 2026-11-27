@@ -5,8 +5,8 @@
 package ui
 
 import (
-	"github.com/monstercameron/GoWebComponents/v7/interop"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/interop"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // DismissPopover closes a `.add-wrap` / `.add-menu` popover when the reader leaves it, and

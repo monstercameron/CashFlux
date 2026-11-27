@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v7/state"
+import "github.com/monstercameron/GoWebComponents/v8/state"
 
 // Quick-add kind seeds: which side of the ledger the panel should open on.
 const (

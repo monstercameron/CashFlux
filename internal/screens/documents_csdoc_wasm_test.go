@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/extract"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestWizardMappingChildControlsCSDOC(t *testing.T) {

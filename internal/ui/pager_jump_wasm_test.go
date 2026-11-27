@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // C627: "Jump to page" accepted 132 and left the ledger on page 1, with the input

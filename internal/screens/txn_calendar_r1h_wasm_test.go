@@ -11,8 +11,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestR1HFuturePeriodRendersScheduledGhostRows(t *testing.T) {

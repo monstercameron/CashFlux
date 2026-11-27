@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/GoWebComponents/v7/state"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/state"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 const (

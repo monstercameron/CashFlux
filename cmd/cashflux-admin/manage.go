@@ -19,9 +19,9 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // manageCSS styles the user-management UI. It is injected from Go (once, guarded by

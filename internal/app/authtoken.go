@@ -16,7 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v8/state"
 )
 
 // Session refresh has two explicit modes: same-origin HTTPS uses the server's

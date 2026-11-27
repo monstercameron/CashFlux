@@ -7,8 +7,8 @@ package ui
 import (
 	"strconv"
 
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // SegmentedControlProps configures either pressed choice buttons or a tablist.

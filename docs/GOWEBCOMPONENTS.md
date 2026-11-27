@@ -7,7 +7,7 @@ framework README, its `examples/`, and source. Keep this current as we learn mor
   fiber-based runtime, typed HTML builders, a shorthand authoring layer, client-side routing,
   shared state, fetch helpers, SSR/hydration, i18n, a11y, PWA, feature flags, and devtools — all
   in one Go module. The whole UI is Go compiled to wasm; no JS build/bundler.
-- **Module:** `github.com/monstercameron/GoWebComponents/v7`, pinned to `v7.0.1`.
+- **Module:** `github.com/monstercameron/GoWebComponents/v8`, pinned to `v8.0.0`.
 - **Requires:** Go 1.27.0+, with the CashFlux toolchain pinned to Go 1.27.3. Target `GOOS=js GOARCH=wasm`.
 - **Trade-offs:** not faster than hand-tuned React; wasm bundle is large raw (~6 MB for a counter)
   but compresses ~5x under brotli. Value = whole UI in Go, shared types client/server.
@@ -44,7 +44,7 @@ returns exactly what router handlers (`func(router.Attrs) *router.Element`) need
 
 ## Authoring with `html/shorthand` (our default)
 
-Dot-import it: `import . "github.com/monstercameron/GoWebComponents/v7/html/shorthand"`.
+Dot-import it: `import . "github.com/monstercameron/GoWebComponents/v8/html/shorthand"`.
 
 - **Elements** are `func(...any) ui.Node`: `Div`, `Span`, `Button`, `Input`, `Select`, `Option`,
   `Form`, `Nav`, `Header`, `Main`, `Section`, `H1`–`H6`, `P`, `Ul`, `Li`, `Table`, … (full set in

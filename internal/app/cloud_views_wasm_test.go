@@ -12,9 +12,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func cloudTestFixture(t *testing.T, node uic.Node) *render.Fixture {

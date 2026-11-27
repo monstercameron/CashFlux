@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
 )
 
 func TestBC6N8IncomeAllocationReportsOverflow(t *testing.T) {

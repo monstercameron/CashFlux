@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/interop"
+	"github.com/monstercameron/GoWebComponents/v8/interop"
 )
 
 // TestOverflowSubmenuFocusUsesWrapper checks that opening a submenu looks up its items from the

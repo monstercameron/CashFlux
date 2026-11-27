@@ -7,8 +7,8 @@ package screens
 import (
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // TestRowNoteGlyphOpensNoteWithoutOpeningEditor checks that the note glyph toggles its note

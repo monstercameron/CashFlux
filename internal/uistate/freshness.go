@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/monstercameron/CashFlux/internal/freshness"
-	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v8/state"
 )
 
 const (

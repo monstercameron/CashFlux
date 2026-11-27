@@ -7,9 +7,9 @@ package app
 import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // The in-app replacements for window.prompt and window.confirm. Each request is a FlipPanel

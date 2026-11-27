@@ -2,7 +2,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v7/state"
+import "github.com/monstercameron/GoWebComponents/v8/state"
 
 // BudgetAddSeed pre-fills the add-budget modal when it's opened from another surface:
 // "Budget this" on an unbudgeted-spending chip (CategoryID + a suggested limit), or a

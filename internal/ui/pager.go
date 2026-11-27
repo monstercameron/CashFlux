@@ -12,9 +12,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	sh "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	sh "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // PagerProps configures the shared, standardized list pager (mirrors top + bottom):

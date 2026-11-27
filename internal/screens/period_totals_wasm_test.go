@@ -23,10 +23,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
 	"github.com/monstercameron/CashFlux/internal/widgetspec"
 	"github.com/monstercameron/CashFlux/internal/widgetvis"
-	"github.com/monstercameron/GoWebComponents/v7/css"
-	"github.com/monstercameron/GoWebComponents/v7/state"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/css"
+	"github.com/monstercameron/GoWebComponents/v8/state"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestDashboardPeriodTotalsUnknownScopeAndFXRecovery(t *testing.T) {

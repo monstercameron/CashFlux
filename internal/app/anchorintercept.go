@@ -9,7 +9,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v8/router"
 )
 
 // wireAnchorInterceptor installs one document-level click handler that turns a same-

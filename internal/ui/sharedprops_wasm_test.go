@@ -8,9 +8,9 @@ import (
 	"slices"
 	"testing"
 
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestEntityRowRootCarriesTestIDAndAttrs(t *testing.T) {

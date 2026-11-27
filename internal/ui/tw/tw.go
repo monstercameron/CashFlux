@@ -24,7 +24,7 @@
 // CDN also drops Tailwind's preflight (which set border-style globally).
 package tw
 
-import "github.com/monstercameron/GoWebComponents/v7/css"
+import "github.com/monstercameron/GoWebComponents/v8/css"
 
 // --- the app's custom palette (exact hex from the former tailwind.config) ------
 const (

@@ -14,8 +14,8 @@ import (
 	"regexp"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // Icon renders one stroked line icon from the curated icon set as an inline SVG

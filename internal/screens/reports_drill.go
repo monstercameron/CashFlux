@@ -10,9 +10,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/router"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/router"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // rptaDrillProps configures a report drill-through to the transaction list.

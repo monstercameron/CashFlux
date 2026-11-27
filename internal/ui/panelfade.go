@@ -7,7 +7,7 @@ package ui
 import (
 	"time"
 
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // panelFadeDuration is how long a fading panel takes to open or close. It matches the

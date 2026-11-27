@@ -5,8 +5,8 @@
 package ui
 
 import (
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // Callout tones. An empty or unknown tone renders as CalloutInfo.

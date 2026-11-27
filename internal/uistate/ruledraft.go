@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v7/state"
+import "github.com/monstercameron/GoWebComponents/v8/state"
 
 // RuleDraft carries prefill data for the Rules add-form. It is set by the
 // "Always categorize like this" action on a transaction row and consumed

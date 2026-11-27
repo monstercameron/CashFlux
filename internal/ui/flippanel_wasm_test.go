@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/interop"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/interop"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
 )
 
 // focusedControl returns a fake focused element with the given tag and, when formID is set,

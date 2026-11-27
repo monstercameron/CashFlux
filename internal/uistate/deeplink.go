@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v7/state"
+import "github.com/monstercameron/GoWebComponents/v8/state"
 
 // DeepLinkFocus carries a CSS selector for an element the app should scroll to and
 // briefly flash after a cross-page jump — so a notification lands on the exact

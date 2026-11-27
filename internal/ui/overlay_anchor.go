@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // AccessibleOverlay records an anchor but leaves placement to its caller.

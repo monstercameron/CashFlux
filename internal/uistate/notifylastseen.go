@@ -7,7 +7,7 @@ package uistate
 import (
 	"strconv"
 
-	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v8/state"
 )
 
 // notifyLastSeenKey is the SQLite-backed KV key that persists the unix-second

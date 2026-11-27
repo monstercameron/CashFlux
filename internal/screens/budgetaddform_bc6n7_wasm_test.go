@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestBudgetTemplateReviewLetsUserChooseBucket(t *testing.T) {

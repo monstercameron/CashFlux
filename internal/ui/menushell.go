@@ -5,8 +5,8 @@
 package ui
 
 import (
-	"github.com/monstercameron/GoWebComponents/v7/router"
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/router"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // MenuControl is what a popover menu renders from: whether it is open, whether it is on screen

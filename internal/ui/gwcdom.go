@@ -4,7 +4,7 @@
 
 package ui
 
-import "github.com/monstercameron/GoWebComponents/v7/interop"
+import "github.com/monstercameron/GoWebComponents/v8/interop"
 
 // domElement finds an element by id through GWC's typed document interface. The typed Element
 // covers focus, listeners, geometry and scroll metrics; anything it does not expose goes

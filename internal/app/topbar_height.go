@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"syscall/js"
 
-	uic "github.com/monstercameron/GoWebComponents/v7/ui"
+	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // The top bar can wrap at narrower desktop widths. Sticky content below it

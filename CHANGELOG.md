@@ -87,6 +87,7 @@ and every commit updates this file under `Unreleased`.
 - Receipt images, goal photos, custom-page images, and artifact thumbnails now load from encrypted local blob storage after sync restores them. New receipt and goal-photo uploads save their bytes there before the dataset refers to them.
 
 ### Changed
+- Upgraded GoWebComponents from `github.com/monstercameron/GoWebComponents/v7` (`v7.0.1`) to `github.com/monstercameron/GoWebComponents/v8` (`v8.0.0`) across the client app, services worker, operator console (`cmd/cashflux-admin`), customer portal (`cmd/cashflux-portal`), and shared server module dependencies (`golang.org/x/net v0.63.0`, `golang.org/x/crypto v0.59.0`, `github.com/yuin/goldmark v1.8.7`, `github.com/fxamacker/cbor/v2 v2.10.0`).
 - Prepared v1.19.11 from the published v1.19.10 stability baseline and the pending private sync, hosted sign-in, recovery, and server AI changes. Production rollout and an authenticated live roundtrip remain pending.
 - Updated the built-in standard-rate estimates for GPT-5.4 mini and GPT-5.5 using OpenAI's published API prices checked on 2026-10-21.
 - `docs/CLEANUP_METHODOLOGY.md` records the method, standards, bugs and open items from the last 73 commits, so the same cleanup can be repeated on other pages. It now includes the shared UI elements, the typed CSS rules, the render-helper standard (`If`, `ui.If`, `ClassNames`, `Map`, `MapKeyed`, `Match`), and the Accounts sites that still assign markup inside an `if` or use inline styles.

@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/GoWebComponents/v7/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v8/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v8/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 func TestTxnWhoCellUnassignedAndSingleOwner(t *testing.T) {
