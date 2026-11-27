@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Added the pure, platform-independent v2 BlobSync engine (`internal/syncengine`) with serialized push/pull orchestration, coalesced trigger wakeups, record-level auto-merge for non-overlapping multi-device edits, live-apply semantics, gap-free log-truncation snapshot bootstrap, idempotent retry-after-drop acknowledgement, client-side plaintext destructive-write checks, and durable scope-isolated `conflictcheckpoint` resolution (`Keep Mine`, `Use Server`, `Merge`). Added canonical `syncstate.SyncPhase` and sequence-based `DecidePullVersion` and removed dead `internal/syncmerge`.
 - Integrated the published v1.19.10 stability code with the pending sync/privacy changes and kept the encrypted three-browser file sync and both offline-file recovery choices passing on the combined v7 app.
 - A disposable two-browser recovery regression now exercises both merge and explicit replacement of an encrypted server copy with a locally saved file, then downloads that file byte-for-byte in a fresh profile.
 - The deploy gate now runs device-erasure storage unit tests and browser cases for two-workspace file removal and direct-link safety.

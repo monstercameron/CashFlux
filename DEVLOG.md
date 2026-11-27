@@ -1,3 +1,12 @@
+## 2026-11-27 — Pure v2 BlobSync engine, record-level reconciliation, and conflict checkpoints
+
+Started the bottom-up rework of CashFlux's client-server sync onto `cashflux.v2.BlobSync` (append-only encrypted change log + compacted snapshots) with live in-place apply and durable conflict checkpoints:
+
+- **Canonical phase & version decisions (`internal/syncstate/phase.go`)**: Replaced diverging string status models with a typed `SyncPhase` enum whose attention states (`conflict`, `rebind`, `locked`, `locked-different-passcode`, `needs-data-protection`, `identity-unknown`) refuse silent overwrite by routine `offline`/`synced`/`local` transitions, plus clock-free `DecidePullVersion`.
+- **Pure v2 sync coordinator (`internal/syncengine`)**: Built a serialized, platform-independent engine with zero `syscall/js` dependencies. Non-overlapping offline edits across devices reconcile automatically at `(table, id)` granularity and live-apply via `SQLiteStore.ReplayChanges`; overlapping edits branch into a scope-isolated `conflictcheckpoint` storing both decrypted snapshots, deterministic `conflictcheckpoint.Compare` diffs, and three verified live resolutions (`ResolveKeepLocal`, `ResolveUseServer`, `ResolveMerge`).
+- **Idempotency & log truncation**: Self-echoed `ChangeID`s returned from `ListChanges` after a dropped `AppendChanges` reply are recognized and acknowledged against the outbox without creating false conflicts; `DetectLogTruncation` detects pruned gaps in the gap-free sequence and transparently bootstraps from `GetSnapshot` + tail replay. Removed the unwired, wall-clock `internal/syncmerge` package.
+- **Verification**: All unit tests and `go vet` in `internal/syncengine`, `internal/syncstate`, and `internal/conflictcheckpoint` pass. Next: wire and harden server-side v2 `BlobSyncService`, gRPC limits, event-driven `Watch`, and SQLite transaction/blob locking.
+
 ## 2026-11-27 — Harden Transactions domain, ledger, calendar, and write seams
 
 Fixed the P0 and P1 correctness, data-loss, panic, and invariant bugs uncovered during the Transactions domain audit, adding focused regression test files across every affected package:
