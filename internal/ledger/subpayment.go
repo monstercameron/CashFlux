@@ -3,6 +3,7 @@
 package ledger
 
 import (
+	"math"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -34,12 +35,17 @@ func SubscriptionPaymentForName(name string, txns []domain.Transaction) Subscrip
 		if t.SubscriptionName != name {
 			continue
 		}
+		isFirst := !info.HasAny
 		info.Count++
 		info.HasAny = true
-		if info.LatestTxn == "" || !t.Date.Before(latest) {
+		if isFirst || !t.Date.Before(latest) {
 			latest = t.Date
 			info.LatestTxn = t.ID
-			info.Latest = t.Amount.Abs()
+			mag, err := t.Amount.AbsChecked()
+			if err != nil {
+				mag = money.New(math.MaxInt64, t.Amount.Currency)
+			}
+			info.Latest = mag
 		}
 	}
 	return info

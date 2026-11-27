@@ -70,12 +70,8 @@ func Delta(curr, prev int64) DeltaResult {
 	case curr == 0:
 		return DeltaResult{Kind: DeltaGone}
 	default:
-		mag := prev
-		if mag < 0 {
-			mag = -mag
-		}
 		return DeltaResult{
-			Pct:  (curr - prev) * 100 / mag,
+			Pct:  ratioPercentTrunc(curr, prev, prev),
 			Kind: DeltaPctKind,
 		}
 	}

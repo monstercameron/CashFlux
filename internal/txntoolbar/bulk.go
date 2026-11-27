@@ -49,7 +49,7 @@ func Draft(rows []domain.Transaction, selected map[string]bool, edit Edit) []dom
 			}
 			updated = row.MarkCleared(edit.Value, edit.Now)
 		case Review:
-			updated = txnreview.Confirm(row, row.CategoryID)
+			updated = txnreview.MarkReviewed(row)
 		case Exclude:
 			updated.ExcludeFromReports = edit.Value
 		case Category:

@@ -249,7 +249,8 @@ func (l Labels) Weekday(day time.Weekday, full bool) string {
 	if full {
 		suffix = ".full"
 	}
-	return l.T("transactions.tq3.weekday." + keys[int(day)] + suffix)
+	idx := ((int(day) % 7) + 7) % 7
+	return l.T("transactions.tq3.weekday." + keys[idx] + suffix)
 }
 
 // Header is a weekday column's short label and accessible full name.
@@ -259,7 +260,7 @@ type Header struct{ Text, Aria string }
 func (l Labels) Headers(start time.Weekday) []Header {
 	headers := make([]Header, 7)
 	for i := range headers {
-		day := time.Weekday((int(start) + i) % 7)
+		day := time.Weekday((((int(start) + i) % 7) + 7) % 7)
 		headers[i] = Header{Text: l.Weekday(day, false), Aria: l.Weekday(day, true)}
 	}
 	return headers

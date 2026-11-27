@@ -27,6 +27,7 @@
 package billmatch
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -81,17 +82,31 @@ type Match struct {
 	VarianceMinor int64 // ActualMinor − ExpectedMinor (signed)
 }
 
-// magnitude returns the absolute value of a signed minor amount.
+// magnitude returns the absolute value of a signed minor amount, saturating
+// math.MinInt64 to math.MaxInt64 so negation never wraps negative.
 func magnitude(v int64) int64 {
+	if v == math.MinInt64 {
+		return math.MaxInt64
+	}
 	if v < 0 {
 		return -v
 	}
 	return v
 }
 
-// tolerance returns the allowed amount deviation for an expected magnitude.
+// absDiff returns |a - b| for two non-negative int64 magnitudes without overflow.
+func absDiff(a, b int64) int64 {
+	if a >= b {
+		return a - b
+	}
+	return b - a
+}
+
+// tolerance returns the allowed amount deviation for an expected magnitude
+// without intermediate multiplication overflow.
 func tolerance(expectedMinor int64) int64 {
-	tol := magnitude(expectedMinor) * AmountTolerancePermille / 1000
+	mag := magnitude(expectedMinor)
+	tol := (mag/1000)*AmountTolerancePermille + (mag%1000)*AmountTolerancePermille/1000
 	if tol < minToleranceMinor {
 		tol = minToleranceMinor
 	}
@@ -104,33 +119,59 @@ func day(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+// absDaysBetween returns the absolute calendar-day distance between a and b
+// without int64 time.Duration overflow for far-apart years.
+func absDaysBetween(a, b time.Time) int64 {
+	da, db := day(a), day(b)
+	if da.Equal(db) {
+		return 0
+	}
+	if da.Before(db) {
+		da, db = db, da
+	}
+	// Days since Unix epoch using int64 seconds avoids time.Duration's ~292y cap.
+	return (da.Unix() - db.Unix()) / 86400
+}
+
 // payeeMatch reports whether two resolved payee names refer to the same merchant
-// (case-insensitive substring either direction). Empty on either side is not a
-// match — identity must be positively established by payee or category.
+// (case-insensitive exact match, or substring either direction when the shorter
+// name is at least 3 characters so 1-2 character noise cannot match everything).
+// Empty on either side is not a match — identity must be positively established
+// by payee or category.
 func payeeMatch(a, b string) bool {
 	a = strings.ToLower(strings.TrimSpace(a))
 	b = strings.ToLower(strings.TrimSpace(b))
 	if a == "" || b == "" {
 		return false
 	}
+	if a == b {
+		return true
+	}
+	shorter := len(a)
+	if len(b) < shorter {
+		shorter = len(b)
+	}
+	if shorter < 3 {
+		return false
+	}
 	return strings.Contains(a, b) || strings.Contains(b, a)
 }
 
-// isCandidate reports whether txn could settle occ: same currency, amount within
-// tolerance, date within the window, and identity established by payee OR
-// category.
+// isCandidate reports whether txn could settle occ: outflow transaction (negative
+// amount), same normalized currency, amount within tolerance, date within the
+// window, and identity established by payee OR category.
 func isCandidate(occ Occurrence, t Txn) bool {
-	if occ.Currency != "" && t.Currency != "" && occ.Currency != t.Currency {
+	if t.AmountMinor >= 0 || occ.AmountMinor == 0 {
 		return false
 	}
-	if diff := magnitude(t.AmountMinor) - magnitude(occ.AmountMinor); diff > tolerance(occ.AmountMinor) || diff < -tolerance(occ.AmountMinor) {
+	oc, tc := strings.TrimSpace(occ.Currency), strings.TrimSpace(t.Currency)
+	if oc != "" && tc != "" && !strings.EqualFold(oc, tc) {
 		return false
 	}
-	d := int(day(t.Date).Sub(day(occ.DueDate)).Hours() / 24)
-	if d < 0 {
-		d = -d
+	if absDiff(magnitude(t.AmountMinor), magnitude(occ.AmountMinor)) > tolerance(occ.AmountMinor) {
+		return false
 	}
-	if d > DateWindowDays {
+	if absDaysBetween(t.Date, occ.DueDate) > DateWindowDays {
 		return false
 	}
 	identity := payeeMatch(occ.Payee, t.Payee) ||
@@ -153,13 +194,13 @@ func Candidates(occ Occurrence, txns []Txn, excluded map[string]bool) []Txn {
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		di := magnitude(magnitude(out[i].AmountMinor) - magnitude(occ.AmountMinor))
-		dj := magnitude(magnitude(out[j].AmountMinor) - magnitude(occ.AmountMinor))
+		di := absDiff(magnitude(out[i].AmountMinor), magnitude(occ.AmountMinor))
+		dj := absDiff(magnitude(out[j].AmountMinor), magnitude(occ.AmountMinor))
 		if di != dj {
 			return di < dj
 		}
-		gi := magnitude(int64(day(out[i].Date).Sub(day(occ.DueDate)).Hours() / 24))
-		gj := magnitude(int64(day(out[j].Date).Sub(day(occ.DueDate)).Hours() / 24))
+		gi := absDaysBetween(out[i].Date, occ.DueDate)
+		gj := absDaysBetween(out[j].Date, occ.DueDate)
 		if gi != gj {
 			return gi < gj
 		}
@@ -200,13 +241,14 @@ func AutoMatches(occs []Occurrence, txns []Txn, alreadyMatched map[string]string
 		}
 	}
 
-	// Count, per transaction, how many open occurrences claim it as their sole
-	// candidate. A 1:1 auto-match requires an occurrence with exactly one
-	// candidate whose txn is not contended by any other occurrence.
+	// Count, per transaction, how many open occurrences list it as a candidate
+	// (including multi-candidate occurrences). A 1:1 auto-match requires an
+	// occurrence with exactly one candidate whose txn is not contended by any
+	// other open occurrence.
 	claims := map[string]int{}
 	for _, oc := range open {
-		if len(oc.cands) == 1 {
-			claims[oc.cands[0].ID]++
+		for _, c := range oc.cands {
+			claims[c.ID]++
 		}
 	}
 

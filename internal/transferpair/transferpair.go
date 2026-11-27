@@ -39,6 +39,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/acctref"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
 )
 
@@ -157,7 +158,7 @@ func For(leg domain.Transaction, txns []domain.Transaction, accounts []domain.Ac
 
 	var candidates []domain.Transaction
 	for _, c := range txns {
-		if physicallyPairable(leg, c) {
+		if physicallyPairable(leg, c, accounts) {
 			candidates = append(candidates, c)
 		}
 	}
@@ -180,9 +181,9 @@ func For(leg domain.Transaction, txns []domain.Transaction, accounts []domain.Ac
 			}
 		}
 	}
-	// The far leg naming THIS account is equally good evidence, and it is what an
-	// export that files both legs onto one account leaves behind.
-	if len(agreeing) == 0 && legMask != "" {
+	// The far leg naming THIS account is equally good evidence when this leg did
+	// not explicitly name a different account mask.
+	if !hasNamed && len(agreeing) == 0 && legMask != "" {
 		for _, c := range candidates {
 			if acctref.Names(c.Desc, legMask) {
 				agreeing = append(agreeing, c)
@@ -232,8 +233,9 @@ func For(leg domain.Transaction, txns []domain.Transaction, accounts []domain.Ac
 }
 
 // physicallyPairable reports whether c could be the far side of leg at all,
-// before any descriptor evidence is weighed.
-func physicallyPairable(leg, c domain.Transaction) bool {
+// before any descriptor evidence is weighed. Honors each account's booking sign
+// convention so a positive-owed liability payment pairs two negative rows.
+func physicallyPairable(leg, c domain.Transaction, accounts []domain.Account) bool {
 	if c.ID == leg.ID || c.AccountID == leg.AccountID {
 		return false
 	}
@@ -242,7 +244,15 @@ func physicallyPairable(leg, c domain.Transaction) bool {
 		// money, and converting to compare would invent a match out of a rate.
 		return false
 	}
-	if leg.Amount.Amount == 0 || c.Amount.Amount != -leg.Amount.Amount {
+	if leg.Amount.Amount == 0 || c.Amount.Amount == 0 {
+		return false
+	}
+	legMag, err1 := money.Abs(leg.Amount.Amount)
+	cMag, err2 := money.Abs(c.Amount.Amount)
+	if err1 != nil || err2 != nil || legMag != cMag {
+		return false
+	}
+	if isIncoming(leg, accounts) == isIncoming(c, accounts) {
 		return false
 	}
 	// A row already linked to somebody else is spoken for.
@@ -252,7 +262,26 @@ func physicallyPairable(leg, c domain.Transaction) bool {
 	if c.TransferGroupID != "" && c.TransferGroupID != leg.TransferGroupID {
 		return false
 	}
-	return absDuration(c.Date.Sub(leg.Date)) <= Window
+	return withinWindow(c.Date, leg.Date, Window)
+}
+
+func isIncoming(t domain.Transaction, accounts []domain.Account) bool {
+	acc, ok := domain.AccountByID(accounts, t.AccountID)
+	if ok && acc.IsLiability() && (acc.LiabilitySign == domain.LiabilityPositiveOwed || (acc.LiabilitySign == "" && acc.OpeningBalance.Amount > 0)) {
+		return t.Amount.Amount < 0
+	}
+	return t.Amount.Amount > 0
+}
+
+func withinWindow(a, b time.Time, window time.Duration) bool {
+	sec := a.Unix() - b.Unix()
+	if sec < 0 {
+		sec = -sec
+	}
+	if sec > int64(window/time.Second)+1 {
+		return false
+	}
+	return absDuration(a.Sub(b)) <= window
 }
 
 // sortByCloseness puts the nearest-dated candidate first, breaking ties by id so
@@ -285,7 +314,11 @@ func absDuration(d time.Duration) time.Duration {
 }
 
 func daysBetween(a, b time.Time) int {
-	return int(absDuration(b.Sub(a)).Hours() / 24)
+	sec := b.Unix() - a.Unix()
+	if sec < 0 {
+		sec = -sec
+	}
+	return int(sec / 86400)
 }
 
 // Declared finds the counterpart a row EXPLICITLY points at: a row on the named
@@ -318,7 +351,7 @@ func Declared(leg domain.Transaction, txns []domain.Transaction) (domain.Transac
 				continue
 			}
 		}
-		if absDuration(c.Date.Sub(leg.Date)) > Window {
+		if !withinWindow(c.Date, leg.Date, Window) {
 			continue
 		}
 		pool = append(pool, c)
@@ -355,7 +388,16 @@ func NetStated(a, b domain.Transaction, accounts []domain.Account) (netMinor int
 	if !conventionKnown(a, accounts) || !conventionKnown(b, accounts) {
 		return 0, false, false
 	}
-	net := statedAmount(a, accounts) + statedAmount(b, accounts)
+	if _, err := money.Abs(a.Amount.Amount); err != nil {
+		return 0, false, false
+	}
+	if _, err := money.Abs(b.Amount.Amount); err != nil {
+		return 0, false, false
+	}
+	net, err := money.Add(statedAmount(a, accounts), statedAmount(b, accounts))
+	if err != nil {
+		return 0, false, false
+	}
 	return net, net == 0, true
 }
 

@@ -3,6 +3,7 @@
 package txnclassify
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -85,17 +86,14 @@ func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.T
 		if c.IsTransfer() && c.TransferAccountID != t.AccountID {
 			continue
 		}
-		gap := c.Date.Sub(t.Date)
-		if gap < 0 {
-			gap = -gap
-		}
-		if gap > PairWindow {
+		gap, ok := absGapWithinWindow(c.Date, t.Date, PairWindow)
+		if !ok {
 			continue
 		}
 		exact := equalMagnitude(t.Amount, c.Amount)
 		// An exact match always beats a near one; between two of the same kind,
-		// the closer date wins.
-		if !found || (exact && !best.Exact) || (exact == best.Exact && gap < bestGap) {
+		// the closer date wins, breaking ties by ID for determinism.
+		if !found || (exact && !best.Exact) || (exact == best.Exact && (gap < bestGap || (gap == bestGap && c.ID < best.Txn.ID))) {
 			best, bestGap, found = Match{Txn: c, Exact: exact}, gap, true
 		}
 	}
@@ -144,11 +142,8 @@ func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Tra
 		if c.IsTransfer() && c.TransferAccountID != t.AccountID {
 			continue
 		}
-		gap := c.Date.Sub(t.Date)
-		if gap < 0 {
-			gap = -gap
-		}
-		if gap > PairWindow {
+		gap, ok := absGapWithinWindow(c.Date, t.Date, PairWindow)
+		if !ok {
 			continue
 		}
 		if equalMagnitude(t.Amount, c.Amount) {
@@ -365,11 +360,7 @@ func PreviewApply(t domain.Transaction, counterpartyID string, countTowardDebt b
 	// Only a row that currently counts is leaving anything; re-pointing a row
 	// that was already a transfer changes which account it names, not the totals.
 	if !t.IsTransfer() && next.IsTransfer() && t.CountsInReports() {
-		amt := t.Amount.Amount
-		if amt < 0 {
-			amt = -amt
-		}
-		p.LeavesTotalsMinor = amt
+		p.LeavesTotalsMinor = safeAbsMinor(t.Amount.Amount)
 	}
 	if counterpartyID != "" {
 		p.Partner, p.HasPartner = FindReciprocal(t, counterpartyID, txns, accounts...)
@@ -399,4 +390,42 @@ func equalMagnitude(a, b money.Money) bool {
 	}
 	y, err := money.Abs(b.Amount)
 	return err == nil && a.Currency == b.Currency && x == y
+}
+
+// absGapWithinWindow returns |a - b| and true when the two instants lie within
+// window, guarding against time.Duration's ~292-year int64 saturation.
+func absGapWithinWindow(a, b time.Time, window time.Duration) (time.Duration, bool) {
+	sec := a.Unix() - b.Unix()
+	if sec < 0 {
+		sec = -sec
+	}
+	if sec > int64(window/time.Second)+1 {
+		return 0, false
+	}
+	gap := a.Sub(b)
+	if gap < 0 {
+		gap = -gap
+	}
+	return gap, gap <= window
+}
+
+func safeAbsMinor(v int64) int64 {
+	if v == math.MinInt64 {
+		return math.MaxInt64
+	}
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func satAddMinor(a, b int64) int64 {
+	sum, err := money.Add(a, b)
+	if err != nil {
+		if b > 0 {
+			return math.MaxInt64
+		}
+		return math.MinInt64
+	}
+	return sum
 }

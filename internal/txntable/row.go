@@ -190,7 +190,7 @@ func DeriveRow(c RowContext, in RowInput) Row {
 	if tx.HasSplits() {
 		r.CategoryTooltip = splitTooltip
 	} else if tx.IsTransfer() {
-		r.CategoryTooltip = c.Labels.T(TransferCategoryKey(tx.Amount), r.TransferWith)
+		r.CategoryTooltip = c.Labels.T(TransferCategoryKeyFor(txnclassify.TransferOutgoing(tx, c.Index.Accounts[tx.AccountID])), r.TransferWith)
 	}
 	r.Balance, r.BalTone = txncalendarview.Balance(c.Balances, in.ID)
 	if group, ok := c.Groups[in.ID]; ok {
@@ -199,13 +199,17 @@ func DeriveRow(c RowContext, in RowInput) Row {
 			r.GroupTotal = c.Labels.Money(total)
 		}
 	}
-	r.InfoText = rowInfo(c.Labels.T, r, splitTooltip)
+	r.InfoText = rowInfoWithBill(c.Labels.T, r, splitTooltip, c.Index.AccountNames[tx.BillAccountID])
 	return r
 }
 
 func rowInfo(t Translator, r Row, splitTooltip string) string {
+	return rowInfoWithBill(t, r, splitTooltip, "")
+}
+
+func rowInfoWithBill(t Translator, r Row, splitTooltip, billAccountName string) string {
 	info := ""
-	if r.FollowUpTotal > 0 {
+	if r.FollowUpOpen > 0 {
 		if r.FollowUpOpen == 1 {
 			info = Info(info, t("uxt5.openFollowUp"))
 		} else {
@@ -248,7 +252,10 @@ func rowInfo(t Translator, r Row, splitTooltip string) string {
 		info = Info(info, splitTooltip)
 	}
 	if r.IsDebtPayment {
-		with := r.TransferWith
+		with := billAccountName
+		if with == "" {
+			with = r.TransferWith
+		}
 		if with == "" {
 			with = t("transactions.badgeDebtPayment")
 		}

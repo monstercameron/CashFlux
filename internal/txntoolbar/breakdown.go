@@ -69,6 +69,7 @@ func ChooseCategory(f txnfilter.Criteria, category string) txnfilter.Criteria {
 		f.Category = ""
 	} else {
 		f.Category = category
+		f.Uncategorized = false
 	}
 	return f
 }

@@ -45,8 +45,12 @@ type Store struct {
 // is empty a new one is assigned (callers may pass their own ID for deterministic
 // output — e.g. tests — in which case none is generated).
 func (s *Store) Upsert(t domain.TxnTemplate) {
-	if strings.TrimSpace(t.ID) == "" {
+	t.ID = strings.TrimSpace(t.ID)
+	if t.ID == "" {
 		t.ID = id.NewWithPrefix("tmpl")
+	}
+	if len(t.Tags) > 0 {
+		t.Tags = append([]string(nil), t.Tags...)
 	}
 	for i := range s.Items {
 		if s.Items[i].ID == t.ID {
@@ -58,12 +62,13 @@ func (s *Store) Upsert(t domain.TxnTemplate) {
 }
 
 // Delete removes the template with the given ID, if present. It is a no-op when
-// no template matches.
+// no template matches. It allocates a new slice so shallow copies of Store never
+// alias mutated backing arrays.
 func (s *Store) Delete(id string) {
 	if id == "" {
 		return
 	}
-	out := s.Items[:0]
+	out := make([]domain.TxnTemplate, 0, len(s.Items))
 	for _, t := range s.Items {
 		if t.ID != id {
 			out = append(out, t)
@@ -105,7 +110,7 @@ func Validate(t domain.TxnTemplate) error {
 	if strings.TrimSpace(t.Name) == "" {
 		return ErrNameRequired
 	}
-	if t.AmountMinor == 0 {
+	if t.AmountMinor <= 0 {
 		return ErrAmountZero
 	}
 	if strings.TrimSpace(t.AccountID) == "" {

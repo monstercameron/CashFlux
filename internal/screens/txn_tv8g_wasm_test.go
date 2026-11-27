@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txntable"
 	"github.com/monstercameron/CashFlux/internal/txnview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
@@ -88,8 +89,8 @@ func TestTV8GTableSummaryCalendarCountAndSelectAllAgree(t *testing.T) {
 			if name == "ambiguous same day" {
 				want = 3
 			}
-			visible := txnV5RowTransfers(rows, false, rates)
-			view, err := txnview.Summarize(rows, rates, rates.Base)
+			visible := txntable.VisibleTransfersWithAccounts(rows, accounts, txnfilter.Criteria{}, rates)
+			view, err := txnview.SummarizeWithAccounts(rows, rows, accounts, rates, rates.Base)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,7 +113,7 @@ func TestTV8GTableSummaryCalendarCountAndSelectAllAgree(t *testing.T) {
 			if count == nil || count.Text() != txnCountTransactionCount(want) {
 				t.Fatalf("count line=%v want %d", count, want)
 			}
-			calendar, err := txncalendar.MonthCashflow(day, time.Monday, visible, nil, rates)
+			calendar, err := txncalendar.MonthCashflowWithAccounts(day, time.Monday, visible, nil, accounts, rates)
 			if err != nil {
 				t.Fatal(err)
 			}

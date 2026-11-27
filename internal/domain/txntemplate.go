@@ -2,6 +2,8 @@
 
 package domain
 
+import "math"
+
 // TxnDirection records whether a quick-template posts money out (an expense) or
 // in (income). Because there is no bank sync, users enter transactions by hand,
 // and a template mirrors the quick-add form's Expense/Income toggle so a saved
@@ -62,6 +64,12 @@ func (t TxnTemplate) IsExpense() bool { return t.EffectiveDirection() == Directi
 // as a magnitude), so a template is robust even if a caller stored a signed value.
 func (t TxnTemplate) SignedMinor() int64 {
 	a := t.AmountMinor
+	if a == math.MinInt64 {
+		if t.IsExpense() {
+			return math.MinInt64
+		}
+		return math.MaxInt64
+	}
 	if a < 0 {
 		a = -a
 	}

@@ -62,6 +62,13 @@ func CategoryFiltered(f txnfilter.Criteria) bool {
 // are retained rather than recalculated. On arithmetic failure, rows and issues
 // remain available for correction, but no partial monetary totals are returned.
 func Derive(rows []domain.Transaction, f txnfilter.Criteria, labels txnfilter.Labels, rates currency.Rates, base string, now time.Time) (Derived, error) {
+	return DeriveWithAccounts(rows, nil, f, labels, rates, base, now)
+}
+
+// DeriveWithAccounts filters a current immutable ledger snapshot and folds the
+// uncollapsed rows while honoring each account's fixed booking sign convention
+// for transfer pairing.
+func DeriveWithAccounts(rows []domain.Transaction, accounts []domain.Account, f txnfilter.Criteria, labels txnfilter.Labels, rates currency.Rates, base string, now time.Time) (Derived, error) {
 	f.Page, f.PageSize = 0, 0
 	visible, issues := txnfilter.ApplyWithLabelsChecked(rows, f, labels)
 	categoryRows := visible
@@ -69,7 +76,7 @@ func Derive(rows []domain.Transaction, f txnfilter.Criteria, labels txnfilter.La
 		categoryRows = txnfilter.ApplyWithLabels(rows, categoryScope, labels)
 	}
 	counts := PresetCounts(rows, f, labels, base, now)
-	view, err := txnview.SummarizeWithCategories(visible, categoryRows, rates, base)
+	view, err := txnview.SummarizeWithAccounts(visible, categoryRows, accounts, rates, base)
 	if err != nil {
 		return Derived{Rows: visible, Issues: issues, Presets: counts, View: txnview.View{Count: len(visible), Categories: []txnview.CategoryTotal{}}}, fmt.Errorf("derive transaction toolbar: %w", err)
 	}

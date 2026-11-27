@@ -95,11 +95,13 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 	if receivedMinor < 0 {
 		return fmt.Errorf("save transfer pair: received amount must not be negative")
 	}
+	next.Date = normalizeTransactionDate(next.Date)
 	if !next.IsTransfer() {
 		if prior.IsTransfer() {
 			next.TransferAccountID, next.TransferGroupID = "", ""
 			if pair, found := a.transferPartner(prior); found {
 				pair.TransferAccountID, pair.TransferGroupID = "", ""
+				pair.Date = normalizeTransactionDate(pair.Date)
 				if err := a.roleGuard(); err != nil {
 					return err
 				}
@@ -132,7 +134,9 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	for _, txn := range writes {
+	for i, txn := range writes {
+		txn.Date = normalizeTransactionDate(txn.Date)
+		writes[i] = txn
 		if issues := validate.ValidateTransaction(txn, a.Accounts()...); !issues.OK() {
 			return issues
 		}

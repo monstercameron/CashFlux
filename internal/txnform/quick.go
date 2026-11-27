@@ -362,9 +362,12 @@ func BuildQuick(d QuickDraft, accounts []domain.Account, accountID, activeMember
 	if err != nil {
 		date = now
 	}
-	return domain.Transaction{ID: id, AccountID: a.ID, Date: date, Payee: strings.TrimSpace(d.Payee),
+	txn := domain.Transaction{ID: id, AccountID: a.ID, Date: date, Payee: strings.TrimSpace(d.Payee),
 		Desc: QuickDescription(d.Payee, d.Desc), CategoryID: d.CategoryID, Amount: money.New(amount, a.Currency),
-		MemberIDs: QuickOwners(d.Owners, activeMember, a, d.OwnersTouched), Reviewed: QuickReviewed(d.NeedsReview),
-		Source: domain.TxnSourceManual, Tags: textutil.CommaFields(d.Tags), Note: strings.TrimSpace(d.Note),
-		Cleared: d.Cleared, ExcludeFromReports: d.Exclude}, nil
+		Reviewed: QuickReviewed(d.NeedsReview),
+		Source:   domain.TxnSourceManual, Tags: textutil.CommaFields(d.Tags), Note: strings.TrimSpace(d.Note),
+		ExcludeFromReports: d.Exclude}
+	txn.SetOwners(QuickOwners(d.Owners, activeMember, a, d.OwnersTouched))
+	txn = txn.MarkCleared(d.Cleared, now)
+	return txn, nil
 }

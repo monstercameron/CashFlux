@@ -103,7 +103,7 @@ func Of(t domain.Transaction, rs []rules.Rule) Provenance {
 // user who fixed a typo in the amount silently vouch for a category they never
 // looked at — which is the same class of overclaim, pointing the other way.
 func ConfirmsCategory(before, after domain.Transaction) bool {
-	return after.CategoryID != "" && after.CategoryID != before.CategoryID
+	return after.CategoryID != "" && (after.CategoryID != before.CategoryID || before.HasSplits())
 }
 
 // explainingRule finds the first rule that matches t AND files it under the
@@ -116,8 +116,13 @@ func ConfirmsCategory(before, after domain.Transaction) bool {
 // answer for "automatic, but no current rule accounts for it" (an old import, or a
 // rule that has since been edited).
 func explainingRule(t domain.Transaction, rs []rules.Rule) *rules.Rule {
-	return rules.FirstMatchFullWhere(
-		rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date),
+	matched := rules.FirstMatchFullWhereCurrency(
+		rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date),
 		func(r rules.Rule) bool { return r.SetCategoryID == t.CategoryID },
 	)
+	if matched == nil {
+		return nil
+	}
+	cp := *matched
+	return &cp
 }

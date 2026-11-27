@@ -32,6 +32,7 @@ package txnmove
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -114,10 +115,22 @@ func PlanMove(t domain.Transaction, toAccountID string, accounts []domain.Accoun
 	// Currency: refused, not converted. See the package doc — a mismatch makes the
 	// destination account's balance unavailable, and converting would rewrite what
 	// the bank recorded.
-	if t.Amount.Currency != "" && to.Currency != "" && t.Amount.Currency != to.Currency {
+	if t.Amount.Currency != "" && to.Currency != "" && !strings.EqualFold(strings.TrimSpace(t.Amount.Currency), strings.TrimSpace(to.Currency)) {
 		p.Err, p.Reason = fmt.Errorf("txnmove: row is %s, account %s is %s",
 			t.Amount.Currency, to.Name, to.Currency), ReasonCurrency
 		return p
+	}
+	if hasFrom && from.InflowSign() != to.InflowSign() {
+		if _, err := t.Amount.NegChecked(); err != nil {
+			p.Err = fmt.Errorf("txnmove: reverse booking sign: %w", err)
+			return p
+		}
+		for _, s := range t.Splits {
+			if _, err := s.Amount.NegChecked(); err != nil {
+				p.Err = fmt.Errorf("txnmove: reverse split sign: %w", err)
+				return p
+			}
+		}
 	}
 
 	if t.IsTransfer() {
@@ -125,9 +138,16 @@ func PlanMove(t domain.Transaction, toAccountID string, accounts []domain.Accoun
 			p.Partner, p.HasPartner = partner, true
 		}
 	}
-	if t.Cleared && hasFrom {
-		if through, has := reconcile.Through(from.Reconciliations); has && !t.Date.After(through) {
-			p.BreaksReconciliation = true
+	if t.Cleared {
+		if hasFrom {
+			if through, has := reconcile.Through(from.Reconciliations); has && !t.Date.After(through) {
+				p.BreaksReconciliation = true
+			}
+		}
+		if !p.BreaksReconciliation {
+			if through, has := reconcile.Through(to.Reconciliations); has && !t.Date.After(through) {
+				p.BreaksReconciliation = true
+			}
 		}
 	}
 	return p
@@ -150,14 +170,25 @@ func Apply(t domain.Transaction, toAccountID string, accounts []domain.Account,
 	}
 	moved = t
 	moved.AccountID = toAccountID
-	from, _ := domain.AccountByID(accounts, t.AccountID)
+	if len(t.Splits) > 0 {
+		moved.Splits = append([]domain.CategorySplit(nil), t.Splits...)
+	}
+	if len(t.Tags) > 0 {
+		moved.Tags = append([]string(nil), t.Tags...)
+	}
+	if len(t.MemberIDs) > 0 {
+		moved.MemberIDs = append([]string(nil), t.MemberIDs...)
+	}
+	if len(t.Attachments) > 0 {
+		moved.Attachments = append([]domain.AttachmentRef(nil), t.Attachments...)
+	}
+	from, hasFrom := domain.AccountByID(accounts, t.AccountID)
 	to, _ := domain.AccountByID(accounts, toAccountID)
-	if from.InflowSign() != to.InflowSign() {
+	if hasFrom && from.InflowSign() != to.InflowSign() {
 		moved.Amount, err = t.Amount.NegChecked()
 		if err != nil {
 			return t, domain.Transaction{}, false, fmt.Errorf("txnmove: reverse booking sign: %w", err)
 		}
-		moved.Splits = append([]domain.CategorySplit(nil), t.Splits...)
 		for i := range moved.Splits {
 			moved.Splits[i].Amount, err = moved.Splits[i].Amount.NegChecked()
 			if err != nil {

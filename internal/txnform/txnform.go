@@ -84,7 +84,7 @@ func Build(original domain.Transaction, d Draft, accounts []domain.Account, txns
 			amt, err = money.Neg(parsed)
 		}
 	}
-	if err == nil && t.IsTransfer() {
+	if err == nil && t.IsTransfer() && d.TransferAccountID != "" {
 		amt = editMagnitude(amt)
 		if t.Amount.IsNegative() {
 			negative, negErr := money.Neg(amt)
@@ -127,7 +127,7 @@ func Build(original domain.Transaction, d Draft, accounts []domain.Account, txns
 		return Plan{Failure: Message{Key: "transactions.splitAmountMismatch"}, Err: errors.New("transaction draft: splits do not reconcile")}
 	}
 	if d.AccountID != "" && d.AccountID != t.AccountID {
-		move := txnmove.PlanMove(original, d.AccountID, accounts, txns)
+		move := txnmove.PlanMove(t, d.AccountID, accounts, txns)
 		if move.Err != nil {
 			args := []any{move.ToName}
 			if move.Reason == txnmove.ReasonCurrency {

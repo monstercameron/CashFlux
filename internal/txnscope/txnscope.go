@@ -22,6 +22,7 @@
 package txnscope
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -132,6 +133,7 @@ func isWholeMonth(from, to time.Time) bool {
 
 // parse reads a filter date string, reporting whether it held a usable date.
 func parse(s string) (time.Time, bool) {
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return time.Time{}, false
 	}

@@ -3,6 +3,8 @@
 package domain
 
 import (
+	"math"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -35,7 +37,19 @@ func (e SharedExpense) Total() money.Money {
 	}
 	total := money.Zero(e.Shares[0].Amount.Currency)
 	for _, s := range e.Shares {
-		total.Amount += s.Amount.Amount
+		if total.Currency != "" && s.Amount.Currency != "" && !strings.EqualFold(strings.TrimSpace(total.Currency), strings.TrimSpace(s.Amount.Currency)) {
+			continue
+		}
+		next, err := money.Add(total.Amount, s.Amount.Amount)
+		if err != nil {
+			if s.Amount.Amount > 0 {
+				total.Amount = math.MaxInt64
+			} else {
+				total.Amount = math.MinInt64
+			}
+			continue
+		}
+		total.Amount = next
 	}
 	return total
 }

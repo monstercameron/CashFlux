@@ -79,11 +79,8 @@ func PlanBulk(txns []domain.Transaction, counterpartyID string, countTowardDebt 
 			continue
 		}
 		if !t.IsTransfer() && next.IsTransfer() && t.CountsInReports() {
-			amt := t.Amount.Amount
-			if amt < 0 {
-				amt = -amt
-			}
-			plan.LeavesTotalsMinor += amt
+			pAmt := safeAbsMinor(t.Amount.Amount)
+			plan.LeavesTotalsMinor = satAddMinor(plan.LeavesTotalsMinor, pAmt)
 		}
 		if next.BillAccountID != "" {
 			plan.DebtRows++

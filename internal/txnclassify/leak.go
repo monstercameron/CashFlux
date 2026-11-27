@@ -4,6 +4,7 @@ package txnclassify
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -40,7 +41,7 @@ type CurrencyLeak struct {
 func LeakedByCurrency(suspects []Suspect) []CurrencyLeak {
 	byCur := map[string][]Suspect{}
 	for _, s := range suspects {
-		cur := s.Txn.Amount.Currency
+		cur := strings.ToUpper(strings.TrimSpace(s.Txn.Amount.Currency))
 		byCur[cur] = append(byCur[cur], s)
 	}
 	out := make([]CurrencyLeak, 0, len(byCur))

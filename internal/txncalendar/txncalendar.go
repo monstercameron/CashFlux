@@ -12,6 +12,7 @@
 package txncalendar
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -72,14 +73,39 @@ type CashflowMonth struct {
 // week totals from those cells. Transfers contribute to Moved, never Spent or
 // Income. Amounts use rates.Base and every sum is checked for overflow.
 func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, rates currency.Rates) (CashflowMonth, error) {
+	return monthCashflow(anchor, weekStart, txns, recurring, nil, rates)
+}
+
+func monthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, accounts []domain.Account, rates currency.Rates) (CashflowMonth, error) {
 	monthStart := dateutil.MonthStart(anchor)
 	monthEnd := dateutil.AddMonths(monthStart, 1)
 	grid := monthGrid(anchor, weekStart, recurring)
 	byDay := make(map[string]Cashflow, len(txns))
-	transferRows := txnclassify.SummarizeVisibleTransfers(txns, rates).CountedRows
+	// Pair only non-excluded in-month transfers so cross-month or excluded legs
+	// never hide or double-count a visible transfer movement.
+	inMonthIncluded := make([]domain.Transaction, 0, len(txns))
+	inMonthOrigIdx := make([]int, 0, len(txns))
+	for i, txn := range txns {
+		txnDay := dateutil.CalendarDayUTC(txn.Date)
+		if txnDay.Before(monthStart) || !txnDay.Before(monthEnd) {
+			continue
+		}
+		if !txn.ExcludeFromReports {
+			inMonthIncluded = append(inMonthIncluded, txn)
+			inMonthOrigIdx = append(inMonthOrigIdx, i)
+		}
+	}
+	countedTransfer := make([]bool, len(txns))
+	includedTransfers := txnclassify.SummarizeVisibleTransfersWithAccounts(inMonthIncluded, accounts, rates).CountedRows
+	for j, origIdx := range inMonthOrigIdx {
+		if j < len(includedTransfers) && includedTransfers[j] {
+			countedTransfer[origIdx] = true
+		}
+	}
 	result := CashflowMonth{Weeks: make([]CashflowWeek, len(grid))}
 	for i, txn := range txns {
-		if txn.Date.Before(monthStart) || !txn.Date.Before(monthEnd) {
+		txnDay := dateutil.CalendarDayUTC(txn.Date)
+		if txnDay.Before(monthStart) || !txnDay.Before(monthEnd) {
 			continue
 		}
 		key := DayKey(txn.Date)
@@ -88,12 +114,15 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 			return CashflowMonth{}, fmt.Errorf("count transactions on %s: %w", key, money.ErrOverflow)
 		}
 		day.Count++
-		if txn.ExcludeFromReports || (txn.IsTransfer() && !transferRows[i]) {
+		if txn.ExcludeFromReports || (txn.IsTransfer() && !countedTransfer[i]) {
 			byDay[key] = day
 			continue
 		}
 		converted, err := rates.Convert(txn.Amount, rates.Base)
 		if err != nil {
+			if !errors.Is(err, currency.ErrUnknownRate) {
+				return CashflowMonth{}, fmt.Errorf("convert transaction %q on %s: %w", txn.ID, key, err)
+			}
 			result.RateIssues = append(result.RateIssues, RateIssue{TransactionID: txn.ID, Date: txn.Date, Currency: txn.Amount.Currency, Err: err})
 			byDay[key] = day
 			continue
@@ -101,10 +130,6 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 		var amount int64
 		switch {
 		case txn.IsTransfer():
-			if !transferRows[i] {
-				byDay[key] = day
-				continue
-			}
 			amount, err = money.Abs(converted.Amount)
 			if err == nil {
 				day.Moved, err = money.Add(day.Moved, amount)
@@ -149,7 +174,7 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 // matching monthly recurring rule are omitted by bills.OccurrencesWithin, so a
 // due item appears once even when both sources describe it.
 func MonthCashflowWithAccounts(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, accounts []domain.Account, rates currency.Rates) (CashflowMonth, error) {
-	result, err := MonthCashflow(anchor, weekStart, txns, recurring, rates)
+	result, err := monthCashflow(anchor, weekStart, txns, recurring, accounts, rates)
 	if err != nil {
 		return CashflowMonth{}, err
 	}
@@ -408,7 +433,7 @@ func SettledLiabilityOccurrences(weeks []CashflowWeek, txns []domain.Transaction
 			}
 			account := accountByID[item.accountID]
 			linkedBillPayment := txn.BillAccountID == item.accountID
-			paymentIntoAccount := txn.AccountID == item.accountID && inflowAmount(txn.Amount.Amount, account.InflowSign())
+			paymentIntoAccount := txn.IsTransfer() && txn.AccountID == item.accountID && inflowAmount(txn.Amount.Amount, account.InflowSign())
 			if linkedBillPayment || paymentIntoAccount {
 				settled[domain.OccurrenceKey("account:"+item.accountID, item.due)] = true
 			}
@@ -471,7 +496,7 @@ func jumpToRange(cadence domain.RecurringCadence, due, from time.Time) time.Time
 		if dayDelta%stepDays != 0 {
 			steps++
 		}
-		return due.AddDate(0, 0, int(steps*stepDays))
+		due = due.AddDate(0, 0, int(steps*stepDays))
 	case domain.CadenceSemimonthly:
 		if due.Day() != 1 && due.Day() != 15 {
 			due = cadence.Next(due)
@@ -514,16 +539,12 @@ func jumpToRange(cadence domain.RecurringCadence, due, from time.Time) time.Time
 }
 
 func jumpMonthCadence(cadence domain.RecurringCadence, due, from time.Time, monthsPerStep int) time.Time {
-	// Go's AddDate normalizes days beyond the target month's length. One real
-	// cadence step first preserves that behavior (and stabilizes dates such as
-	// Jan 31 -> Mar 3); the remaining jump is then equivalent to repeated steps.
-	if due.Day() > 28 {
-		due = cadence.Next(due)
-	}
+	// Jump using dateutil.AddMonthsClamped so end-of-month anchors (29..31)
+	// clamp to shorter months like February instead of overflowing into March.
 	months := (from.Year()-due.Year())*12 + int(from.Month()-due.Month())
 	steps := months / monthsPerStep
 	if steps > 0 {
-		due = due.AddDate(0, steps*monthsPerStep, 0)
+		due = dateutil.AddMonthsClamped(due, steps*monthsPerStep)
 	}
 	return due
 }

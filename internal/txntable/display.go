@@ -34,7 +34,13 @@ func CategoryKind(amount money.Money) domain.CategoryKind {
 
 // TransferCategoryKey names the account-relative direction of a transfer.
 func TransferCategoryKey(amount money.Money) string {
-	if amount.Amount < 0 {
+	return TransferCategoryKeyFor(amount.Amount < 0)
+}
+
+// TransferCategoryKeyFor names the transfer direction from an explicit
+// account-aware outgoing boolean (honoring positive-owed liabilities).
+func TransferCategoryKeyFor(outgoing bool) string {
+	if outgoing {
 		return "r4c.transferTo"
 	}
 	return "r4c.transferFrom"

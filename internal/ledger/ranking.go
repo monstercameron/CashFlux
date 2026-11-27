@@ -2,7 +2,12 @@
 
 package ledger
 
-import "sort"
+import (
+	"math"
+	"sort"
+
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 // CategoryTotal is one category's summed amount (minor units), used for spend
 // breakdowns. CategoryID is empty for uncategorized spend.
@@ -35,7 +40,16 @@ func RankSpending(totals map[string]int64, n int) (top []CategoryTotal, other in
 		return all, 0
 	}
 	for _, c := range all[n:] {
-		other += c.Amount
+		next, err := money.Add(other, c.Amount)
+		if err != nil {
+			if c.Amount > 0 {
+				other = math.MaxInt64
+			} else {
+				other = math.MinInt64
+			}
+			continue
+		}
+		other = next
 	}
 	return all[:n], other
 }

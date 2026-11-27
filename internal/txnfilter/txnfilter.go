@@ -8,6 +8,7 @@ package txnfilter
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -308,9 +309,10 @@ func (c Criteria) Normalize() Criteria {
 	// preset key was carried over with those new bounds, re-key it before it can
 	// be persisted or used by a later filter action.
 	if c.PeriodPreset != "" && c.PeriodPreset != PeriodCustom {
-		resolved := c.ResolvePeriod(time.Now())
+		now := time.Now()
+		resolved := c.ResolvePeriod(now)
 		if resolved.From != c.From || resolved.To != c.To {
-			c.PeriodPreset = InferPeriodPreset(c.From, c.To, time.Now())
+			c.PeriodPreset = InferPeriodPreset(c.From, c.To, now)
 		}
 	}
 	return c
@@ -1067,6 +1069,9 @@ func compare(a, b domain.Transaction, key string, l Labels) int {
 // that column displays a signed figure, so it orders on the signed value.
 func AbsAmount(t domain.Transaction) int64 {
 	if a := t.Amount.Amount; a < 0 {
+		if a == math.MinInt64 {
+			return math.MaxInt64
+		}
 		return -a
 	}
 	return t.Amount.Amount

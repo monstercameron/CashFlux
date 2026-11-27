@@ -110,7 +110,7 @@ func Build(txns []domain.Transaction, accounts []domain.Account) Report {
 			continue
 		}
 		// Report from the outgoing leg so one movement produces one entry.
-		if !t.Amount.IsNegative() {
+		if isIncoming(t, accounts) {
 			continue
 		}
 		if m.Confidence == Verified {
@@ -125,7 +125,10 @@ func Build(txns []domain.Transaction, accounts []domain.Account) Report {
 		if r.Items[i].Kind != r.Items[j].Kind {
 			return r.Items[i].Kind < r.Items[j].Kind
 		}
-		return r.Items[i].Leg.Date.Before(r.Items[j].Leg.Date)
+		if !r.Items[i].Leg.Date.Equal(r.Items[j].Leg.Date) {
+			return r.Items[i].Leg.Date.Before(r.Items[j].Leg.Date)
+		}
+		return r.Items[i].Leg.ID < r.Items[j].Leg.ID
 	})
 	return r
 }

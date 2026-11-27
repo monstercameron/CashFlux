@@ -153,7 +153,7 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 	}, revKey(app), derivedFilter, activeImportProfileWorkspaceID(), month)
 	shown := ui.UseMemo(func() []domain.Transaction {
 		rows := txntable.OrderDescriptions(derived.Value.Rows, derivedFilter, resolver.HasLearned, resolver.Resolve)
-		return txntable.VisibleTransfers(rows, derivedFilter, rates)
+		return txntable.VisibleTransfersWithAccounts(rows, accounts, derivedFilter, rates)
 	}, derived)
 
 	return widgetrender.RenderCtx{App: app, Accounts: accounts, Txns: transactions, ScopedAccounts: accounts, ScopedTxns: shown,
@@ -165,7 +165,11 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 func deriveTxnScope(app *appstate.App, rows []domain.Transaction, f txnfilter.Criteria, labels txnfilter.Labels, rates currency.Rates, base string) txntoolbar.Derived {
 	defer txnPerfStart("scope-derive")()
 	defer txnPerfStart("filter-sort")()
-	value, err := txntoolbar.Derive(rows, f, labels, rates, base, time.Now())
+	var accounts []domain.Account
+	if app != nil {
+		accounts = app.Accounts()
+	}
+	value, err := txntoolbar.DeriveWithAccounts(rows, accounts, f, labels, rates, base, time.Now())
 	if err != nil {
 		slog.Error("Could not total the transaction scope", "error", err)
 	}

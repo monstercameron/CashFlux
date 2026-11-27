@@ -118,14 +118,16 @@ func Counterparties(t domain.Transaction, accounts []domain.Account) []Choice {
 func Apply(t domain.Transaction, counterpartyID string, countTowardDebt bool, accounts []domain.Account) (domain.Transaction, error) {
 	before := t.TransferAccountID
 	beforeBill := t.BillAccountID
+	beforeGroup := t.TransferGroupID
 
 	if counterpartyID == "" {
 		if countTowardDebt {
 			return t, fmt.Errorf("txnclassify: a debt payment needs an account to pay toward")
 		}
 		t.TransferAccountID = ""
+		t.TransferGroupID = ""
 		t.BillAccountID = ""
-		if before != "" || beforeBill != "" {
+		if before != "" || beforeBill != "" || beforeGroup != "" {
 			t.Reviewed = true
 		}
 		return t, nil
@@ -142,12 +144,15 @@ func Apply(t domain.Transaction, counterpartyID string, countTowardDebt bool, ac
 		return t, fmt.Errorf("txnclassify: %s is not a debt, so nothing can be paid toward it", acc.Name)
 	}
 
+	if before != counterpartyID {
+		t.TransferGroupID = ""
+	}
 	t.TransferAccountID = counterpartyID
 	t.BillAccountID = ""
 	if countTowardDebt {
 		t.BillAccountID = counterpartyID
 	}
-	if before != t.TransferAccountID || beforeBill != t.BillAccountID {
+	if before != t.TransferAccountID || beforeBill != t.BillAccountID || beforeGroup != t.TransferGroupID {
 		t.Reviewed = true
 	}
 	return t, nil

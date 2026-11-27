@@ -4,6 +4,7 @@ package appstate
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -122,7 +123,9 @@ func (a *App) PutTxnLink(l domain.TxnLink) error {
 		if strings.TrimSpace(l.EventID) == "" {
 			return fmt.Errorf("appstate: an event link needs an event id")
 		}
-		if _, ok, _ := a.store.GetEvent(l.EventID); !ok {
+		if _, ok, err := a.store.GetEvent(l.EventID); err != nil {
+			return fmt.Errorf("appstate: read event %q: %w", l.EventID, err)
+		} else if !ok {
 			return fmt.Errorf("appstate: event %q does not exist", l.EventID)
 		}
 		// One event-link per transaction per event.
@@ -209,7 +212,10 @@ func (a *App) PutTransactionWithRule(t domain.Transaction, r rules.Rule) error {
 	if err := validateRule(r); err != nil {
 		return err
 	}
-	_, existed, _ := a.store.GetTransaction(t.ID)
+	_, existed, err := a.store.GetTransaction(t.ID)
+	if err != nil {
+		return err
+	}
 	var overBefore map[string]bool
 	if !existed && !a.triggersSuspended {
 		overBefore = a.overBudgetIDs()
@@ -223,6 +229,9 @@ func (a *App) PutTransactionWithRule(t domain.Transaction, r rules.Rule) error {
 }
 
 func absTxnAmount(amount int64) int64 {
+	if amount == math.MinInt64 {
+		return math.MaxInt64
+	}
 	if amount < 0 {
 		return -amount
 	}

@@ -167,15 +167,21 @@ func UserColumnVisible(enabled bool, memberScope string, memberCount int) bool {
 // CountNumber contains the toolbar's pure txnCountNumber decision.
 func CountNumber(n int) string {
 	digits := strconv.Itoa(n)
+	prefix := ""
+	if strings.HasPrefix(digits, "-") {
+		prefix = "-"
+		digits = digits[1:]
+	}
 	if len(digits) <= 3 {
-		return digits
+		return prefix + digits
 	}
 	first := len(digits) % 3
 	if first == 0 {
 		first = 3
 	}
 	var out strings.Builder
-	out.Grow(len(digits) + len(digits)/3)
+	out.Grow(len(prefix) + len(digits) + len(digits)/3)
+	out.WriteString(prefix)
 	out.WriteString(digits[:first])
 	for i := first; i < len(digits); i += 3 {
 		out.WriteByte(',')
@@ -383,14 +389,19 @@ func (p Presentation) CategoryTopFive(categories []CategoryTotal, selected strin
 	if len(categories) <= 5 {
 		return categories
 	}
+	hasSelected := selected != ""
+	wantID := selected
+	if wantID == "__uncategorized__" {
+		wantID = ""
+	}
 	result := append([]CategoryTotal(nil), categories[:5]...)
 	selectedFound := false
 	for _, category := range result {
-		selectedFound = selectedFound || selected != "" && category.ID == selected
+		selectedFound = selectedFound || (hasSelected && category.ID == wantID)
 	}
 	other := CategoryTotal{ID: "__other__", Name: p.Text("v5sum.other")}
 	for _, category := range categories[5:] {
-		if selected != "" && category.ID == selected && !selectedFound {
+		if hasSelected && category.ID == wantID && !selectedFound {
 			result = append(result, category)
 			selectedFound = true
 			continue

@@ -361,11 +361,17 @@ func RulePhrase(row domain.Transaction) string {
 // VisibleTransfers retains one row per household movement while keeping the
 // matching leg in single-account register views. It preserves source order.
 func VisibleTransfers(rows []domain.Transaction, criteria txnfilter.Criteria, rates currency.Rates) []domain.Transaction {
+	return VisibleTransfersWithAccounts(rows, nil, criteria, rates)
+}
+
+// VisibleTransfersWithAccounts honors each account's fixed booking convention
+// when pairing visible transfer legs.
+func VisibleTransfersWithAccounts(rows []domain.Transaction, accounts []domain.Account, criteria txnfilter.Criteria, rates currency.Rates) []domain.Transaction {
 	_, single := (txnfilter.Criteria{Account: strings.TrimSpace(criteria.Account), Accounts: criteria.Accounts}).SingleAccount()
 	if single || len(rows) < 2 {
-		return rows
+		return append([]domain.Transaction(nil), rows...)
 	}
-	summary := txnclassify.SummarizeVisibleTransfers(rows, rates)
+	summary := txnclassify.SummarizeVisibleTransfersWithAccounts(rows, accounts, rates)
 	kept := make([]domain.Transaction, 0, len(rows))
 	for i, row := range rows {
 		if !row.IsTransfer() || summary.CountedRows[i] {

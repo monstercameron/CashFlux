@@ -11,6 +11,7 @@ package ledger
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -190,7 +191,7 @@ func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs
 func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (map[string]money.Money, error) {
 	out := make(map[string]money.Money)
 	for _, a := range accounts {
-		if a.Archived {
+		if !a.CountsInNetWorth() {
 			continue
 		}
 		bal, err := Balance(a, all)
@@ -200,6 +201,17 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 		conv, err := rates.Convert(bal, rates.Base)
 		if err != nil {
 			return nil, err
+		}
+		if a.Class == domain.ClassLiability {
+			magnitude, absErr := conv.AbsChecked()
+			if absErr != nil {
+				return nil, fmt.Errorf("ledger: account %s liability magnitude: %w", a.ID, absErr)
+			}
+			negated, negErr := magnitude.NegChecked()
+			if negErr != nil {
+				return nil, fmt.Errorf("ledger: account %s liability sign: %w", a.ID, negErr)
+			}
+			conv = negated
 		}
 
 		if len(a.OwnershipShares) > 0 {
@@ -233,6 +245,33 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 	return out, nil
 }
 
+// ratioPercentTrunc computes (num - denomOffset) * 100 / |denom| truncated toward
+// zero without int64 overflow, falling back to big.Int only for extreme values.
+func ratioPercentTrunc(a, b, denom int64) int64 {
+	if diff, err := money.Sub(a, b); err == nil {
+		if denom != math.MinInt64 {
+			mag := denom
+			if mag < 0 {
+				mag = -mag
+			}
+			if diff >= math.MinInt64/100 && diff <= math.MaxInt64/100 {
+				return diff * 100 / mag
+			}
+		}
+	}
+	num := new(big.Int).Sub(big.NewInt(a), big.NewInt(b))
+	num.Mul(num, big.NewInt(100))
+	den := new(big.Int).Abs(big.NewInt(denom))
+	quo := new(big.Int).Quo(num, den)
+	if !quo.IsInt64() {
+		if quo.Sign() < 0 {
+			return math.MinInt64
+		}
+		return math.MaxInt64
+	}
+	return quo.Int64()
+}
+
 // SavingsRate returns the share of income that wasn't spent, as a whole percent
 // (income and expense in the same minor units). It returns 0 when income is
 // non-positive (no meaningful rate), can go negative when spending exceeds
@@ -241,7 +280,14 @@ func SavingsRate(income, expense int64) int {
 	if income <= 0 {
 		return 0
 	}
-	return int((income - expense) * 100 / income)
+	pct := ratioPercentTrunc(income, expense, income)
+	if pct > math.MaxInt {
+		return math.MaxInt
+	}
+	if pct < math.MinInt {
+		return math.MinInt
+	}
+	return int(pct)
 }
 
 // Utilization returns credit utilization as a whole percent — how much of a
@@ -252,14 +298,14 @@ func Utilization(balance, limit int64) (pct int, ok bool) {
 	if limit <= 0 {
 		return 0, false
 	}
-	owed := balance
-	if owed < 0 {
-		owed = -owed
-	}
 	// Round to the nearest whole percent (not truncate) so every surface that shows
 	// utilization agrees — 17.83% reads as 18% here and in the payoff ladder, which
 	// derives its percent from the engine's rounded float.
-	return int(math.Round(float64(owed) * 100 / float64(limit))), true
+	rounded := math.Round(math.Abs(float64(balance)) * 100 / float64(limit))
+	if rounded >= float64(math.MaxInt) {
+		return math.MaxInt, true
+	}
+	return int(rounded), true
 }
 
 // PercentChange returns the whole-percent change from prev to curr (both in the
@@ -272,9 +318,5 @@ func PercentChange(curr, prev int64) (pct int64, ok bool) {
 	if prev == 0 {
 		return 0, false
 	}
-	mag := prev
-	if mag < 0 {
-		mag = -mag
-	}
-	return (curr - prev) * 100 / mag, true
+	return ratioPercentTrunc(curr, prev, prev), true
 }

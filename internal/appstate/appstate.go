@@ -3075,7 +3075,10 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	// Detect whether this is a brand-new transaction (vs. an edit) so the
 	// "transaction added" trigger fires only on real additions, from every add
 	// path (quick-add, inline add, transfer, duplicate, import), not on edits.
-	_, existed, _ := a.store.GetTransaction(t.ID)
+	_, existed, err := a.store.GetTransaction(t.ID)
+	if err != nil {
+		return err
+	}
 	// Snapshot which budgets are over BEFORE the write: it's the transaction
 	// that pushes a budget over its limit, so the budget-exceeded trigger must
 	// fire from here — previously only re-saving the budget document itself
@@ -3160,7 +3163,11 @@ func (a *App) applySinkingFundDrawdown(t domain.Transaction) {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
-	spendAbs := t.Amount.Abs()
+	spendAbs, err := t.Amount.AbsChecked()
+	if err != nil {
+		a.log.Warn("sinking-fund drawdown skipped: amount overflow", "txn", t.ID, "err", err)
+		return
+	}
 	for _, g := range a.Goals() {
 		if !g.IsSinkingFund || g.Archived || g.CategoryID != t.CategoryID {
 			continue

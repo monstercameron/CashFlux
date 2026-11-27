@@ -5,6 +5,7 @@
 package txnview
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -45,10 +46,35 @@ func Summarize(rows []domain.Transaction, rates currency.Rates, base string) (Vi
 // categoryRows. The latter normally clears category/flow filters while keeping
 // the same date, search, member, and account scope.
 func SummarizeWithCategories(rows, categoryRows []domain.Transaction, rates currency.Rates, base string) (View, error) {
-	view := View{Count: len(rows), UnconvertedByCurrency: make(map[string]int)}
-	transfers := txnclassify.SummarizeVisibleTransfers(rows, rates)
-	view.CountedTransfers = transfers.CountedRows
+	return SummarizeWithAccounts(rows, categoryRows, nil, rates, base)
+}
+
+// SummarizeWithAccounts derives cashflow and category spend while honoring each
+// account's fixed booking sign convention for transfer pairing.
+func SummarizeWithAccounts(rows, categoryRows []domain.Transaction, accounts []domain.Account, rates currency.Rates, base string) (View, error) {
+	view := View{Count: len(rows), CountedTransfers: make([]bool, len(rows)), UnconvertedByCurrency: make(map[string]int)}
+	pairRates := rates
+	if strings.TrimSpace(base) != "" {
+		pairRates.Base = base
+	}
+	// Pair only non-excluded rows so an excluded leg never suppresses a
+	// non-excluded partner or inflates UnpairedRows.
+	includedRows := make([]domain.Transaction, 0, len(rows))
+	includedOrigIdx := make([]int, 0, len(rows))
+	for i, row := range rows {
+		if row.ExcludeFromReports {
+			continue
+		}
+		includedRows = append(includedRows, row)
+		includedOrigIdx = append(includedOrigIdx, i)
+	}
+	transfers := txnclassify.SummarizeVisibleTransfersWithAccounts(includedRows, accounts, pairRates)
 	view.UnpairedRows = transfers.UnpairedRows
+	for j, origIdx := range includedOrigIdx {
+		if j < len(transfers.CountedRows) && transfers.CountedRows[j] {
+			view.CountedTransfers[origIdx] = true
+		}
+	}
 	for i, row := range rows {
 		if row.ExcludeFromReports {
 			view.Excluded++
@@ -56,8 +82,11 @@ func SummarizeWithCategories(rows, categoryRows []domain.Transaction, rates curr
 		}
 		converted, err := rates.Convert(row.Amount, base)
 		if err != nil {
+			if !errors.Is(err, currency.ErrUnknownRate) {
+				return View{}, fmt.Errorf("convert transaction %q: %w", row.ID, err)
+			}
 			view.Unconverted++
-			code := row.Amount.Currency
+			code := strings.ToUpper(strings.TrimSpace(row.Amount.Currency))
 			if code == "" {
 				code = "unknown"
 			}
@@ -65,7 +94,7 @@ func SummarizeWithCategories(rows, categoryRows []domain.Transaction, rates curr
 			continue
 		}
 		if row.IsTransfer() {
-			if i < len(transfers.CountedRows) && transfers.CountedRows[i] {
+			if view.CountedTransfers[i] {
 				amount, absErr := money.Abs(converted.Amount)
 				if absErr != nil {
 					return View{}, fmt.Errorf("transfer %q magnitude: %w", row.ID, absErr)
@@ -106,15 +135,15 @@ func SummarizeWithCategories(rows, categoryRows []domain.Transaction, rates curr
 func categoryTotals(rows []domain.Transaction, rates currency.Rates, base string) ([]CategoryTotal, error) {
 	categories := make(map[string]int64)
 	for _, row := range rows {
-		if row.ExcludeFromReports || row.IsTransfer() {
+		if row.ExcludeFromReports || row.IsTransfer() || row.Amount.Amount >= 0 {
 			continue
 		}
 		if len(row.Splits) == 0 {
-			if row.Amount.Amount >= 0 {
-				continue
-			}
 			converted, err := rates.Convert(row.Amount, base)
 			if err != nil {
+				if !errors.Is(err, currency.ErrUnknownRate) {
+					return nil, fmt.Errorf("convert category expense %q: %w", row.ID, err)
+				}
 				continue
 			}
 			amount, err := money.Neg(converted.Amount)
@@ -131,6 +160,9 @@ func categoryTotals(rows []domain.Transaction, rates currency.Rates, base string
 		for _, split := range row.Splits {
 			converted, err := rates.Convert(split.Amount, base)
 			if err != nil {
+				if !errors.Is(err, currency.ErrUnknownRate) {
+					return nil, fmt.Errorf("convert category split for %q: %w", row.ID, err)
+				}
 				continue
 			}
 			splitTotals[split.CategoryID], err = money.Add(splitTotals[split.CategoryID], converted.Amount)
@@ -207,15 +239,32 @@ func (c *Cache) GetWithCategories(revision uint64, scope string, rows, categoryR
 	// of map identity and sensitive to in-place rate changes.
 	conversionKey := fmt.Sprintf("%q|%#v", base, rates)
 	if c.valid && c.revision == revision && c.scope == scope && c.rows == rowKey && c.categories == categoryKey && c.conversion == conversionKey {
-		return c.view, nil
+		return cloneView(c.view), nil
 	}
 	view, err := SummarizeWithCategories(rows, categoryRows, rates, base)
 	if err != nil {
 		return View{}, err
 	}
-	c.revision, c.scope, c.view, c.valid = revision, scope, view, true
+	c.revision, c.scope, c.view, c.valid = revision, scope, cloneView(view), true
 	c.rows, c.categories, c.conversion = rowKey, categoryKey, conversionKey
 	return view, nil
+}
+
+func cloneView(v View) View {
+	if v.CountedTransfers != nil {
+		v.CountedTransfers = append([]bool(nil), v.CountedTransfers...)
+	}
+	if v.Categories != nil {
+		v.Categories = append([]CategoryTotal(nil), v.Categories...)
+	}
+	if v.UnconvertedByCurrency != nil {
+		cp := make(map[string]int, len(v.UnconvertedByCurrency))
+		for k, n := range v.UnconvertedByCurrency {
+			cp[k] = n
+		}
+		v.UnconvertedByCurrency = cp
+	}
+	return v
 }
 
 // rowIDsKey is collision-free even when IDs contain separators. Order matters:
@@ -235,5 +284,5 @@ func (c *Cache) Lookup(revision uint64, scope string) (View, bool) {
 	if !c.valid || c.revision != revision || c.scope != scope {
 		return View{}, false
 	}
-	return c.view, true
+	return cloneView(c.view), true
 }

@@ -117,7 +117,7 @@ func suggestByReciprocal(t domain.Transaction, accounts []domain.Account, txns [
 		if acc.ID == t.AccountID || acc.Archived {
 			continue
 		}
-		m, ok := FindReciprocal(t, acc.ID, txns)
+		m, ok := FindReciprocal(t, acc.ID, txns, accounts...)
 		if !ok {
 			continue
 		}
