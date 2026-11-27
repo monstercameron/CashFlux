@@ -285,30 +285,86 @@ func refreshAccessToken(ctx context.Context, pr prefs.Prefs) bool {
 	if scope == nil || !backendSessionReady() || normalizedBackendEndpoint(pr.ServerURL) != scope.Endpoint {
 		return false
 	}
+	startingAccess := strings.TrimSpace(lsGet(authAccessTokenKey))
+	startingRefresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
 	var ok bool
 	if scope.Mode == authRefreshModeCookie {
 		ok = (scopedRefreshSession{*scope}).refreshCookieAccessToken(ctx, pr)
 	} else {
-		err := (scopedRefreshSession{*scope}).refreshFirst(ctx, func(ctx context.Context, token string) (backendrpc.TokenPairResponse, error) {
+		// Single-flight check: if another goroutine or tab already rotated the
+		// token before we acquired the refresh lock, reuse it instead of
+		// rotating a second time and churning streams.
+		reused := false
+		var refreshErr error
+		ran := false
+		withTokenRefreshLock(func() {
+			ran = true
+			switch syncstate.DecideRefresh(startingRefresh, lsGet(authRefreshTokenKey), startingAccess, lsGet(authAccessTokenKey)) {
+			case syncstate.RefreshReuseStored:
+				reused = true
+				return
+			case syncstate.RefreshSessionGone:
+				refreshErr = errors.New("session signed out while waiting to refresh")
+				return
+			}
+			// Delegate inside a direct single exchange to avoid nested lock acquisition.
+			s := scopedRefreshSession{*scope}
+			cred, raw, have, err := s.load()
+			if err != nil {
+				refreshErr = err
+				return
+			}
+			if !have {
+				refreshErr = errors.New("session refresh: no credential for this account")
+				return
+			}
 			var pair backendrpc.TokenPairResponse
-			err := invokeWorkerRPC(ctx, scope.Endpoint, "refresh", backendrpc.MethodAuthRefreshToken, backendrpc.RefreshTokenRequest{RefreshToken: token}, &pair)
-			return pair, err
+			err = invokeWorkerRPC(ctx, scope.Endpoint, "refresh", backendrpc.MethodAuthRefreshToken, backendrpc.RefreshTokenRequest{RefreshToken: cred.Token}, &pair)
+			if err != nil {
+				refreshErr = err
+				return
+			}
+			if strings.TrimSpace(pair.AccessToken) == "" || strings.TrimSpace(pair.RefreshToken) == "" || pair.ExpiresInSeconds <= 0 {
+				refreshErr = errors.New("session refresh: server returned an incomplete token pair")
+				return
+			}
+			done := make(chan error, 1)
+			s.saveThen(pair.RefreshToken, raw, func(err error) { done <- err })
+			if err := <-done; err != nil {
+				refreshErr = err
+				return
+			}
+			browserstore.SetMemory(authRefreshTokenKey, pair.RefreshToken)
+			browserstore.SetMemory(authAccessTokenKey, pair.AccessToken)
+			browserstore.SetMemory(authExpiresInKey, strconv.FormatInt(pair.ExpiresInSeconds, 10))
+			browserstore.SetMemory(authRefreshModeKey, scope.Mode)
+			uistate.BumpAuthRevision()
 		})
-		if err != nil {
-			if isAuthError(err) {
+		if !ran {
+			return false
+		}
+		if refreshErr != nil {
+			if isAuthError(refreshErr) {
 				degradeToLocalOnly()
 			} else {
-				logSyncError("token refresh failed", err)
+				logSyncError("token refresh failed", refreshErr)
 			}
 			return false
 		}
 		ok = true
+		if reused {
+			return true
+		}
 	}
 	if ok {
 		restoreTokenLifecycleOnBoot()
-		dropSharedConn()
+		// services.wasm pools connections per endpoint and attaches bearer
+		// tokens per RPC, so routine token rotation does NOT call
+		// dropSharedConn() (avoiding killing sibling in-flight RPCs). Only
+		// refresh long-lived watch streams with the new bearer.
 		stopBackendWatch()
 		startBackendWatch()
+		startV2Watch()
 	}
 	return ok
 }
@@ -320,18 +376,22 @@ func (s scopedRefreshSession) refreshCookieAccessToken(ctx context.Context, pr p
 	if s.scope.Mode != authRefreshModeCookie || normalizedBackendEndpoint(pr.ServerURL) != s.scope.Endpoint {
 		return false
 	}
+	startingAccess := strings.TrimSpace(lsGet(authAccessTokenKey))
 	ok := false
-	withTokenRefreshLock(func() { ok = doCookieRefreshForAccount(ctx, pr, s.scope.AccountID) })
+	withTokenRefreshLock(func() {
+		switch syncstate.DecideRefresh("", "", startingAccess, lsGet(authAccessTokenKey)) {
+		case syncstate.RefreshReuseStored:
+			ok = true
+			return
+		case syncstate.RefreshSessionGone:
+			ok = false
+			return
+		}
+		ok = doCookieRefreshForAccount(ctx, pr, s.scope.AccountID)
+	})
 	return ok
 }
 
-// storeAuthTokenPair publishes a token pair in page memory and rearms the
-// proactive countdown. C425: an already-open watch stream authenticated
-// with the OLD token has no reason to keep running under it — cycle it
-// through the existing reconnect/backoff machinery (stopBackendWatch/
-// startBackendWatch, unchanged) as one more trigger, so it re-subscribes
-// with the new access token right away instead of running until it
-// eventually gets rejected on its own.
 func storeAuthTokenPair(pair backendrpc.TokenPairResponse) {
 	if strings.TrimSpace(pair.AccessToken) != "" {
 		browserstore.SetMemory(authAccessTokenKey, pair.AccessToken)
@@ -343,11 +403,9 @@ func storeAuthTokenPair(pair backendrpc.TokenPairResponse) {
 		browserstore.SetMemory(authExpiresInKey, strconv.FormatInt(pair.ExpiresInSeconds, 10))
 		armProactiveRefresh(pair.ExpiresInSeconds)
 	}
-	// services.wasm keys its pooled connections by endpoint and bearer. Explicitly
-	// reset on every rotation so old credentialed sockets and streams cannot linger.
-	dropSharedConn()
 	stopBackendWatch()
 	startBackendWatch()
+	startV2Watch()
 }
 
 // armProactiveRefresh (re)starts the local countdown to the next proactive
@@ -523,17 +581,14 @@ func startBackendSync() {
 	go func() {
 		pr := uistate.LoadPrefs().Normalize()
 		if !adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr)) {
+			markHostedHydrationError("CashFlux could not confirm your signed-in account. Check your connection and try again.")
 			return
 		}
+		startV2Watch()
 		startBackendWatch()
-		flushBackendSyncQueue()
-		// Reconcile the account's workspaces BEFORE pulling. The pull addresses
-		// whichever workspace is open, so running it first on a freshly signed-in
-		// browser asks the server for a workspace the account has never heard of,
-		// gets "not found", and seeds this device's empty one to the server as a new
-		// workspace — permanently, and before anything had a chance to notice the
-		// account already had the real one.
-		mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
+		// Reconcile the account's workspace registry first, then run a single
+		// serialized v2 sync cycle (pull -> reconcile -> live-apply -> push).
+		mergeRemoteWorkspaces(func() { requestV2Sync() })
 	}()
 }
 
@@ -558,21 +613,26 @@ func wireSyncLifecycleListeners() {
 		}
 		return nil
 	})
-	// Both events fire when a tab is switched back to, and they are registered with
-	// the SAME callback — so every tab switch used to trigger two flushes and two
-	// pulls, each of which dials its own WebSocket. wakeSync coalesces them.
 	js.Global().Call("addEventListener", "visibilitychange", cb)
 	js.Global().Call("addEventListener", "focus", cb)
 	js.Global().Call("addEventListener", "online", js.FuncOf(func(js.Value, []js.Value) any {
-		flushBackendSyncQueue()
+		if eng, ok := ensureV2Engine(); ok {
+			eng.NotifyOnline()
+		}
+		wakeV2Watch()
+		requestV2Sync()
 		return nil
 	}))
-	// C323: reflect going offline immediately. Without this only "online" was wired,
-	// so a dropped connection left the chip on its last (often "synced") state until
-	// the next failed dial. Mark any pending work as queued/offline right away.
 	js.Global().Call("addEventListener", "offline", js.FuncOf(func(js.Value, []js.Value) any {
+		if eng, ok := ensureV2Engine(); ok {
+			eng.NotifyOffline()
+			return nil
+		}
 		st := loadSyncStatus()
-		st.State = "offline"
+		if !syncstate.NormalizePhase(st.State).CanRoutineTransitionTo(syncstate.PhaseOffline) {
+			return nil
+		}
+		st.State = string(syncstate.PhaseOffline)
 		st.Pending = pendingSyncCount()
 		setSyncStatus(st)
 		return nil
@@ -733,8 +793,8 @@ func wakeSync() {
 	lastWakeAt = time.Now()
 	wakeMu.Unlock()
 
-	flushBackendSyncQueue()
-	pullActiveWorkspaceFromBackend(true)
+	wakeV2Watch()
+	requestV2Sync()
 }
 
 // wakeCoalesceWindow is how long after one wake-up another is treated as the same
@@ -953,13 +1013,12 @@ func requestBackendSyncNow() {
 	if syncApplyPaused || !backendSessionReady() {
 		return
 	}
-	// Seed the queue with the CURRENT dataset before flushing. The queue is only ever
-	// filled by an autosave (pushActiveWorkspaceToBackend), so on a device that has
-	// signed in but not edited anything since, "Sync now" used to find an empty queue,
-	// report "Synced", and upload precisely nothing — the chip claiming success for a
-	// server that never received a byte. The hash guard inside
-	// pushActiveWorkspaceToBackend keeps this a no-op when the server already holds
-	// this exact dataset, so pressing Sync now repeatedly stays cheap.
+	if eng, ok := ensureV2Engine(); ok {
+		eng.NotifyOnline()
+		wakeV2Watch()
+		requestV2Sync()
+		return
+	}
 	if app := appstate.Default; app != nil {
 		if dataset, err := app.ExportJSONRedacted(); err == nil {
 			pushActiveWorkspaceToBackend(dataset, time.Now().UTC())
@@ -1224,12 +1283,6 @@ func flushBackendSyncQueue() {
 			// everything else goes through the conflict path below, where the
 			// local edit is backed up and the user decides.
 			if !resp.Accepted {
-				// LWW resolution: the server holds a newer snapshot, so this push lost.
-				// C309: do NOT silently drop the local edit. Before removing it from the
-				// active queue (which must happen, or it would re-push and re-lose every
-				// cycle — an infinite conflict loop), stash the rejected local dataset to
-				// a recoverable per-workspace backup so the user can restore it. Then tell
-				// them plainly (§7.11) and pull the newer server copy so the UI is current.
 				saveConflictBackup(item)
 				removeQueuedSyncMutationFor(item.UserID, item.WorkspaceID, item.Hash)
 				setSyncStatus(syncStatus{State: "conflict", Pending: pendingSyncCount(), Message: "newer server snapshot available"})
@@ -1238,15 +1291,8 @@ func flushBackendSyncQueue() {
 					app.Log().Warn("backend sync push rejected; local edit backed up, newer server snapshot pulled",
 						"workspace", item.WorkspaceID, "reason", resp.Reason)
 				}
-				// PULL. This comment claimed the newer copy was fetched "so the UI
-				// is current" and no fetch was ever made: the screen went on showing
-				// the local edit that had just been rejected and filed away, so the
-				// user was told there was a conflict while looking at the losing
-				// data — and any further edit queued another push from a base the
-				// server had already moved past. It only ever corrected itself if
-				// the watch loop happened to fire (Cam, 2026-08-31).
 				pullActiveWorkspaceFromBackend(true)
-				continue
+				return
 			}
 			// Accepted: only now is it safe to drop the local mutation from the queue.
 			if cryptobox.IsEnvelope(dataset) {
@@ -1311,6 +1357,8 @@ func startBackendWatch() {
 // stopBackendWatch cancels the live watch loop (if any), tearing down its stream
 // and connection promptly (the loop's ctx-bound RecvMsg unblocks on cancel).
 func stopBackendWatch() {
+	stopV2Watch()
+	cancelV2Retry()
 	watchMu.Lock()
 	defer watchMu.Unlock()
 	if watchCancel != nil {
@@ -1319,22 +1367,16 @@ func stopBackendWatch() {
 	}
 }
 
-// restartBackendSync applies a runtime backend pref change (toggle / URL / token)
-// without a reload: it stops the watch when the backend is now off, or flushes,
-// pulls, and restarts the watch against the fresh prefs when it is on. Callers are
-// the Sync page and Settings → Cloud toggles.
 func restartBackendSync() {
 	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		stopBackendWatch()
-		// Backend switched off: nothing should hold a socket open to it.
 		dropSharedConn()
 		return
 	}
 	wireSyncLifecycleListeners()
-	flushBackendSyncQueue()
-	// Same ordering rule as startBackendSync: reconcile, then pull.
-	mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
+	startV2Watch()
 	startBackendWatch()
+	mergeRemoteWorkspaces(func() { requestV2Sync() })
 }
 
 // runBackendWatch is the watch loop body: it dials the bridge, subscribes, and
@@ -1857,16 +1899,12 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			saveSyncedDatasetThen(w.ID, localDataset, meta, done)
 			return
 		}
-		if reloadOnApply {
-			// The dataset and its sync metadata are one durability unit. Reloading
-			// after fire-and-forget IndexedDB writes could persist the dataset but
-			// lose the metadata; the next watch event then looked like it would
-			// overwrite unsynced local work and was rejected forever. Commit both,
-			// in order, before allowing the document to reload.
-			saveSyncedDatasetThen(w.ID, localDataset, meta, reloadPage)
-		} else {
-			saveSyncedDatasetThen(w.ID, localDataset, meta, nil)
-		}
+		// Live in-place apply: persist the dataset and sync metadata together,
+		// then bump data revision so all open views refresh smoothly without
+		// reloading the browser or discarding UI state.
+		saveSyncedDatasetThen(w.ID, localDataset, meta, func() {
+			uistate.BumpDataRevision()
+		})
 	}()
 }
 
@@ -1986,6 +2024,7 @@ func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, do
 					attempt(datasetMyGen, retries+1)
 					return
 				}
+				syncApplyPaused = false
 				logSyncError("backend sync local replacement failed", err)
 				message := uistate.T("sync.localReplacementFailed")
 				setSyncStatus(syncStatus{State: "error", Message: message})
@@ -2152,6 +2191,9 @@ func hasConflictBackup(workspaceID string) bool {
 // stashed snapshot against the latest server version. It never uses Force;
 // the server's version check remains the conflict guard.
 func resolveConflictKeepLocal() {
+	if resolveV2ConflictKeepLocal() {
+		return
+	}
 	pr := uistate.LoadPrefs().Normalize()
 	if !backendConnectionActive(pr) {
 		return
@@ -2209,6 +2251,9 @@ func queueConflictBackupAtCurrentVersion(pr prefs.Prefs, workspaceID string, ite
 // import — so the stash is never lost due to a mid-operation failure. Called by
 // SyncConflictHost's "Use server version" action. (C309 / #464)
 func resolveConflictUseServer() {
+	if resolveV2ConflictUseServer() {
+		return
+	}
 	pr := uistate.LoadPrefs().Normalize()
 	if !backendConnectionActive(pr) {
 		return
@@ -2486,11 +2531,9 @@ func syncStatusLabel() string {
 	case "error":
 		return "Sync error"
 	case syncStateRebind:
-		// Without its own case this fell through to the default, which says
-		// "Synced" when nothing is queued and "N queued" when something is —
-		// the first a flat lie, the second an implication that it is going to
-		// go. It is not going to go until somebody decides.
 		return "Needs your decision"
+	case "locked":
+		return uistate.T("sync.locked")
 	case syncStateLockedDifferentPasscode:
 		return uistate.T("sync.lockedDifferentPasscode")
 	case syncStateIdentityUnknown:

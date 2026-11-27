@@ -99,6 +99,9 @@ func SaveFailureBanner() ui.Node {
 	failed := uistate.UsePersistFailures()
 	notice := state.UseAtom("app:stale-dataset", staleDatasetNoticeRev)
 	staleDatasetNotice, staleDatasetNoticeLive = notice, true
+	ui.UseEffect(func() func() {
+		return func() { staleDatasetNoticeLive = false }
+	}, "stale-notice-lifecycle")
 	if staleDatasetBlocked {
 		return ui.CreateElement(staleDatasetBanner)
 	}

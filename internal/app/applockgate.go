@@ -68,6 +68,7 @@ func showAppLockGate() {
 	}
 	appLockClosing = true
 	suspendAutosave = true
+	stopBackendWatch()
 	rememberPasskeyForLock()
 	setMuzakLocked(true)
 	if root := js.Global().Get("document").Call("getElementById", "app"); root.Truthy() {

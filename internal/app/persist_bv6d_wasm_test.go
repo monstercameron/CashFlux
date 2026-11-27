@@ -581,10 +581,13 @@ func TestBV6DToastTimerToleratesAbsentAndPartialDocuments(t *testing.T) {
 				a.Store().Close()
 			})
 			f := render.New(t)
+			renderDocument := js.Global().Get("document")
 			defer f.Cleanup()
+			defer js.Global().Set("document", renderDocument)
 			f.Render(Body(ui.CreateElement(Toast)))
 			uistate.PostNotice("A useful notice", false)
 			f.Stabilize()
+			defer uistate.PostNotice("", false)
 			document := js.Undefined()
 			if mode != "absent" {
 				document = js.Global().Get("Object").New()

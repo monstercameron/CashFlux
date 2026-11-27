@@ -193,8 +193,14 @@ func TestENC39EraseRevokeAndLocalCredentialDeleteAreBestEffort(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldApp := appstate.Default
+	oldPrefs := uistate.LoadPrefs()
+	oldSuspend, oldSyncPaused := suspendAutosave, syncApplyPaused
 	appstate.Default = app
-	t.Cleanup(func() { appstate.Default = oldApp })
+	t.Cleanup(func() {
+		appstate.Default = oldApp
+		uistate.PersistPrefs(oldPrefs)
+		suspendAutosave, syncApplyPaused = oldSuspend, oldSyncPaused
+	})
 	pr := prefs.Default()
 	pr.ServerURL = scope.Endpoint
 	var atom state.Atom[prefs.Prefs]

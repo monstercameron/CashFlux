@@ -7,17 +7,17 @@ package syncstate
 type SyncPhase string
 
 const (
-	PhaseLocal                  SyncPhase = "local"
-	PhaseSyncing                SyncPhase = "syncing"
-	PhaseSynced                 SyncPhase = "synced"
-	PhaseOffline                SyncPhase = "offline"
-	PhaseConflict               SyncPhase = "conflict"
-	PhaseRebind                 SyncPhase = "rebind"
-	PhaseLocked                 SyncPhase = "locked"
+	PhaseLocal                   SyncPhase = "local"
+	PhaseSyncing                 SyncPhase = "syncing"
+	PhaseSynced                  SyncPhase = "synced"
+	PhaseOffline                 SyncPhase = "offline"
+	PhaseConflict                SyncPhase = "conflict"
+	PhaseRebind                  SyncPhase = "rebind"
+	PhaseLocked                  SyncPhase = "locked"
 	PhaseLockedDifferentPasscode SyncPhase = "locked-different-passcode"
-	PhaseNeedsDataProtection    SyncPhase = "needs-data-protection"
-	PhaseIdentityUnknown        SyncPhase = "identity-unknown"
-	PhaseError                  SyncPhase = "error"
+	PhaseNeedsDataProtection     SyncPhase = "needs-data-protection"
+	PhaseIdentityUnknown         SyncPhase = "identity-unknown"
+	PhaseError                   SyncPhase = "error"
 )
 
 // IsAttention reports whether the phase requires explicit user intervention

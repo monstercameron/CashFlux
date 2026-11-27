@@ -517,13 +517,14 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 						app.Log().Warn("release captured changes", "err", err)
 					}
 				}
-				completeWaiters(targetRevision, targetCursor, nil)
 				// Enqueue committed v2 record changes synchronously at the
-				// durable commit boundary so closing/reloading within the 10ms
-				// legacy snapshot window can never lose dirty tracking.
+				// durable commit boundary before resolving RequestDurable
+				// waiters so neither a subsequent LockSecureThen nor a fast
+				// reload can race with or drop outbox recording.
 				if onLocalDatasetCommitted != nil {
 					onLocalDatasetCommitted(workspace, full, captured, fullDataset)
 				}
+				completeWaiters(targetRevision, targetCursor, nil)
 				// The legacy sync protocol still needs a portable full JSON snapshot.
 				// Assemble from committed records, never from newer live SQL rows.
 				if push != nil {

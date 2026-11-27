@@ -257,5 +257,3 @@ func MergeDatasets(localJSON, serverJSON []byte, localPending []store.RecordChan
 	}
 	return out, summary, nil
 }
-
-

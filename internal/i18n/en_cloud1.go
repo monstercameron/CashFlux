@@ -115,6 +115,15 @@ func init() {
 		"cloud1.useServer":               "Use server copy",
 		"cloud1.useServerHint":           "Load the server copy on this device. The current sync service then removes the saved device copy after it loads successfully.",
 		"cloud1.useServerConfirm":        "Use the server copy and remove the saved device copy after it loads? Choose Keep both for now if you still need to preserve that copy.",
+		"cloud1.mergeBoth":               "Merge both copies",
+		"cloud1.mergeBothHint":           "Combine non-overlapping edits from both devices live in place, keeping this device's edit on colliding records.",
+		"cloud1.diffSummary":             "This device: %d transactions · Server copy: %d transactions · %d differing records.",
+		"cloud1.keepLocalFailed":         "Could not apply your local copy: %s",
+		"cloud1.keepLocalDone":           "Kept this device's copy and synced it.",
+		"cloud1.useServerFailed":         "Could not apply server copy: %s",
+		"cloud1.useServerDone":           "Applied the server copy.",
+		"cloud1.mergeFailed":             "Could not merge copies: %s",
+		"cloud1.mergeDone":               "Merged changes from both devices and synced.",
 		"cloud1.aiHint":                  "Your key is sent to this server only when you save it. The server can read the key and AI requests. Household sync encryption does not cover AI requests. Estimated AI costs appear in the server console.",
 	} {
 		english[key] = value

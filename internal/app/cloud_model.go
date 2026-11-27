@@ -71,6 +71,10 @@ func cloudFace(f cloudFacts, step cloudStep) (title, hint string) {
 		return "cloud1.attention", "cloud1.conflictHint"
 	}
 	switch f.State {
+	case "locked":
+		return "cloud1.attention", "cloud1.protectHint"
+	case "needs-data-protection":
+		return "cloud1.attention", "cloud1.protectHint"
 	case "locked-different-passcode":
 		return "cloud1.attention", "cloud1.differentPasscode"
 	case "needs-rebind", "rebind":

@@ -14,7 +14,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/datasetmerge"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v8/css"
 	. "github.com/monstercameron/GoWebComponents/v8/html/shorthand"
@@ -423,36 +422,20 @@ func rebindLocalWorkspace(fromWorkspaceID, toWorkspaceID, userID string) error {
 		return err
 	}
 	queue := loadSyncQueue()
-	pending := make([]syncstate.PendingMutation, 0, len(queue))
-	byKey := map[string]queuedSyncMutation{}
+	next := make([]queuedSyncMutation, 0, len(queue))
 	for _, q := range queue {
-		pending = append(pending, syncstate.PendingMutation{UserID: q.UserID, WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
-		byKey[q.UserID+"\x00"+q.WorkspaceID+"\x00"+q.Hash] = q
-	}
-	for _, owner := range []string{userID, ""} {
-		pending = syncstate.Rebind(pending,
-			syncstate.Binding{UserID: owner, WorkspaceID: from},
-			syncstate.Binding{UserID: userID, WorkspaceID: to})
-	}
-	next := make([]queuedSyncMutation, 0, len(pending))
-	for _, p := range pending {
-		q, ok := byKey[p.UserID+"\x00"+from+"\x00"+p.Hash]
-		if !ok {
-			q, ok = byKey[""+"\x00"+from+"\x00"+p.Hash]
+		if q.WorkspaceID == from {
+			q.UserID = userID
+			q.WorkspaceID = to
+			q.BaseVersion = 0
+			q.LastAttemptError = ""
 		}
-		if !ok {
-			q, ok = byKey[p.UserID+"\x00"+p.WorkspaceID+"\x00"+p.Hash]
-		}
-		if !ok {
-			continue
-		}
-		q.UserID = p.UserID
-		q.WorkspaceID = p.WorkspaceID
 		next = append(next, q)
 	}
 	saveSyncQueue(next)
 	carryConflictBackup(from, to)
 	clearSyncMetaFor(from)
+	clearV2ScopeState(from)
 	setSyncStatus(syncStatus{State: "syncing", Pending: len(next)})
 	return nil
 }

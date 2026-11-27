@@ -77,6 +77,16 @@ func storage() atrest.Storage {
 // must not seed or autosave an empty replacement while this error is non-nil.
 func InitError() error { return secureInitErr }
 
+// Locked reports whether protected storage is currently locked or unreadable
+// due to a boot/migration failure. Asynchronous post-commit hooks and
+// background loops should check this before reading protected keys via Get.
+func Locked() bool {
+	mu.Lock()
+	locked := secureLocked || secureInitErr != nil
+	mu.Unlock()
+	return locked
+}
+
 // MigratedKeys returns the successfully migrated key names, never their values.
 func MigratedKeys() []string { return append([]string(nil), migratedKeys...) }
 
