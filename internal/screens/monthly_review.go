@@ -17,6 +17,7 @@
 package screens
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -107,25 +108,45 @@ func MonthlyReviewCard() ui.Node {
 // reviewStepNumber is the 1-based position for the "step 2 of 4" line.
 func reviewStepNumber(s monthlyreview.State) int { return s.Index + 1 }
 
+type reviewAvailMemo struct {
+	avail         monthlyreview.Availability
+	findingsCount int
+}
+
+var reviewAvailCache = newViewCache[reviewAvailMemo](4)
+
+func reviewAvailabilityCached(app *appstate.App) reviewAvailMemo {
+	if app == nil {
+		return reviewAvailMemo{}
+	}
+	now := time.Now()
+	pr := uistate.LoadPrefs()
+	settings := uistate.LoadSmartSettings()
+	key := fmt.Sprintf("%s|%s|%d|%s|%v|%s|%v",
+		revKey(app), now.Format("2006-01-02"), pr.WeekStartWeekday(),
+		pr.PayCycleAnchor, pr.BudgetRolloverLeftover, uistate.ActiveMemberFromScope(), settings)
+	return memoByRev(reviewAvailCache, key, func() reviewAvailMemo {
+		findingsCount := len(runAnomalyDetectors(app, pr.WeekStartWeekday()))
+		var a monthlyreview.Availability
+		a.HasFindings = findingsCount > 0
+		for _, st := range budgetStatusesAt(app, now) {
+			if budgeting.NeedsViewAttention(st) {
+				a.BudgetsNeedingAttention++
+			}
+		}
+		allGoals := app.Goals()
+		goals := make([]goalcoach.Goal, 0, len(allGoals))
+		for _, g := range allGoals {
+			goals = append(goals, coachGoal(g))
+		}
+		a.GoalsNeedingAttention = len(goalcoach.CoachAll(goals, now))
+		return reviewAvailMemo{avail: a, findingsCount: findingsCount}
+	})
+}
+
 // reviewAvailability works out which steps have anything in them this month.
 func reviewAvailability(app *appstate.App) monthlyreview.Availability {
-	if app == nil {
-		return monthlyreview.Availability{}
-	}
-	var a monthlyreview.Availability
-	a.HasFindings = len(runAnomalyDetectors(app, uistate.LoadPrefs().WeekStartWeekday())) > 0
-
-	for _, st := range budgetStatusesAt(app, time.Now()) {
-		if budgeting.NeedsViewAttention(st) {
-			a.BudgetsNeedingAttention++
-		}
-	}
-	goals := make([]goalcoach.Goal, 0, len(app.Goals()))
-	for _, g := range app.Goals() {
-		goals = append(goals, coachGoal(g))
-	}
-	a.GoalsNeedingAttention = len(goalcoach.CoachAll(goals, time.Now()))
-	return a
+	return reviewAvailabilityCached(app).avail
 }
 
 // budgetStatusesAt evaluates each visible budget on its own cadence, with the
@@ -156,7 +177,7 @@ func budgetStatusesAt(app *appstate.App, now time.Time) []budgeting.Status {
 func reviewStepBody(app *appstate.App, step monthlyreview.Step, p monthlyreview.Progress, a monthlyreview.Availability) ui.Node {
 	switch step {
 	case monthlyreview.StepFindings:
-		return P(uistate.T("review.findingsBody", len(runAnomalyDetectors(app, uistate.LoadPrefs().WeekStartWeekday()))))
+		return P(uistate.T("review.findingsBody", reviewAvailabilityCached(app).findingsCount))
 	case monthlyreview.StepBudgets:
 		return P(uistate.T("review.budgetsBody", a.BudgetsNeedingAttention))
 	case monthlyreview.StepGoals:

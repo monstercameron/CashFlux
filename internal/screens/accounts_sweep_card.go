@@ -29,6 +29,8 @@ import (
 // accountsSweepCards renders one card per due sweep proposal, or Fragment() when none
 // is due. Each card is its own component so its approve and dismiss hooks keep stable
 // positions.
+var acctSweepProposalsCache = newViewCache[[]sweep.Proposal](4)
+
 func accountsSweepCards() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -36,7 +38,10 @@ func accountsSweepCards() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get()
 
-	proposals := app.SweepProposals(time.Now())
+	now := time.Now()
+	proposals := memoByRev(acctSweepProposalsCache, revKey(app)+"|"+now.Format("2006-01-02"), func() []sweep.Proposal {
+		return app.SweepProposals(now)
+	})
 	if len(proposals) == 0 {
 		return Fragment()
 	}

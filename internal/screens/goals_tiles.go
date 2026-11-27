@@ -184,6 +184,15 @@ func goalListWidget(props goalListProps) ui.Node {
 	achievedOpen := ui.UseState(true)
 	toggleAchieved := ui.UseEvent(Prevent(func() { achievedOpen.Set(!achievedOpen.Get()) }))
 	goalSort := uistate.UseGoalSort().Get()
+	goalsView := uistate.UseGoalsView().Get()
+	pr := uistate.UsePrefs().Get()
+
+	if goalsView == uistate.GoalsViewEarmarks {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "goal-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+			Body: ui.CreateElement(goalEarmarksManager, goalEarmarksProps{App: app}),
+		})
+	}
 
 	v := computeGoalView(app, activeMemberID)
 
@@ -451,7 +460,6 @@ func goalListWidget(props goalListProps) ui.Node {
 	// omitted rather than showing an empty "Goals" heading.
 	var listSection ui.Node = Fragment()
 	if len(v.Active) == 0 && len(v.Fund) == 0 && len(v.Missed) == 0 {
-		pr := uistate.UsePrefs().Get()
 		in := buildSmartInput(app, pr.WeekStartWeekday())
 		listSection = uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.goals"),
@@ -478,9 +486,6 @@ func goalListWidget(props goalListProps) ui.Node {
 	// Collapsible achieved card.
 	var achievedSection ui.Node = Fragment()
 	if len(v.Achieved) > 0 {
-		achievedRows := MapKeyed(v.Achieved, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
-			return rowFor(g, 0, "")
-		})
 		achievedSection = uiw.Card(uiw.CardProps{
 			Attrs: []any{Attr("aria-label", uistate.T("goals.achieved"))},
 			Header: H2(css.Class("card-title"),
@@ -491,12 +496,17 @@ func goalListWidget(props goalListProps) ui.Node {
 					Span(css.Class("goal-count-inline"), uistate.T("goals.achievedCount", len(v.Achieved))),
 				),
 			),
-			Body: If(achievedOpen.Get(), Div(Attr("id", "goals-achieved-list"), achievedRows)),
+			Body: ui.If(achievedOpen.Get(), func() ui.Node {
+				achievedRows := MapKeyed(v.Achieved, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+					return rowFor(g, 0, "")
+				})
+				return Div(Attr("id", "goals-achieved-list"), achievedRows)
+			}),
 		})
 	}
 
 	var body ui.Node = Div(
-		goalsWaterfallCard(),
+		ui.CreateElement(goalsWaterfallCard),
 		// #65: shared-claim conflicts, the next-paycheck preview, and the payday
 		// funding-order control (each self-gates to nothing when not applicable).
 		ui.CreateElement(goalConflictStrip, struct{}{}),
@@ -511,10 +521,6 @@ func goalListWidget(props goalListProps) ui.Node {
 		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 		achievedSection,
 	)
-	// The toolbar's tab strip can swap the whole list area over to the earmarks manager.
-	if uistate.UseGoalsView().Get() == uistate.GoalsViewEarmarks {
-		body = ui.CreateElement(goalEarmarksManager, goalEarmarksProps{App: app})
-	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,

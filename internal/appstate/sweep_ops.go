@@ -46,15 +46,17 @@ func (a *App) SweepRules() []domain.SweepRule {
 	if a.ready() != nil {
 		return nil
 	}
-	v, err := a.store.ListSweepRules()
-	a.logErr("sweep rules", err)
-	sort.SliceStable(v, func(i, j int) bool {
-		if v[i].SourceAccountID != v[j].SourceAccountID {
-			return v[i].SourceAccountID < v[j].SourceAccountID
-		}
-		return v[i].ID < v[j].ID
+	return a.reads.sweepRules.get(a.store.Rev(), func() []domain.SweepRule {
+		v, err := a.store.ListSweepRules()
+		a.logErr("sweep rules", err)
+		sort.SliceStable(v, func(i, j int) bool {
+			if v[i].SourceAccountID != v[j].SourceAccountID {
+				return v[i].SourceAccountID < v[j].SourceAccountID
+			}
+			return v[i].ID < v[j].ID
+		})
+		return v
 	})
-	return v
 }
 
 // SweepPairError reports why a source and destination cannot carry a sweep, or nil when they can:
@@ -424,6 +426,10 @@ func (a *App) SweepProposals(now time.Time) []sweep.Proposal {
 	if a.ready() != nil {
 		return nil
 	}
+	rules := a.SweepRules()
+	if len(rules) == 0 {
+		return nil
+	}
 	if now.IsZero() {
 		now = a.clock()
 	}
@@ -437,14 +443,14 @@ func (a *App) SweepProposals(now time.Time) []sweep.Proposal {
 		a.logErr("sweep goals", err)
 		return nil
 	}
-	earmarks, err := a.store.ListEarmarks()
+	earmarks, err := a.reads.earmarks.getChecked(a.store.Rev(), a.store.ListEarmarks)
 	if err != nil {
 		a.logErr("sweep earmarks", err)
 		return nil
 	}
 	remaining := make(map[string]int64)
 	var out []sweep.Proposal
-	for _, r := range a.SweepRules() {
+	for _, r := range rules {
 		src, ok := a.findAccount(r.SourceAccountID)
 		if !ok {
 			continue

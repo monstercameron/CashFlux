@@ -676,38 +676,6 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 		return Fragment() // only meaningful in zero-based mode with budgets present
 	}
 
-	leftover := int64(0)
-	if amount, complete := budgetSpreadAmount(v); complete {
-		leftover = amount
-	}
-
-	var body ui.Node
-	if len(v.SavingsAccts) == 0 {
-		body = P(css.Class("empty", tw.TextDim), Attr("data-testid", "budgets-savings-empty"), uistate.T("budgets.savingsEmpty"))
-	} else {
-		rows := MapKeyed(v.SavingsAccts,
-			func(a savingsAcct) any { return a.AccountID },
-			func(a savingsAcct) ui.Node {
-				return ui.CreateElement(budgetSavingsAcctRow, budgetSavingsAcctRowProps{App: app, Acct: a, Base: v.Base})
-			})
-		body = Div(css.Class("zbb-savings-rows"), rows)
-	}
-
-	head := Div(css.Class("zbb-savings-head"),
-		Span(css.Class("zbb-savings-title"), uistate.T("budgets.savingsTitle")),
-		Span(css.Class("zbb-savings-total fig"), uistate.T("budgets.savingsPerMonthTotal", fmtMoney(money.New(v.SavingsAssigned, v.Base)))))
-
-	// The smart button appears only when there's unassigned money to place and at least
-	// one account to place it in — otherwise there's nothing to spread.
-	var spreadBtn ui.Node = Fragment()
-	if leftover > 0 && len(v.SavingsAccts) > 0 && budgetSpreadReady(v) {
-		spreadBtn = Button(css.Class("btn btn-sm btn-accent zbb-savings-spread"), Type("button"),
-			Attr("data-testid", "budgets-savings-spread"), Attr("aria-label", uistate.T("budgets.savingsSpreadAria")),
-			Attr("title", uistate.T("budgets.savingsSpreadTitle")), spreadOnClick,
-			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T("budgets.savingsSpread", fmtMoney(money.New(leftover, v.Base)))))
-	}
-
 	// The fold header mirrors "Plan the year" directly below it, so the two
 	// collapsible sections that close this surface read as one pattern. The hint
 	// carries the monthly total, which is the whole answer most visits need — you
@@ -735,9 +703,36 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	// The fold header IS the section title, exactly as it is for Plan the year — so
 	// the body is a plain container rather than an EntityListSection, which would
 	// print "Savings & investments" a second time directly under the toggle.
-	var foldBody ui.Node = Fragment()
-	if open.Get() {
-		foldBody = Fragment(
+	foldBody := ui.If(open.Get(), func() ui.Node {
+		leftover := int64(0)
+		if amount, complete := budgetSpreadAmount(v); complete {
+			leftover = amount
+		}
+		var body ui.Node
+		if len(v.SavingsAccts) == 0 {
+			body = P(css.Class("empty", tw.TextDim), Attr("data-testid", "budgets-savings-empty"), uistate.T("budgets.savingsEmpty"))
+		} else {
+			rows := MapKeyed(v.SavingsAccts,
+				func(a savingsAcct) any { return a.AccountID },
+				func(a savingsAcct) ui.Node {
+					return ui.CreateElement(budgetSavingsAcctRow, budgetSavingsAcctRowProps{App: app, Acct: a, Base: v.Base})
+				})
+			body = Div(css.Class("zbb-savings-rows"), rows)
+		}
+		head := Div(css.Class("zbb-savings-head"),
+			Span(css.Class("zbb-savings-title"), uistate.T("budgets.savingsTitle")),
+			Span(css.Class("zbb-savings-total fig"), uistate.T("budgets.savingsPerMonthTotal", fmtMoney(money.New(v.SavingsAssigned, v.Base)))))
+		// The smart button appears only when there's unassigned money to place and at least
+		// one account to place it in — otherwise there's nothing to spread.
+		var spreadBtn ui.Node = Fragment()
+		if leftover > 0 && len(v.SavingsAccts) > 0 && budgetSpreadReady(v) {
+			spreadBtn = Button(css.Class("btn btn-sm btn-accent zbb-savings-spread"), Type("button"),
+				Attr("data-testid", "budgets-savings-spread"), Attr("aria-label", uistate.T("budgets.savingsSpreadAria")),
+				Attr("title", uistate.T("budgets.savingsSpreadTitle")), spreadOnClick,
+				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("budgets.savingsSpread", fmtMoney(money.New(leftover, v.Base)))))
+		}
+		return Fragment(
 			head,
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.savingsDesc")),
 			body,
@@ -749,7 +744,7 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), goalsOnClick,
 						uiw.Icon(icon.Goals, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageGoals"))))),
 		)
-	}
+	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-savings", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("zbb-savings budget-fold"), fold, foldBody),
@@ -1452,15 +1447,11 @@ func budgetAnnualGridWidget(props budgetListProps) ui.Node {
 	}
 	annualGrid := ui.CreateElement(BudgetAnnualGrid, budgetAnnualGridProps{
 		Budgets: budgetsForGrid,
-		Txns:    budgetLedgerForApp(app),
 		App:     app, Scope: uistate.ActiveMemberFromScope(),
-		Cats:       app.Categories(),
-		Recurrings: app.Recurring(), // W6/C394 — future-month bill + goal projection
-		Goals:      app.Goals(),
-		Rates:      currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
-		WeekStart:  pr.WeekStartWeekday(),
-		Now:        budgetNow(),
-		OnCell:     drillMonth,
+		Rates:     currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
+		WeekStart: pr.WeekStartWeekday(),
+		Now:       budgetNow(),
+		OnCell:    drillMonth,
 	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-annualgrid", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

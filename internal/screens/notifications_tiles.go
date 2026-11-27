@@ -50,7 +50,8 @@ func notifSummaryWidget(props notifProps) ui.Node {
 
 	// Session-stable baseline: captured once on first mount so the catch-up count doesn't
 	// vanish when the open-effect stamps last-seen = now.
-	seen := ui.UseState(loadLastSeen())
+	initialSeen := ui.UseMemo(loadLastSeen, "notif-summary-seen-init")
+	seen := ui.UseState(initialSeen)
 	counts := notificationview.Count(visible, seen.Get())
 	newCount, unread := counts.New, counts.Unread
 	crit, warn, info := counts.Critical, counts.Warning, counts.Info
@@ -163,6 +164,7 @@ func notifSummaryWidget(props notifProps) ui.Node {
 		filtersArgs = append(filtersArgs, c)
 	}
 
+	members := props.App.Members()
 	body := Div(css.Class("notif-summary"),
 		Div(css.Class("notif-summary-lead"),
 			Span(css.Class("notif-summary-count"), fmt.Sprintf("%d", len(visible))),
@@ -180,12 +182,13 @@ func notifSummaryWidget(props notifProps) ui.Node {
 			// C407: the member lens, beside the severity chips. Only shown in a
 			// household with more than one member — a select with a single option
 			// is a control that cannot change anything.
-			If(len(props.App.Members()) >= 2,
-				ui.CreateElement(notifMemberLens, notifMemberLensProps{
-					Members:  props.App.Members(),
+			ui.If(len(members) >= 2, func() ui.Node {
+				return ui.CreateElement(notifMemberLens, notifMemberLensProps{
+					Members:  members,
 					Selected: memberFilter.Get(),
 					OnPick:   func(id string) { memberFilter.Set(id) },
-				})),
+				})
+			}),
 			// Safe, non-destructive bulk actions grouped together (Mark all read +
 			// Alert settings). The destructive Clear all is deliberately split out of
 			// this group — see below — so a wipe isn't one slip away from "Mark all read".
@@ -306,6 +309,7 @@ func notifListWidget(props notifProps) ui.Node {
 
 	groups := notificationview.GroupItems(visible, notifGroupMin)
 	members := props.App.Members()
+	routes := uistate.NotifyRoutes()
 
 	buildRow := func(it uistate.FeedItem) ui.Node {
 		id := it.ID
@@ -322,6 +326,8 @@ func notifListWidget(props notifProps) ui.Node {
 		}
 		return ui.CreateElement(notifyRow, notifyRowProps{
 			Members: members,
+			NowUnix: now,
+			Route:   uistate.RouteForNotifyIDFrom(routes, it.ID),
 			Item:    it,
 			TimeStr: timeStr,
 			OnRead:  func() { uistate.MarkFeedItemRead(id, !isRead) },

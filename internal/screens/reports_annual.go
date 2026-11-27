@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/doublecount"
+	"github.com/monstercameron/CashFlux/internal/emergencyfund"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -260,7 +261,9 @@ func reportController(p reportControllerProps) ui.Node {
 	nwSeries, nwNet, nwChange := activity.NetWorthSeries, activity.NetWorth, activity.NetWorthChange
 
 	// Health: the deterministic score + factors + prioritized steps.
-	health := healthscore.Evaluate(liveHealthInputs(app, nowActivity))
+	health := memoByRev(reportHealthCache, revKey(app)+"|"+nowActivity.Format(dateutil.Layout), func() healthscore.Result {
+		return healthscore.Evaluate(liveHealthInputs(app, nowActivity))
+	})
 
 	// The year's fee + interest charges ("money that bought nothing", §07).
 	costs := activity.Costs
@@ -295,7 +298,9 @@ func reportController(p reportControllerProps) ui.Node {
 	// (a balance sheet has no scope). Trailing 6-month averages feed the
 	// capacity figures; the essential-month basis and debt list feed the rest.
 	// All judgment lives in the pure internal/vitals core.
-	essBasis := buildSmartInput(app, pr.WeekStartWeekday()).EssentialBasis()
+	essBasis := memoByRev(reportEssBasisCache, fmt.Sprintf("%s|%d|%s", revKey(app), pr.WeekStartWeekday(), nowActivity.Format(dateutil.Layout)), func() emergencyfund.Basis {
+		return buildSmartInput(app, pr.WeekStartWeekday()).EssentialBasis()
+	})
 	position := ui.UseMemo(func() reportview.Position {
 		reportModelBuilt("position")
 		return reportview.BuildPosition(accounts, txns, review.HouseholdFlows, rates, essBasis.EssentialMonthlyMinor())
@@ -450,8 +455,14 @@ func reportController(p reportControllerProps) ui.Node {
 	// the figures themselves.
 	verdict, verdictTone := rptaVerdict(health)
 	kept := money.New(flow.Net(), base)
-	provFlow := provenance.DescribeFlow(scopedTxns, scopedAccounts, as, ae)
-	provNW := provenance.DescribeBalance(scopedTxns, scopedAccounts, ae)
+	provKey := fmt.Sprintf("%s|%#v|%d|%d", revKey(app), sc, as.Unix(), ae.Unix())
+	provMemo := memoByRev(reportProvCache, provKey, func() reportProvMemo {
+		return reportProvMemo{
+			flow: provenance.DescribeFlow(scopedTxns, scopedAccounts, as, ae),
+			nw:   provenance.DescribeBalance(scopedTxns, scopedAccounts, ae),
+		}
+	})
+	provFlow, provNW := provMemo.flow, provMemo.nw
 	provLines := func(counted string) []string {
 		ls := []string{counted, windowLine}
 		if provFlow.TransferCount > 0 {
@@ -1162,6 +1173,17 @@ func reportController(p reportControllerProps) ui.Node {
 		If(showFormulas.Get(), metricsModal),
 	)
 }
+
+type reportProvMemo struct {
+	flow provenance.Flow
+	nw   provenance.Balance
+}
+
+var (
+	reportHealthCache   = newViewCache[healthscore.Result](8)
+	reportEssBasisCache = newViewCache[emergencyfund.Basis](8)
+	reportProvCache     = newViewCache[reportProvMemo](8)
+)
 
 // If2 is a tiny string ternary for class/detail composition.
 func If2(cond bool, a, b string) string {

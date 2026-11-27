@@ -37,6 +37,7 @@ const maxTodoCalChips = 3
 
 type todoCalendarProps struct {
 	Tasks      []domain.Task
+	Buckets    map[string][]domain.Task
 	Month      time.Time    // any day within the month to display
 	Today      time.Time    // for the calendar's "today" ring
 	WeekStart  time.Weekday // from prefs
@@ -96,7 +97,10 @@ func TodoCalAddBtn(props todoCalAddBtnProps) ui.Node {
 
 // todoCalendarView renders the calendar schedule view over the reusable uiw.Calendar.
 func todoCalendarView(props todoCalendarProps) ui.Node {
-	buckets := taskview.ByDueDay(props.Tasks)
+	buckets := props.Buckets
+	if buckets == nil {
+		buckets = taskview.ByDueDay(props.Tasks)
+	}
 
 	// DayContent is hook-free: it only composes child components + static nodes.
 	dayContent := func(day time.Time, inMonth bool) ui.Node {

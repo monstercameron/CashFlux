@@ -51,10 +51,9 @@ var todoPageBuildObserver func()
 // Renders nothing when there are no tasks (the list tile owns the empty CTA).
 func todoSummaryWidget(props todoSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	tasks := props.App.Tasks()
 	today := dateutil.FormatDate(time.Now())
 	c := taskSnapshot(props.App, today).Counts
-	if len(tasks) == 0 {
+	if c.Total == 0 {
 		return Fragment()
 	}
 
@@ -112,8 +111,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	// hook, so a view saved on one tile is visible on the next render of another
 	// — the same reason the notification rule config is re-read on toggle.
 	savedRev := ui.UseState(0)
-	_ = savedRev.Get()
-	savedViews := uistate.LoadTodoViews()
+	savedViews := ui.UseMemo(uistate.LoadTodoViews, savedRev.Get(), revKey(props.App))
 
 	// Changing any filter/search/sort resets to the first page so the view can't land on a
 	// now-empty page.
@@ -618,6 +616,13 @@ func todoListWidget(props todoListProps) ui.Node {
 		return todoTreePage{Nodes: nodes, TotalRoots: roots}
 	}, listMode, filtered, len(filtered), revisionKey, filter, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
 
+	calMode := viewAtom.Get() == uistate.TodoViewCalendar
+	calBuckets := ui.UseMemo(func() map[string][]domain.Task {
+		if !calMode {
+			return nil
+		}
+		return taskview.ByDueDay(filtered)
+	}, calMode, filtered, len(filtered), revisionKey, filter)
 	// Board / calendar views are alternate projections of the SAME filtered set (search +
 	// priority + link + hide-done all still apply). They don't paginate or nest, so they
 	// return here, before the list-only tree/pagination work. All hooks are above, so
@@ -674,6 +679,7 @@ func todoListWidget(props todoListProps) ui.Node {
 		month := dateutil.AddMonths(dateutil.MonthStart(time.Now()), off)
 		cal := todoCalendarView(todoCalendarProps{
 			Tasks:      filtered,
+			Buckets:    calBuckets,
 			Month:      month,
 			Today:      time.Now(),
 			WeekStart:  prefsAtom.Get().WeekStartWeekday(),
@@ -907,6 +913,7 @@ func todoListWidget(props todoListProps) ui.Node {
 					Selectable:  selectMode.Get(),
 					Selected:    selected.Get()[n.Task.ID],
 					OnSelect:    toggleSelect,
+					TodayISO:    today,
 				})
 			},
 		)

@@ -5,10 +5,7 @@
 package screens
 
 import (
-	"time"
-
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -32,18 +29,8 @@ func NotificationCenter() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get()
 
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	accounts := app.Accounts()
-	txns := app.Transactions()
 	rctx := widgetrender.RenderCtx{
-		App: app, Accounts: accounts, Txns: txns,
-		ScopedAccounts: accounts, ScopedTxns: txns,
-		Rates: rates, Base: base,
-		Start: time.Time{}, End: time.Now(),
+		App: app,
 	}
 
 	// 2026-07-17 audit: alerts outrank celebration — the prioritized feed (critical
@@ -54,11 +41,14 @@ func NotificationCenter() ui.Node {
 		notifNativeSpec("notif-wins"),
 	}
 
-	live := surfaceTiles(surfaceTilesProps{Class: "bento-notif", Specs: specs, Context: rctx})
-
 	// Wrap the live feed in the Live/History view shell (notifications.go), which
 	// adds the two-way toggle and the persisted archive view.
-	return ui.CreateElement(notifSurfaceShell, notifSurfaceShellProps{App: app, Live: live})
+	return ui.CreateElement(notifSurfaceShell, notifSurfaceShellProps{
+		App: app,
+		RenderLive: func() ui.Node {
+			return surfaceTiles(surfaceTilesProps{Class: "bento-notif", Specs: specs, Context: rctx})
+		},
+	})
 }
 
 // init registers the notifications-surface widget bodies with the engine render registry.

@@ -23,6 +23,12 @@ import (
 
 // budgetRecurringWidget reads snapshots and binds navigation and budget-form
 // actions. All bill selection, calculations and presentation decisions are pure.
+type budgetRecurMemo struct {
+	input recurringview.Input
+	model recurringview.Model
+	err   error
+}
+
 func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	member := uistate.UseActiveMember().Get()
@@ -30,13 +36,20 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	open := ui.UseState(false)
 	start, end := uistate.UsePeriod().Get().Range()
 	app := props.App
-	settings := app.Settings()
-	input := recurringview.Input{
-		Recurring: app.Recurring(), Budgets: app.Budgets(), Categories: app.Categories(), Accounts: app.Accounts(),
-		BaseCurrency: settings.BaseCurrency, Rates: settings.FXRates, MemberID: member,
-		Now: time.Now(), Start: start, End: end,
-	}
-	model, err := recurringview.Build(input, uistate.T("budgets.recurring.uncategorized"), uistate.T("budgets.recurring.unnamedBill"))
+	now := time.Now()
+	dayKey := now.Format("2006-01-02")
+	lang := uistate.ActiveLanguage()
+	computed := ui.UseMemo(func() budgetRecurMemo {
+		settings := app.Settings()
+		input := recurringview.Input{
+			Recurring: app.Recurring(), Budgets: app.Budgets(), Categories: app.Categories(), Accounts: app.Accounts(),
+			BaseCurrency: settings.BaseCurrency, Rates: settings.FXRates, MemberID: member,
+			Now: now, Start: start, End: end,
+		}
+		model, err := recurringview.Build(input, uistate.T("budgets.recurring.uncategorized"), uistate.T("budgets.recurring.unnamedBill"))
+		return budgetRecurMemo{input: input, model: model, err: err}
+	}, revKey(app), member, start.Unix(), end.Unix(), dayKey, lang)
+	input, model, err := computed.input, computed.model, computed.err
 	if err != nil {
 		return Div(Attr("role", "alert"), uistate.T("budgets.annualGridError"))
 	}

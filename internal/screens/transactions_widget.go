@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
@@ -236,8 +237,10 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 	dismiss := func() { previewAtom.Set(domain.AttachmentRef{}) }
 	ref := previewAtom.Get()
 	art := domain.Artifact{}
-	if found := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); ref.ArtifactID != "" && found != nil {
-		art = *found
+	if ref.ArtifactID != "" {
+		if found := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); found != nil {
+			art = *found
+		}
 	}
 	url := useArtifactImageURL(app, art)
 	if ref.ArtifactID == "" {
@@ -312,7 +315,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	category := useTxnTableCategoryTarget(props.App)
 	renderRow := useTxnTableRows(c, category.Choose)
 	body := ui.CreateElement(txnTableBody, txnTableBodyProps{App: props.App, Filter: c.filter, Columns: c.columns,
-		Page: c.page, Total: props.Frame.Rows, Visible: c.visible, ShowBalance: c.rowContext.Balances != nil, Register: c.register,
+		Page: c.page, Total: props.Frame.Rows, Visible: c.visible, MemberCount: len(c.index.MemberNames), ShowBalance: c.rowContext.Balances != nil, Register: c.register,
 		SearchPending: c.searchPending, RenderRow: renderRow, IDAt: func(i int) any { return c.frame.ID.Str(i) },
 		OnSort: func(key string) {
 			setTxFilterOn(c.filterAtom, func(f *uistate.TxFilter) { *f = txntable.SortBy(*f, key, c.register) })
@@ -355,7 +358,9 @@ func useTxnTableData(c *txnTableController) {
 	balances := ui.UseMemo(func() map[string]money.Money {
 		return txntable.RegisterBalances(c.register, c.registerID, props.App.Accounts(), props.App.Transactions())
 	}, props.App, props.App.Rev(), c.registerID, c.register)
-	groups := txnlinks.GroupsByTxn(props.App.TxnLinks())
+	groups := ui.UseMemo(func() map[string]domain.TxnLink {
+		return txnlinks.GroupsByTxn(props.App.TxnLinks())
+	}, props.App, props.App.Rev())
 	resolver := props.App.PayeeResolver()
 	c.rowContext = txntable.RowContext{Index: c.index, Filter: c.filter, Now: time.Now(),
 		Labels: txntable.Labels{T: uistate.T, Ledger: fmtLedgerAmount, Money: fmtMoney}, Learned: resolver.HasLearned, Resolve: resolver.Resolve,
@@ -363,13 +368,16 @@ func useTxnTableData(c *txnTableController) {
 		Rates: currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates},
 	}
 	settings := uistate.LoadSmartSettings()
+	pr := uistate.UsePrefs().Get()
 	finish := txnPerfStart("flags")
-	c.smart = useTxnRowFlags(props.App, int(props.App.Rev()), settings, uistate.LoadPrefs().WeekStartWeekday())
+	c.smart = useTxnRowFlags(props.App, int(props.App.Rev()), settings, pr.WeekStartWeekday())
 	finish()
 	c.suggestionsReady = useAfterSettle("txn-suggestions")
 	c.suggestionsEnabled = settings.IsEnabled(catSuggestFreeCode)
 	useTxnFocusRow(txnFocusRowHint{Virtual: c.page.Virtual, RowHeight: txnRowHeight, Scroller: "main.cf-scroll", IndexOf: c.frame.IndexOf})
-	c.followUps = txntable.FollowUps(props.App.Tasks(), uistate.UsePrefs().Get().FormatDate)
+	c.followUps = ui.UseMemo(func() map[string]txntable.FollowUpInfo {
+		return txntable.FollowUps(props.App.Tasks(), pr.FormatDate)
+	}, props.App, props.App.Rev(), pr.DateStyle)
 	c.visible = ui.UseMemo(func() []string { return txntable.IDs(c.frame.ID, c.page.SelectionStart, c.page.SelectionEnd) },
 		props.App, props.App.Rev(), c.filter, c.frame.ID, len(c.frame.ID.Values), c.page.SelectionStart, c.page.SelectionEnd)
 }
@@ -555,24 +563,35 @@ func useTxnTableLinks(c *txnTableController) {
 
 func useTxnTableRows(c *txnTableController, choose func(string)) func(int) ui.Node {
 	cache := ui.UseRef(&txnFrameRowPropsCache{rows: make(map[string]*txnFrameRowProps)})
+	rev := int(c.props.App.Rev())
+	rs := ui.UseMemo(func() []rules.Rule {
+		return c.props.App.Rules()
+	}, c.props.App, rev)
+	vis := txnColsForScope(c.columns, c.filter.Member, len(c.index.MemberNames))
+	sel := c.selection.Get()
+	onSuggest := ui.UseCallback(func(id string) { uistate.SetCatSuggest(id) })
+	onReceiptSplit := ui.UseCallback(func(id string) { txnTableReceiptSplit(c.props.App, id) }, c.props.App)
 	return func(i int) ui.Node {
 		in := c.frame.RowAt(i)
 		row := c.index.Transactions[in.ID]
 		in.SuggestionsReady = c.suggestionsReady
-		in.Selected = c.selection.Get()[in.ID]
+		in.Selected = sel[in.ID]
 		in.Duplicate, in.Spike = c.smart.Duplicate[in.ID], c.smart.Spike[in.ID]
-		in.Automatic = txnAutoByID(c.props.App, []domain.Transaction{row}, c.props.App.Rules(), int(c.props.App.Rev()))[in.ID].IsAutomatic()
-		in.FollowUpOpen, in.FollowUpTotal = c.followUps[in.ID].Open, c.followUps[in.ID].Total
+		in.Automatic = txnIsAutomatic(c.props.App, row, rs, rev)
+		fu := c.followUps[in.ID]
+		in.FollowUpOpen, in.FollowUpTotal = fu.Open, fu.Total
 		in.SuggestedCategory = txnTableSuggestedCategory(c, row)
 		derived := txntable.DeriveRow(c.rowContext, in)
 		r := txnFramePropsFromRow(derived)
-		r.Vis = txnColsForScope(c.columns, c.filter.Member, len(c.index.MemberNames))
-		r.FollowUps = txnTableFollowUpItems(c.followUps[in.ID].Items)
+		r.Vis = vis
+		if len(fu.Items) > 0 {
+			r.FollowUps = txnTableFollowUpItems(fu.Items)
+		}
 		r.RowIndex = c.page.RowIndex(i)
 		c.actions.bind(&r)
 		r.OnChooseCategory = choose
-		r.OnSuggestCategory = func(id string) { uistate.SetCatSuggest(id) }
-		r.OnReceiptSplit = func(id string) { txnTableReceiptSplit(c.props.App, id) }
+		r.OnSuggestCategory = onSuggest
+		r.OnReceiptSplit = onReceiptSplit
 		return ui.CreateElement(txnFrameRow, cache.Get().reuse(r))
 	}
 }
@@ -667,6 +686,7 @@ type txnTableBodyProps struct {
 	Page                                 txntable.Page
 	Total                                int
 	Visible                              []string
+	MemberCount                          int
 	ShowBalance, Register, SearchPending bool
 	RenderRow                            func(int) ui.Node
 	IDAt                                 func(int) any
@@ -686,8 +706,11 @@ func txnTableColumns(props txnTableBodyProps) []uiw.Column {
 	if props.Columns.Account {
 		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAccount"), SortKey: txnTableSortKey(props.Register, "account"), Class: "td-acct txn-col-account"})
 	}
-	members := props.App.Members()
-	showUser := txnUserColumnVisible(props.Columns.User, props.Filter.Member, len(members))
+	memberCount := props.MemberCount
+	if memberCount == 0 && props.App != nil {
+		memberCount = len(props.App.Members())
+	}
+	showUser := txnUserColumnVisible(props.Columns.User, props.Filter.Member, memberCount)
 	if showUser {
 		cols = append(cols, uiw.Column{Head: txnWhoHeader(), Class: "td-user txn-col-who"})
 	}

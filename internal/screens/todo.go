@@ -51,6 +51,7 @@ type taskRowProps struct {
 	Selectable bool
 	Selected   bool
 	OnSelect   func(taskID string, shift bool)
+	TodayISO   string
 }
 
 // TaskRow renders one task with complete/edit/delete. It can be edited inline
@@ -150,11 +151,15 @@ func TaskRow(props taskRowProps) ui.Node {
 
 	// Due emphasis: overdue → red "Overdue · <date>", today → amber "Today", else a quiet
 	// right-aligned date. (Colour + word, not colour alone — B15.)
-	todayISO := dateutil.FormatDate(time.Now())
-	overdue := !done && !t.Due.IsZero() && dateutil.FormatDate(t.Due) < todayISO
-	dueToday := !done && !overdue && !t.Due.IsZero() && dateutil.FormatDate(t.Due) == todayISO
 	var dueNode ui.Node = Fragment()
 	if !t.Due.IsZero() {
+		todayISO := props.TodayISO
+		if todayISO == "" {
+			todayISO = dateutil.FormatDate(time.Now())
+		}
+		dueISO := dateutil.FormatDate(t.Due)
+		overdue := !done && dueISO < todayISO
+		dueToday := !done && !overdue && dueISO == todayISO
 		switch {
 		case overdue:
 			dueNode = Span(css.Class("todo-due is-overdue"), uistate.T("todo.overdueLabel")+" · "+pr.FormatDate(t.Due))

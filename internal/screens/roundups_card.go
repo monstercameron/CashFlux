@@ -86,18 +86,25 @@ func goalsRoundUpCard() ui.Node {
 		hidden.Set(true)
 	})
 
-	acc := roundups.Accrue(app.Transactions(), cfg.ParticipatingSet(), app.TxnLinks(), since, end)
-	goalName := roundUpGoalName(app, cfg.TargetGoalID)
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+	eligible := cfg.Enabled && cfg.TargetGoalID != "" &&
+		uistate.RoundUpPromptHandledPeriod() != periodKey && !hidden.Get()
+
+	var acc roundups.Accrual
+	var goalName, base, totalStr, accelerator string
+	if eligible {
+		acc = roundups.Accrue(app.Transactions(), cfg.ParticipatingSet(), app.TxnLinks(), since, end)
+		goalName = roundUpGoalName(app, cfg.TargetGoalID)
+		base = app.Settings().BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		cur := acc.Currency
+		if cur == "" {
+			cur = base
+		}
+		dec := currency.Decimals(cur)
+		totalStr = currency.Symbol(cur) + money.FormatMinor(acc.TotalCents, dec)
 	}
-	cur := acc.Currency
-	if cur == "" {
-		cur = base
-	}
-	dec := currency.Decimals(cur)
-	totalStr := currency.Symbol(cur) + money.FormatMinor(acc.TotalCents, dec)
 
 	onApprove := ui.UseEvent(func() {
 		if cfg.TargetGoalID == "" {
@@ -121,16 +128,15 @@ func goalsRoundUpCard() ui.Node {
 		hidden.Set(true)
 	})
 
-	// EC-13: what the round-ups are actually worth to the goal they feed, at the
-	// rate this household has really been accruing — not a theoretical one.
-	accelerator := roundUpAcceleratorLine(app, cfg.TargetGoalID, now, base)
-
 	// Gate: enabled, a goal chosen, spare change accrued, and not already handled
 	// for this cadence period, and not locally hidden this render.
-	if !cfg.Enabled || cfg.TargetGoalID == "" || !acc.HasSpareChange() ||
-		uistate.RoundUpPromptHandledPeriod() == periodKey || hidden.Get() {
+	if !eligible || !acc.HasSpareChange() {
 		return Fragment()
 	}
+
+	// EC-13: what the round-ups are actually worth to the goal they feed, at the
+	// rate this household has really been accruing — not a theoretical one.
+	accelerator = roundUpAcceleratorLine(app, cfg.TargetGoalID, now, base)
 
 	return Div(
 		css.Class("catchup-card"),

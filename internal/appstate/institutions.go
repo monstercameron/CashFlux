@@ -32,9 +32,11 @@ func (a *App) Institutions() []domain.Institution {
 	if a.ready() != nil {
 		return nil
 	}
-	v, err := a.store.ListInstitutions()
-	a.logErr("institutions", err)
-	return v
+	return a.reads.institutions.get(a.store.Rev(), func() []domain.Institution {
+		v, err := a.store.ListInstitutions()
+		a.logErr("institutions", err)
+		return v
+	})
 }
 
 // PutInstitution upserts an institution (needs an ID and a name).

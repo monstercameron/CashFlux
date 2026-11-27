@@ -111,7 +111,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		noteText: rowTitle.noteText,
 	})
 
-	metricsStrip := budgetRowMetrics(lastMonthMode, props, s, rowDisclosure.prefs)
+	var metricsStrip ui.Node
+	if rowDisclosure.detailsOpen.Get() {
+		metricsStrip = budgetRowMetrics(lastMonthMode, props, s, rowDisclosure.prefs)
+	}
 
 	// A composite budget (multi-category, cats+tags, or multi-tag) gets a spend-composition
 	// donut UNDER the full-width status bar; a single-dimension budget shows none.

@@ -157,12 +157,13 @@ func buildActivitySubscriptions(out *Activity, in ActivityInput) error {
 	}
 	nameOf := func(id string) string { return names[id] }
 	txns := in.Series.Transactions
+	classifier := subscriptions.NewRealNameClassifier(txns, in.HouseholdAccounts, nameOf, planned)
 	subs, subErr := subscriptions.Detect(txns, in.Rates, 3)
 	levels := make(map[string]subscriptions.Confidence, len(subs))
 	for _, sub := range subs {
 		level := subscriptions.Assess(sub, in.ConfirmedSubs).Level
 		levels[subscriptions.ConfirmKey(sub.Name)] = level
-		if sub.Lapsed(in.Now) || level == subscriptions.ConfidenceReview || !subscriptions.IsRealSubscriptionName(sub.Name, txns, in.HouseholdAccounts, nameOf, planned) {
+		if sub.Lapsed(in.Now) || level == subscriptions.ConfidenceReview || !classifier.IsReal(sub.Name) {
 			continue
 		}
 		out.Subscriptions = append(out.Subscriptions, sub)
@@ -178,7 +179,7 @@ func buildActivitySubscriptions(out *Activity, in ActivityInput) error {
 	}
 	changes, priceErr := subscriptions.DetectPriceChanges(txns, in.Rates, 3)
 	for _, change := range changes {
-		if change.Delta > 0 && levels[subscriptions.ConfirmKey(change.Name)] != subscriptions.ConfidenceReview && subscriptions.IsRealSubscriptionName(change.Name, txns, in.HouseholdAccounts, nameOf, planned) {
+		if change.Delta > 0 && levels[subscriptions.ConfirmKey(change.Name)] != subscriptions.ConfidenceReview && classifier.IsReal(change.Name) {
 			out.PriceRises = append(out.PriceRises, change)
 		}
 	}

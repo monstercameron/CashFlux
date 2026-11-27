@@ -38,6 +38,15 @@ func waterfallAmount(minor int64, base string) string {
 // one primary action ("Fund goals ($X)"), one "Not now" — a low-pressure moment,
 // never naggy. Its own component so the approval/dismiss hooks stay at stable
 // render positions.
+var waterfallPlanCache = newViewCache[appstate.WaterfallProposal](4)
+
+func cachedWaterfallPlan(app *appstate.App, now time.Time) appstate.WaterfallProposal {
+	key := revKey(app) + "|" + now.Format("2006-01-02")
+	return memoByRev(waterfallPlanCache, key, func() appstate.WaterfallProposal {
+		return app.WaterfallPlan(now)
+	})
+}
+
 func goalsWaterfallCard() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -53,7 +62,7 @@ func goalsWaterfallCard() ui.Node {
 	}
 
 	now := time.Now()
-	proposal := app.WaterfallPlan(now)
+	proposal := cachedWaterfallPlan(app, now)
 	if !proposal.HasProposal() {
 		return Fragment()
 	}

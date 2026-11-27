@@ -174,7 +174,10 @@ func rhyAgendaSection(props rhyAgendaProps) ui.Node {
 	// grid whose remaining days were empty and whose next obligations were one
 	// click away in a month the user could not see — strictly worse than the
 	// compact list it is meant to be a peer of.
-	calOffset := ui.UseState(rhyCalendarLanding(app, now, base))
+	initialOffset := ui.UseMemo(func() int {
+		return rhyCalendarLanding(app, now, base)
+	}, "rhy-cal-landing-init")
+	calOffset := ui.UseState(initialOffset)
 	calPrev := ui.UseEvent(Prevent(func() { calOffset.Set(calOffset.Get() - 1) }))
 	calNext := ui.UseEvent(Prevent(func() { calOffset.Set(calOffset.Get() + 1) }))
 	calToday := ui.UseEvent(Prevent(func() { calOffset.Set(0) }))
@@ -280,16 +283,16 @@ func rhyAgendaCompact(items []agendaItem, base string, showAll bool, onToggleAll
 // is the case that made the calendar read as broken.
 func rhyCalendarLanding(app *appstate.App, now time.Time, base string) int {
 	thisMonthEnd := dateutil.AddMonths(dateutil.MonthStart(now), 1)
-	ahead := buildAgendaRange(app, now, thisMonthEnd.AddDate(0, 0, agendaWindowDays), base)
-	for _, it := range ahead {
+	span := prepareAgendaSpan(app, now, now, thisMonthEnd.AddDate(0, 0, agendaWindowDays), base)
+	for _, it := range span.Occurrences {
 		if it.Date.Before(thisMonthEnd) {
 			return 0 // this month still has something in it
 		}
 	}
-	if len(ahead) == 0 {
+	if len(span.Occurrences) == 0 {
 		return 0
 	}
-	return rhyMonthOffset(now, ahead[0].Date)
+	return rhyMonthOffset(now, span.Occurrences[0].Date)
 }
 
 // rhyMonthOffset counts whole calendar months from a's month to b's month.

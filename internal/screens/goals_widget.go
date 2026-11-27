@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -46,18 +45,8 @@ func Goals() ui.Node {
 		return nil
 	})
 
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	accounts := app.Accounts()
-	txns := app.Transactions()
 	rctx := widgetrender.RenderCtx{
-		App: app, Accounts: accounts, Txns: txns,
-		ScopedAccounts: accounts, ScopedTxns: txns,
-		Rates: rates, Base: base,
-		Start: time.Time{}, End: time.Now(),
+		App: app,
 	}
 
 	specs := []domain.WidgetSpec{

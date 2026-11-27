@@ -81,17 +81,28 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 		}
 		return nil
 	}, open.Get(), year.Get(), curMonth)
-	deps := []any{revision, props.App, props.Scope, props.WeekStart, props.Now.Format("2006-01-02"), year.Get(), open.Get()}
+	deps := []any{revision, props.App, props.Scope, props.WeekStart, props.Now.Format("2006-01-02"), year.Get(), open.Get(), props.Rates.Base}
 	if props.App != nil {
-		deps = append(deps, props.App.Rev())
+		deps = append(deps, props.App.Rev(), len(props.Budgets))
+	} else {
+		// GWC compares slices by base pointer. Length makes a reslice an invalidation.
+		deps = append(deps, props.Budgets, len(props.Budgets), props.Txns, len(props.Txns), props.Cats, len(props.Cats), props.Rates)
 	}
-	// GWC compares slices by base pointer. Length makes a reslice an invalidation.
-	deps = append(deps, props.Budgets, len(props.Budgets), props.Txns, len(props.Txns), props.Cats, len(props.Cats), props.Rates)
 	build := ui.UseMemo(func() *budgetview.AnnualBuild {
 		if !open.Get() {
 			return &budgetview.AnnualBuild{}
 		}
-		value := budgetview.BuildAnnual(props.Budgets, props.Txns, props.Cats, year.Get(), props.Rates, props.WeekStart, props.Now)
+		txns := props.Txns
+		cats := props.Cats
+		if props.App != nil {
+			if len(txns) == 0 {
+				txns = budgetLedgerForApp(props.App)
+			}
+			if len(cats) == 0 {
+				cats = props.App.Categories()
+			}
+		}
+		value := budgetview.BuildAnnual(props.Budgets, txns, cats, year.Get(), props.Rates, props.WeekStart, props.Now)
 		return &value
 	}, deps...)
 	projection := useBudgetAnnualProjection(props, build, open.Get(), revision)

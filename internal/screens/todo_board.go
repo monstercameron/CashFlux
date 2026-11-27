@@ -51,7 +51,9 @@ func TaskBoardView(props TaskBoardProps) ui.Node {
 
 	now := time.Now()
 	todayISO := dateutil.FormatDate(now)
-	cols := taskboard.Columns(props.Tasks, props.By)
+	cols := ui.UseMemo(func() []taskboard.Column {
+		return taskboard.Columns(props.Tasks, props.By)
+	}, props.Rev, props.By, props.Tasks, len(props.Tasks))
 
 	return Div(css.Class("tdb-wrap"),
 		Attr("data-testid", "todo-board"),

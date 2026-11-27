@@ -357,8 +357,8 @@ func assistantInsightsDataPanel() ui.Node {
 		Div(css.Class("rpt-hero"),
 			P(css.Class("rpt-hero-eyebrow", tw.TextDim), Attr("data-testid", "ast-hero-range"),
 				uistate.T("assistant.heroRange",
-					uistate.LoadPrefs().FormatDate(window.Start),
-					uistate.LoadPrefs().FormatDate(window.End.AddDate(0, 0, -1)))),
+					pr.FormatDate(window.Start),
+					pr.FormatDate(window.End.AddDate(0, 0, -1)))),
 			Div(css.Class("rpt-hero-main"),
 				Div(
 					Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("data-countup", ""), Attr("data-testid", "ast-hero-value"), fmtMoney(money.New(mtd, base))),

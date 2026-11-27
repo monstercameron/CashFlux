@@ -87,20 +87,28 @@ func taxDepthContent(p taxDepthContentProps) ui.Node {
 		saveTaxMinor(v, func(c *uistate.TaxPlan, m int64) { c.PaidToDateMinor = m })
 	})
 
-	base := app.Settings().BaseCurrency
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 	fmtM := func(v int64) string { return fmtMoney(money.New(v, base)) }
 
-	sched := schedulec.Group(app.Transactions(), app.Categories(), props.From, props.To, rates)
-	gains := capgains.Gather(app.RealizedSales(), props.From, props.To)
-
-	catName := map[string]string{}
-	for _, c := range app.Categories() {
-		catName[c.ID] = c.Name
-	}
+	taxKey := fmt.Sprintf("%s|%d|%d|%s", revKey(app), props.From.Unix(), props.To.Unix(), base)
+	taxMemo := memoByRev(reportTaxCache, taxKey, func() reportTaxMemo {
+		cats := app.Categories()
+		catName := make(map[string]string, len(cats))
+		for _, c := range cats {
+			catName[c.ID] = c.Name
+		}
+		return reportTaxMemo{
+			sched:   schedulec.Group(app.Transactions(), cats, props.From, props.To, rates),
+			gains:   capgains.Gather(app.RealizedSales(), props.From, props.To),
+			catName: catName,
+		}
+	})
+	sched, gains, catName := taxMemo.sched, taxMemo.gains, taxMemo.catName
 	nameOf := func(id string) string {
 		if n := catName[id]; n != "" {
 			return n
@@ -444,3 +452,11 @@ func saveTaxMinor(v string, set func(*uistate.TaxPlan, int64)) {
 	set(&cur, currency.MinorFromMajor(f, base))
 	uistate.SaveTaxPlan(cur)
 }
+
+type reportTaxMemo struct {
+	sched   schedulec.Summary
+	gains   capgains.Summary
+	catName map[string]string
+}
+
+var reportTaxCache = newViewCache[reportTaxMemo](8)

@@ -102,13 +102,13 @@ func todoSuggestStripAt(app *appstate.App, now time.Time) ui.Node {
 		return tasksuggest.Scan(app.Accounts(), budgetLedgerForApp(app), app.Budgets(),
 			app.FreshnessWindows(), rates, now, uistate.LoadPrefs().WeekStartWeekday())
 	}, key, now.Format("2006-01-02"), freshnessKey.String())
+	dismissed := ui.UseMemo(loadSuggestDismissals, key)
 	if app == nil {
 		return Fragment()
 	}
 
 	// Drop dismissed-within-snooze and already-open proposals (an open task
 	// linked to the same entity from a prior Add).
-	dismissed := loadSuggestDismissals()
 	open := taskSnapshot(app, now.Format("2006-01-02")).OpenLinks
 	kept := suggestions[:0:0]
 	for _, sg := range suggestions {

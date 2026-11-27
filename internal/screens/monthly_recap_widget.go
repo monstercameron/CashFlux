@@ -6,8 +6,10 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/recap"
@@ -45,6 +47,24 @@ func recapStat(testID string, glyph icon.Name, label, value, sub, tone string) u
 // lacks), followed by the "where did it go" story (top category, biggest
 // expense, biggest change) and a no-spend-days streak. Read-only, so its cells
 // inline safely.
+type recapCacheEntry struct {
+	rec recap.MonthRecap
+	err error
+}
+
+var monthlyRecapCache = newViewCache[recapCacheEntry](8)
+
+func recapScopeSig(accts []domain.Account) string {
+	var b strings.Builder
+	for i, a := range accts {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(a.ID)
+	}
+	return b.String()
+}
+
 func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 	const widgetID = "monthly-recap"
 	// The recap follows the dashboard's SELECTED period, not the wall clock: a
@@ -56,7 +76,12 @@ func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 	if now.Before(c.Start) || !now.Before(c.End) {
 		anchor = c.End.Add(-time.Second) // last instant of the viewed period
 	}
-	rec, err := recap.Compute(anchor, c.ScopedTxns, c.ScopedAccounts, c.Rates)
+	recKey := revKey(c.App) + "|" + anchor.Format("2006-01-02") + "|" + c.Rates.Base + "|" + recapScopeSig(c.ScopedAccounts) + "|" + strconv.Itoa(len(c.ScopedTxns))
+	cached := memoByRev(monthlyRecapCache, recKey, func() recapCacheEntry {
+		r, err := recap.Compute(anchor, c.ScopedTxns, c.ScopedAccounts, c.Rates)
+		return recapCacheEntry{rec: r, err: err}
+	})
+	rec, err := cached.rec, cached.err
 	if err != nil || !rec.HasData {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: widgetID, Title: uistate.T("dashboard.monthlyRecap"),
@@ -96,9 +121,14 @@ func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 			m(rec.Expense), uistate.T("dashboard.recapSpendNew"), "")
 	}
 
+	var cats []domain.Category
+	if rec.TopCategoryID != "" || (rec.MoverHasData && rec.MoverDelta != 0 && rec.MoverID != "") {
+		cats = c.App.Categories()
+	}
+
 	// Stat 2 — Top category.
 	topStat := recapStat("recap-top", icon.Tag, uistate.T("dashboard.recapTopCategory"),
-		categoryDisplayName(c, rec.TopCategoryID), m(rec.TopCategoryAmount), "")
+		categoryDisplayNameFrom(cats, rec.TopCategoryID), m(rec.TopCategoryAmount), "")
 
 	stats := []any{css.Class("cf-recap-stats"), stat1, topStat}
 
@@ -120,7 +150,7 @@ func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 			glyph, tone, arrow, d = icon.TrendingDown, "good", "↓", -d
 		}
 		stats = append(stats, recapStat("recap-mover", glyph, uistate.T("dashboard.recapBiggestChange"),
-			categoryDisplayName(c, rec.MoverID), arrow+" "+m(d)+" "+vsLast, tone))
+			categoryDisplayNameFrom(cats, rec.MoverID), arrow+" "+m(d)+" "+vsLast, tone))
 	}
 
 	// Stat 4b — this month against TYPICAL, not against last month (EC-1). The
@@ -163,13 +193,13 @@ func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 	})
 }
 
-// categoryDisplayName resolves a category id to its name, labelling the empty id
-// (uncategorized spend) with a friendly fallback.
-func categoryDisplayName(c widgetrender.RenderCtx, id string) string {
+// categoryDisplayNameFrom resolves a category id from a preloaded category list,
+// labelling the empty id (uncategorized spend) with a friendly fallback.
+func categoryDisplayNameFrom(cats []domain.Category, id string) string {
 	if id == "" {
 		return uistate.T("dashboard.recapUncategorized")
 	}
-	for _, cat := range c.App.Categories() {
+	for _, cat := range cats {
 		if cat.ID == id {
 			return cat.Name
 		}

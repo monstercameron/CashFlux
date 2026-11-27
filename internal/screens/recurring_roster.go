@@ -79,29 +79,44 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 	base := v.Base
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
-	// Price-creep percentages by flow name (positive changes only).
-	creep := map[string]int{}
-	if changes, err := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3); err == nil {
-		for _, c := range changes {
-			if c.PercentChange > 0 {
-				creep[strings.ToLower(strings.TrimSpace(c.Name))] = c.PercentChange
+	meta := memoByRev(rhyRosterMetaCache, revKey(app)+"|"+now.Format("2006-01-02")+"|"+base, func() rhyRosterMeta {
+		// Price-creep percentages by flow name (positive changes only).
+		creep := map[string]int{}
+		if changes, err := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3); err == nil {
+			for _, c := range changes {
+				if c.PercentChange > 0 {
+					creep[strings.ToLower(strings.TrimSpace(c.Name))] = c.PercentChange
+				}
 			}
 		}
-	}
-	// Cancelled-but-present flows keep watching.
-	watching := map[string]bool{}
-	for _, c := range app.Cancellations() {
-		watching[strings.ToLower(strings.TrimSpace(c.SubName))] = true
-	}
-
-	// The Bills lens asks the SAME question the agenda already answers when it
-	// collapses a liability's statement onto the flow that pays it, so it asks it
-	// through the same helper rather than inventing a second definition.
-	anchors := bills.LiabilityAnchors(app.Accounts(), app.Recurring(), now, now.AddDate(0, 0, agendaWindowDays))
-	catName := map[string]string{}
-	for _, c := range app.Categories() {
-		catName[c.ID] = c.Name
-	}
+		// Cancelled-but-present flows keep watching.
+		watching := map[string]bool{}
+		for _, c := range app.Cancellations() {
+			watching[strings.ToLower(strings.TrimSpace(c.SubName))] = true
+		}
+		// The Bills lens asks the SAME question the agenda already answers when it
+		// collapses a liability's statement onto the flow that pays it, so it asks it
+		// through the same helper rather than inventing a second definition.
+		accts := app.Accounts()
+		anchors := bills.LiabilityAnchors(accts, app.Recurring(), now, now.AddDate(0, 0, agendaWindowDays))
+		catName := make(map[string]string, len(app.Categories()))
+		for _, c := range app.Categories() {
+			catName[c.ID] = c.Name
+		}
+		acctName := make(map[string]string, len(accts))
+		for _, ac := range accts {
+			acctName[ac.ID] = ac.Name
+		}
+		return rhyRosterMeta{
+			creep:    creep,
+			watching: watching,
+			anchors:  anchors,
+			catName:  catName,
+			acctName: acctName,
+		}
+	})
+	creep, watching, anchors, catName, acctName := meta.creep, meta.watching, meta.anchors, meta.catName, meta.acctName
+	pr := uistate.UsePrefs().Get()
 	confirmedSubs := loadConfirmedSubs()
 
 	// Lens filter.
@@ -138,12 +153,16 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 
 	rowOf := func(r domain.Recurring, isWatching bool) ui.Node {
 		fact := v.MonthlyByID[r.ID]
+		acName := acctName[r.AccountID]
+		if acName == "" {
+			acName = r.AccountID
+		}
 		return ui.CreateElement(rhyClaimRow, rhyClaimRowProps{
 			R: r, Base: base, MonthlyAmount: fact.MonthlyAmount, MonthlyAvailable: fact.MonthlyAvailable,
 			SharePercent: fact.SharePercent, ShareAvailable: fact.ShareAvailable, VarPrefix: v.VarPrefixByID[r.ID],
 			HasBudget: r.CategoryID != "" && v.BudgetedCats[r.CategoryID],
 			CreepPct:  creep[strings.ToLower(strings.TrimSpace(r.Label))],
-			Watching:  isWatching, Acts: props.Acts,
+			Watching:  isWatching, AccountName: acName, NextDate: pr.FormatDate(r.NextDue), Acts: props.Acts,
 		})
 	}
 
@@ -238,6 +257,16 @@ func recurringMagnitude(fact recurringview.FlowFact) (int64, bool) {
 	return amount, err == nil
 }
 
+type rhyRosterMeta struct {
+	creep    map[string]int
+	watching map[string]bool
+	anchors  map[string]string
+	catName  map[string]string
+	acctName map[string]string
+}
+
+var rhyRosterMetaCache = newViewCache[rhyRosterMeta](4)
+
 // rhyClaimRowProps drives one roster claim row.
 type rhyClaimRowProps struct {
 	R                domain.Recurring
@@ -250,6 +279,8 @@ type rhyClaimRowProps struct {
 	HasBudget        bool
 	CreepPct         int
 	Watching         bool
+	AccountName      string
+	NextDate         string
 	Acts             rhyActions
 }
 
@@ -333,9 +364,13 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 		chips = append(chips, Span(css.Class("rhy-badge"), uistate.T("rhythm.pausedTag")))
 	}
 	if r.AccountID != "" {
+		acName := props.AccountName
+		if acName == "" {
+			acName = rhyAccountName(r.AccountID)
+		}
 		chips = append(chips, Button(css.Class("rhy-chip is-anchor"), Type("button"),
-			Attr("data-testid", "rhy-anchor-"+r.ID), Title(uistate.T("rhythm.anchorTitle", rhyAccountName(r.AccountID))),
-			OnClick(anchorClick), rhyAccountName(r.AccountID)))
+			Attr("data-testid", "rhy-anchor-"+r.ID), Title(uistate.T("rhythm.anchorTitle", acName)),
+			OnClick(anchorClick), acName))
 	}
 	if props.CreepPct > 0 {
 		chips = append(chips, Span(css.Class("rhy-chip is-creep"), Title(uistate.T("rhythm.creepTitle")),
@@ -351,7 +386,11 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 		perMonth = uistate.T("rhythm.perMonth", fmtMoney(money.New(props.MonthlyAmount, props.Base)))
 		amountTone = recurAmountTone(money.New(props.MonthlyAmount, props.Base))
 	}
-	nextLine := recurCadence(r.Cadence) + " · " + uistate.T("rhythm.nextOn", uistate.LoadPrefs().FormatDate(r.NextDue))
+	nextDate := props.NextDate
+	if nextDate == "" {
+		nextDate = uistate.LoadPrefs().FormatDate(r.NextDue)
+	}
+	nextLine := recurCadence(r.Cadence) + " · " + uistate.T("rhythm.nextOn", nextDate)
 
 	return Div(css.Class("rhy-claim"), Attr("role", "listitem"), Attr("data-testid", "rhy-claim-"+r.ID),
 		spine,

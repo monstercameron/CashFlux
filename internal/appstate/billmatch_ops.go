@@ -163,15 +163,25 @@ func (a *App) billMatchTxns() []billmatch.Txn {
 }
 
 // billMatchLinksByOccurrence indexes existing bill-match links by their
-// occurrence key (billmatch.Key), for both the already-matched guard and paid-
-// state reads.
+// occurrence key (billmatch.Key), cached per store revision so per-occurrence
+// render checks stay O(1). Callers must not mutate the returned map.
 func (a *App) billMatchLinksByOccurrence() map[string]domain.TxnLink {
+	if a.ready() != nil {
+		return nil
+	}
+	rev := a.store.Rev()
+	if a.reads.billMatchLoaded && a.reads.billMatchRev == rev {
+		return a.reads.billMatchByOcc
+	}
 	out := map[string]domain.TxnLink{}
 	for _, l := range a.TxnLinks() {
 		if rid, due, ok := l.OccurrenceRef(); ok {
 			out[billmatch.Key(rid, due)] = l
 		}
 	}
+	a.reads.billMatchByOcc = out
+	a.reads.billMatchRev = rev
+	a.reads.billMatchLoaded = true
 	return out
 }
 
@@ -223,8 +233,8 @@ func (a *App) BillMatchVariance(recurringID string, due time.Time, expectedMinor
 	if !ok {
 		return 0, false
 	}
-	t, found, err := a.store.GetTransaction(l.Primary())
-	if err != nil || !found {
+	t, found := a.TransactionByID(l.Primary())
+	if !found {
 		return 0, false
 	}
 	return absInt64(t.Amount.Amount) - absInt64(expectedMinor), true

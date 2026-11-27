@@ -67,12 +67,21 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	if app != nil {
 		appRevision = app.Rev()
 	}
+	userPrefs := uistate.UsePrefs().Get()
 	data := ui.UseMemo(func() unbudgetedStripData {
 		if app == nil {
 			return unbudgetedStripData{}
 		}
-		rates := currency.Rates{Base: props.Base, Rates: app.Settings().FXRates}
-		computed, err := budgeting.ComputeUnbudgeted(app.Budgets(), app.Categories(), budgetLedgerForApp(app), ms, me, rates)
+		settings := app.Settings()
+		base := props.Base
+		if base == "" {
+			base = budgetBaseCurrency(base)
+		}
+		rates := currency.Rates{Base: base, Rates: settings.FXRates}
+		cats := app.Categories()
+		budgets := app.Budgets()
+		ledgerTxns := budgetLedgerForApp(app)
+		computed, err := budgeting.ComputeUnbudgeted(budgets, cats, ledgerTxns, ms, me, rates)
 		if err != nil {
 			return unbudgetedStripData{Err: err}
 		}
@@ -83,8 +92,35 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			}
 			candidates = append(candidates, candidate)
 		}
-		return unbudgetedStripData{Candidates: candidates}
-	}, dataRevision, appRevision, ms.Unix(), me.Unix(), props.Base)
+		total := len(candidates)
+		const maxChips = 4
+		visible := candidates
+		if len(visible) > maxChips {
+			visible = visible[:maxChips]
+		}
+		var payAnchor time.Time
+		if userPrefs.PayCycleAnchor != "" {
+			payAnchor, _ = time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
+		}
+		chips := make([]unbudgetedChipProps, 0, len(visible))
+		for _, c := range visible {
+			sug, err := contextCategoryBudgetMedian(c.CategoryID, cats, ledgerTxns, ms,
+				rates, userPrefs.WeekStartWeekday(), payAnchor)
+			if err != nil {
+				slog.Error("suggest unbudgeted category limit", "category_id", c.CategoryID, "error", err)
+			}
+			if sug <= 0 {
+				sug = c.Amount.Amount
+			}
+			chips = append(chips, unbudgetedChipProps{
+				CatID: c.CategoryID, CatName: c.Name,
+				SpentStr:   fmtMoney(c.Amount),
+				LimitMajor: money.FormatMinor(sug, currency.Decimals(rates.Base)),
+				Others:     hasMemberBudgetForCategory(budgets, cats, c.CategoryID),
+			})
+		}
+		return unbudgetedStripData{Total: total, Chips: chips}
+	}, dataRevision, appRevision, ms.Unix(), me.Unix(), props.Base, userPrefs.WeekStartWeekday(), userPrefs.PayCycleAnchor)
 	if app == nil {
 		return Fragment()
 	}
@@ -92,47 +128,13 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 		slog.Error("calculate unbudgeted spending", "error", data.Err)
 		return P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))
 	}
-	cands := append([]unbudgetedCat(nil), data.Candidates...)
-	if len(cands) == 0 {
+	if len(data.Chips) == 0 {
 		return Fragment()
 	}
-	// The cap is fine — this is a teaser, not an inventory — but it used to be
-	// SILENT: a household with nine untracked categories was shown four and never
-	// told the other five existed, so "tidy these up" looked finished when it was
-	// not (Cam, 2026-08-31). The count rides on the bulk link below.
-	const maxChips = 4
-	totalCands := len(cands)
-	if len(cands) > maxChips {
-		cands = cands[:maxChips]
-	}
-	settings := app.Settings()
-	rates := currency.Rates{Base: props.Base, Rates: settings.FXRates}
-	if rates.Base == "" {
-		rates.Base = budgetBaseCurrency(rates.Base)
-	}
-	userPrefs := uistate.LoadPrefs()
-	var payAnchor time.Time
-	if userPrefs.PayCycleAnchor != "" {
-		payAnchor, _ = time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
-	}
-	ledger := budgeting.NewNettedLedger(budgetLedgerForApp(app), app.TxnLinks())
+	totalCands := data.Total
 
-	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.CategoryID }, func(c unbudgetedCat) ui.Node {
-		// Only the four visible chips need a historical recommendation.
-		sug, err := contextCategoryBudgetMedian(c.CategoryID, app.Categories(), ledger.Transactions(), ms,
-			rates, userPrefs.WeekStartWeekday(), payAnchor)
-		if err != nil {
-			slog.Error("suggest unbudgeted category limit", "category_id", c.CategoryID, "error", err)
-		}
-		if sug <= 0 {
-			sug = c.Amount.Amount
-		}
-		return ui.CreateElement(unbudgetedChip, unbudgetedChipProps{
-			CatID: c.CategoryID, CatName: c.Name,
-			SpentStr:   fmtMoney(c.Amount),
-			LimitMajor: money.FormatMinor(sug, currency.Decimals(rates.Base)),
-			Others:     hasMemberBudgetForCategory(app.Budgets(), app.Categories(), c.CategoryID),
-		})
+	chips := MapKeyed(data.Chips, func(c unbudgetedChipProps) any { return c.CatID }, func(c unbudgetedChipProps) ui.Node {
+		return ui.CreateElement(unbudgetedChip, c)
 	})
 	// C607: the hint NAMES the period it describes. "this month" was true only by
 	// coincidence, and false in exactly the case a user is most likely to
@@ -160,8 +162,9 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 }
 
 type unbudgetedStripData struct {
-	Candidates []unbudgetedCat
-	Err        error
+	Total int
+	Chips []unbudgetedChipProps
+	Err   error
 }
 
 func contextCategoryBudgetMedian(categoryID string, categories []domain.Category, txns []domain.Transaction, anchor time.Time,

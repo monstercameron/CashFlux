@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -41,40 +42,50 @@ func spendMixSection(props spendMixProps) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
-	base := app.Settings().BaseCurrency
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 	fmtM := func(v int64) string { return fmtMoney(money.New(v, base)) }
 
-	mix := spendmix.Summarize(app.Transactions(), app.Categories(), props.From, props.To, rates)
+	mixKey := fmt.Sprintf("%s|%d|%d|%s|%s", revKey(app), props.From.Unix(), props.To.Unix(), base, uistate.ActiveLanguage())
+	cached := memoByRev(reportSpendMixCache, mixKey, func() spendMixMemo {
+		cats := app.Categories()
+		mix := spendmix.Summarize(app.Transactions(), cats, props.From, props.To, rates)
 
-	// Budget limits and spend come from `budgeting` — the same functions the
-	// budgets screen uses — so this table can never disagree with that screen
-	// about what was spent. Two independent computations of one figure eventually
-	// differ, and the reader has no way to tell which is lying.
-	limits := map[string]int64{}
-	spends := map[string]int64{}
-	labels := map[string]string{}
-	catName := map[string]string{}
-	for _, c := range app.Categories() {
-		catName[c.ID] = c.Name
-	}
-	for _, bg := range app.Budgets() {
-		sp, err := budgeting.Spent(bg, budgetLedgerForApp(app), props.From, props.To, rates)
-		if err != nil {
-			continue
+		// Budget limits and spend come from `budgeting` — the same functions the
+		// budgets screen uses — so this table can never disagree with that screen
+		// about what was spent. Two independent computations of one figure eventually
+		// differ, and the reader has no way to tell which is lying.
+		limits := map[string]int64{}
+		spends := map[string]int64{}
+		labels := map[string]string{}
+		catName := map[string]string{}
+		for _, c := range cats {
+			catName[c.ID] = c.Name
 		}
-		limits[bg.ID] = bg.Limit.Amount
-		spends[bg.ID] = sp.Amount
-		if n := catName[bg.CategoryID]; n != "" {
-			labels[bg.ID] = n
-		} else {
-			labels[bg.ID] = uistate.T("reports.uncategorized")
+		ledgerTxns := budgetLedgerForApp(app)
+		for _, bg := range app.Budgets() {
+			sp, err := budgeting.Spent(bg, ledgerTxns, props.From, props.To, rates)
+			if err != nil {
+				continue
+			}
+			limits[bg.ID] = bg.Limit.Amount
+			spends[bg.ID] = sp.Amount
+			if n := catName[bg.CategoryID]; n != "" {
+				labels[bg.ID] = n
+			} else {
+				labels[bg.ID] = uistate.T("reports.uncategorized")
+			}
 		}
-	}
-	variance := spendmix.Compare(limits, spends, labels, map[string]string{})
+		return spendMixMemo{
+			mix:      mix,
+			variance: spendmix.Compare(limits, spends, labels, map[string]string{}),
+		}
+	})
+	mix, variance := cached.mix, cached.variance
 
 	return rptaSection("rpta-mix", "13", uistate.T("mix.secTitle"), "neutral",
 		uistate.T("mix.secSub"), "", Fragment(
@@ -82,6 +93,13 @@ func spendMixSection(props spendMixProps) ui.Node {
 			budgetVarianceBlock(variance, fmtM),
 		))
 }
+
+type spendMixMemo struct {
+	mix      spendmix.Mix
+	variance spendmix.Report
+}
+
+var reportSpendMixCache = newViewCache[spendMixMemo](8)
 
 // spendMixBlock renders the committed-versus-chosen split.
 func spendMixBlock(m spendmix.Mix, fmtM func(int64) string) ui.Node {

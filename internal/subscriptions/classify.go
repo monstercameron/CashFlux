@@ -131,6 +131,65 @@ func IsRealSubscriptionName(name string, txns []domain.Transaction, accounts []d
 	return true
 }
 
+// RealNameClassifier pre-indexes accounts and transactions by normalized
+// description so batch callers (such as report activity summaries) can test
+// many candidate names in O(1) amortized time instead of rescanning the full
+// ledger and account list per name.
+type RealNameClassifier struct {
+	planned      map[string]bool
+	liabilityAcc map[string]bool
+	byDesc       map[string][]domain.Transaction
+	catNameOf    func(string) string
+}
+
+// NewRealNameClassifier builds an indexed classifier with identical rules to
+// IsRealSubscriptionName.
+func NewRealNameClassifier(txns []domain.Transaction, accounts []domain.Account, catNameOf func(string) string, plannedRecurring map[string]bool) *RealNameClassifier {
+	liab := make(map[string]bool, len(accounts))
+	for _, a := range accounts {
+		if a.Type.IsLiability() || a.Class == domain.ClassLiability {
+			liab[a.ID] = true
+		}
+	}
+	byDesc := make(map[string][]domain.Transaction, len(txns)/4+1)
+	for _, t := range txns {
+		key := strings.ToLower(strings.TrimSpace(t.Desc))
+		byDesc[key] = append(byDesc[key], t)
+	}
+	return &RealNameClassifier{
+		planned:      plannedRecurring,
+		liabilityAcc: liab,
+		byDesc:       byDesc,
+		catNameOf:    catNameOf,
+	}
+}
+
+// IsReal reports whether name passes the same checks as IsRealSubscriptionName.
+func (c *RealNameClassifier) IsReal(name string) bool {
+	key := strings.ToLower(strings.TrimSpace(name))
+	if c.planned != nil && c.planned[key] {
+		return false
+	}
+	if containsLenderPhrase(name) || containsEssentialPhrase(name) {
+		return false
+	}
+	for _, t := range c.byDesc[key] {
+		if c.liabilityAcc[t.AccountID] {
+			return false
+		}
+		if containsLenderPhrase(t.Payee) || containsLenderPhrase(t.Desc) {
+			return false
+		}
+		if containsEssentialPhrase(t.Payee) || containsEssentialPhrase(t.Desc) {
+			return false
+		}
+		if c.catNameOf != nil && t.CategoryID != "" && containsEssentialPhrase(c.catNameOf(t.CategoryID)) {
+			return false
+		}
+	}
+	return true
+}
+
 // essentialPhrases marks recurring EVERYDAY SPENDING that is not a cancellable
 // subscription: utilities, fuel, groceries, pharmacy/tobacco runs, rent,
 // insurance, taxes. Offering "How to cancel" for Electricity or Pharmacy (QA

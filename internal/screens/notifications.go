@@ -137,8 +137,9 @@ func UseNotifyView() state.Atom[string] { return state.UseAtom("notify:view", "l
 // notifSurfaceShellProps carries the app handle plus the already-built live
 // surface node so the shell can swap it for the archive view without rebuilding.
 type notifSurfaceShellProps struct {
-	App  *appstate.App
-	Live ui.Node
+	App        *appstate.App
+	Live       ui.Node
+	RenderLive func() ui.Node
 }
 
 // notifSurfaceShell wraps the Notifications surface with a Live/History view
@@ -175,10 +176,14 @@ func notifSurfaceShell(props notifSurfaceShellProps) ui.Node {
 		OnSelect: func(value string) { view.Set(value) },
 	})
 
-	var content ui.Node = props.Live
-	if cur == "history" {
-		content = ui.CreateElement(notificationHistoryView, notifHistoryProps{App: props.App})
-	}
+	content := ui.If(cur == "history", func() ui.Node {
+		return ui.CreateElement(notificationHistoryView, notifHistoryProps{App: props.App})
+	}, func() ui.Node {
+		if props.RenderLive != nil {
+			return props.RenderLive()
+		}
+		return props.Live
+	})
 
 	return Div(css.Class("nhx-surface"),
 		Div(css.Class("nhx-head"), toggle),
@@ -288,6 +293,8 @@ type notifyRowProps struct {
 	// id into a name for the chip (C407). Passed in rather than read from
 	// appstate so the row stays a pure function of its props.
 	Members []domain.Member
+	NowUnix int64
+	Route   string
 }
 
 // notifyRow renders one notification as a card: a severity medallion (icon) on the left,
@@ -332,7 +339,10 @@ func notifyRow(props notifyRowProps) ui.Node {
 	// re-render a past-due "due in N days" line as overdue wording instead of
 	// letting yesterday's bill claim it's still "due in 0 days".
 	body := it.ResolvedBody()
-	nowUnix := time.Now().Unix()
+	nowUnix := props.NowUnix
+	if nowUnix == 0 {
+		nowUnix = time.Now().Unix()
+	}
 	if od := uistate.OverdueDays(it.DueAt, nowUnix); od > 0 {
 		if od == 1 {
 			body = uistate.T("notifications.overdueOneDay")
@@ -345,7 +355,10 @@ func notifyRow(props notifyRowProps) ui.Node {
 		body = uistate.T("notifications.dueToday")
 	}
 
-	route := routeForNotify(it)
+	route := props.Route
+	if route == "" && props.NowUnix == 0 {
+		route = routeForNotify(it)
+	}
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
 	// A notification isn't just about a page — it's about one specific thing on it.

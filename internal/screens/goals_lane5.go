@@ -60,6 +60,13 @@ func goalConflictDetails(conflicts []goals.AccountReservation) ui.Node {
 // next paycheck (#65), before any income lands — an estimate-labelled preview
 // whose approval remains the real waterfall card the moment income arrives.
 // Renders nothing while a live proposal exists (that card owns the moment).
+type paycheckPreviewMemo struct {
+	est     int64
+	preview appstate.WaterfallProposal
+}
+
+var goalsPaycheckPreviewCache = newViewCache[paycheckPreviewMemo](4)
+
 func goalsPaycheckPreviewCard(_ struct{}) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	open := ui.UseState(false)
@@ -69,15 +76,18 @@ func goalsPaycheckPreviewCard(_ struct{}) ui.Node {
 		return Fragment()
 	}
 	now := time.Now()
-	if app.WaterfallPlan(now).HasProposal() {
+	if cachedWaterfallPlan(app, now).HasProposal() {
 		return Fragment()
 	}
-	est := app.EstimatedNextPaycheckMinor(now)
-	if est <= 0 {
-		return Fragment()
-	}
-	preview := app.WaterfallPreview(now, est)
-	if !preview.HasProposal() {
+	cached := memoByRev(goalsPaycheckPreviewCache, revKey(app)+"|"+now.Format("2006-01-02"), func() paycheckPreviewMemo {
+		est := app.EstimatedNextPaycheckMinor(now)
+		if est <= 0 {
+			return paycheckPreviewMemo{}
+		}
+		return paycheckPreviewMemo{est: est, preview: app.WaterfallPreview(now, est)}
+	})
+	est, preview := cached.est, cached.preview
+	if est <= 0 || !preview.HasProposal() {
 		return Fragment()
 	}
 	base := preview.Currency

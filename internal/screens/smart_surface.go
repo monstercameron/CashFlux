@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
@@ -49,6 +50,14 @@ func smartHeroVoice(counts engineenv.SmartCounts, openInsights int) string {
 	}
 }
 
+type smartSurfaceMemo struct {
+	insights []smart.Insight
+	capped   []smart.Insight
+	findings int
+}
+
+var smartSurfaceCache = newViewCache[smartSurfaceMemo](8)
+
 // SmartSurface is the redesigned Smart panel (the /assistant Smart tab and the
 // /smart route): ONE flattened bento surface instead of nested tabs — an
 // agent-voiced hero tile (how many features are watching, split by tier with
@@ -73,28 +82,28 @@ func SmartSurface() ui.Node {
 	conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 
 	settings := uistate.LoadSmartSettings()
-	insights := runSmart(app, weekStart, settings)
-	// Reconcile overlapping findings: two engines can reach the same conclusion,
-	// and showing it twice reads as noise. Dedupe once, up front, so both the hero
-	// count and every downstream section work off the same reconciled set.
-	insights = smart.DedupeInsights(insights)
+	surfaceKey := fmt.Sprintf("%s|%d|%s|%s|%v", revKey(app), weekStart, time.Now().Format("2006-01-02"), uistate.ActiveLanguage(), settings)
+	computed := memoByRev(smartSurfaceCache, surfaceKey, func() smartSurfaceMemo {
+		ins := runSmart(app, weekStart, settings)
+		// Reconcile overlapping findings: two engines can reach the same conclusion,
+		// and showing it twice reads as noise. Dedupe once, up front, so both the hero
+		// count and every downstream section work off the same reconciled set.
+		ins = smart.DedupeInsights(ins)
+		smart.SortInsights(ins)
+		capped := smart.CapPerRule(ins, 3)
+		findings := 0
+		for _, item := range capped {
+			if smart.NeedsAttention(item) {
+				findings++
+			}
+		}
+		return smartSurfaceMemo{insights: ins, capped: capped, findings: findings}
+	})
+	insights, findings := computed.insights, computed.findings
 	counts := liveSmartCounts()
 	density := settings.DensityOrDefault()
 
-	// The hero leads with what NEEDS the user (Warn + Alert), not the full catalog
-	// tally — a "108 findings" headline reads as homework, not help. The count is
-	// taken from the per-rule-capped, deduped set so it agrees with the default
-	// "Needs you" feed the sections render below.
-	smart.SortInsights(insights)
-	capped := smart.CapPerRule(insights, 3)
-	findings := 0
-	for _, ins := range capped {
-		if smart.NeedsAttention(ins) {
-			findings++
-		}
-	}
-
-	// ── Compact masthead (built from scratch — NO bento tile, NO astSection): just
+	// ── Compact masthead:
 	// the big FINDINGS count with its kicker/label and the agent's voice line, so the
 	// findings feed sits high on the page. The posture metrics (watching/AI/density)
 	// and the on-device promise are configuration/telemetry, not findings — they moved

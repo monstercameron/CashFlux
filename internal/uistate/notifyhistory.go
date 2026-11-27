@@ -99,17 +99,20 @@ func SyncFeedToArchive() {
 	if len(feed) == 0 {
 		return
 	}
+	routes := NotifyRoutes()
+	batch := make([]notifyhistory.Record, 0, len(feed))
 	for _, it := range feed {
-		histArchive.Add(notifyhistory.Record{
+		batch = append(batch, notifyhistory.Record{
 			ID:          it.ID,
 			Severity:    it.Severity,
 			Message:     feedMessage(it),
 			MessageText: feedMessageText(it),
-			Route:       RouteForNotifyID(it.ID),
+			Route:       RouteForNotifyIDFrom(routes, it.ID),
 			At:          it.At,
 			Read:        it.Read,
 		})
 	}
+	histArchive.AddAll(batch)
 	saveHistory()
 }
 

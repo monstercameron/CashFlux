@@ -17,15 +17,20 @@ import (
 // /accounts groupings — AC1), sorted by Order then Name so the page renders
 // sections in a stable arrangement.
 func (a *App) AccountGroups() []domain.AccountGroup {
-	v, err := a.store.ListAccountGroups()
-	a.logErr("account groups", err)
-	sort.SliceStable(v, func(i, j int) bool {
-		if v[i].Order != v[j].Order {
-			return v[i].Order < v[j].Order
-		}
-		return v[i].Name < v[j].Name
+	if a.ready() != nil {
+		return nil
+	}
+	return a.reads.accountGroups.get(a.store.Rev(), func() []domain.AccountGroup {
+		v, err := a.store.ListAccountGroups()
+		a.logErr("account groups", err)
+		sort.SliceStable(v, func(i, j int) bool {
+			if v[i].Order != v[j].Order {
+				return v[i].Order < v[j].Order
+			}
+			return v[i].Name < v[j].Name
+		})
+		return v
 	})
-	return v
 }
 
 // GetAccountGroup returns the account group with the given id and whether it exists.

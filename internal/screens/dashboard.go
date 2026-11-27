@@ -766,15 +766,26 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 	// period activity, and the tile must say so (parity-scan period contract).
 	nowT := dashboardPreparationNow()
 	viewingCurrent := !nowT.Before(start) && nowT.Before(end)
+	type mtdMemoResult struct {
+		res nwchange.Change
+		err error
+	}
+	mtdMemo := ui.UseMemo(func() mtdMemoResult {
+		if !viewingCurrent || !nw.Complete() {
+			return mtdMemoResult{}
+		}
+		r, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT)
+		return mtdMemoResult{res: r, err: err}
+	}, revKey(app), scopeSig, viewingCurrent, nw.Complete(), nowT.Format(dateutil.Layout))
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if !viewingCurrent {
 		nwSub = uistate.T("dashboard.netWorthAsOfToday")
 	} else if nw.Complete() {
-		if mtd, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT); err == nil && mtd.Known {
+		if mtdMemo.err == nil && mtdMemo.res.Known {
 			// One seam, one window, one wording for every "this month" net-worth
 			// figure in the app (C341) — the hero, /accounts, /networth and /reports
 			// used to compute this four different ways.
-			nwSub, nwTone = nwChangeSub(mtd)
+			nwSub, nwTone = nwChangeSub(mtdMemo.res)
 		}
 	}
 	// A missing FX rate excludes accounts from the total (L4) — say so on the tile,
@@ -913,12 +924,15 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 	// The dashboard welcome/hero is a widget too: a full-width placement rendered
 	// above the bento (not a packed grid cell) with ChromeHover, so it reads as clean
 	// content but is a configurable, persisted widget like any tile.
-	heroNode := ui.CreateElement(dashboardHero)
+	var heroNode ui.Node
 	if preparedLayout.Hero != nil {
 		rctx.Spec = preparedLayout.Hero.Spec
 		if node, ok := safeRender("hero", rctx); ok {
 			heroNode = node
 		}
+	}
+	if heroNode == nil {
+		heroNode = ui.CreateElement(dashboardHero)
 	}
 
 	// Persist the dashboard's placements to SQLite as first-class rows so the layout
@@ -2184,34 +2198,41 @@ func spanOf(items []dashlayout.Item, id string) (col, row int) {
 // internal/attention package under the widget's gear/flip settings. It is
 // responsive-by-span: at 1×1 it shows the single most-urgent item plus a count;
 // wider/taller it shows more. Default placement is 4×1 at the top of the grid.
+var dashAttentionCache = newViewCache[[]attention.Item](8)
+
 func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currency.Rates, start, end time.Time, dismissals freshness.Dismissals, cfg widgetcfg.Config, spanCol, spanRow int) ui.Node {
 	now := time.Now()
-
-	// Budget statuses (near/over are what the digest keeps), rolled up like the
-	// Budgets widget so parent budgets include sub-category spend.
-	cats := app.Categories()
-	budgetLedger := budgetLedgerForTransactions(app, txns)
-	statuses := make([]budgeting.Status, 0, len(app.Budgets()))
-	bs, be := dateutil.MonthRange(now)
-	for _, b := range app.Budgets() {
-		if st, err := budgeting.EvaluateRollup(b, budgetLedger, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
-			statuses = append(statuses, st)
+	acfg := attentionConfig(cfg)
+	cacheKey := fmt.Sprintf("%s|%s|%d|%s|%v|%v", revKey(app), now.Format(dateutil.Layout), len(txns), rates.Base, acfg, dismissals)
+	items := memoByRev(dashAttentionCache, cacheKey, func() []attention.Item {
+		// Budget statuses (near/over are what the digest keeps), rolled up like the
+		// Budgets widget so parent budgets include sub-category spend.
+		cats := app.Categories()
+		accts := app.Accounts()
+		budgets := app.Budgets()
+		budgetLedger := budgetLedgerForTransactions(app, txns)
+		statuses := make([]budgeting.Status, 0, len(budgets))
+		bs, be := dateutil.MonthRange(now)
+		for _, b := range budgets {
+			if st, err := budgeting.EvaluateRollup(b, budgetLedger, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
+				statuses = append(statuses, st)
+			}
 		}
-	}
 
-	var anomalyPtr *insights.Anomaly
-	if anomalies := detectSpendingAnomaliesMemo(app, "dash-attention", txns, cats, rates); len(anomalies) > 0 {
-		anomalyPtr = &anomalies[0]
-	}
+		var anomalyPtr *insights.Anomaly
+		if anomalies := detectSpendingAnomaliesMemo(app, "dash-attention", txns, cats, rates); len(anomalies) > 0 {
+			anomalyPtr = &anomalies[0]
+		}
 
-	items := attention.Rank(attention.Inputs{
-		Now:     now,
-		Bills:   bills.UpcomingAll(app.Accounts(), app.Recurring(), now),
-		Budgets: statuses,
-		Stale:   freshness.VisibleStaleAccounts(app.Accounts(), app.FreshnessWindows(), dismissals, now),
-		Tasks:   app.Tasks(),
-		Anomaly: anomalyPtr,
-	}, attentionConfig(cfg))
+		return attention.Rank(attention.Inputs{
+			Now:     now,
+			Bills:   bills.UpcomingAll(accts, app.Recurring(), now),
+			Budgets: statuses,
+			Stale:   freshness.VisibleStaleAccounts(accts, app.FreshnessWindows(), dismissals, now),
+			Tasks:   app.Tasks(),
+			Anomaly: anomalyPtr,
+		}, acfg)
+	})
 
 	base := rates.Base
 	var body ui.Node
@@ -2339,6 +2360,8 @@ const digestCap = 3
 // dial permits dashboard widgets. Strictly additive: if no features are enabled or
 // no insights are active, it renders the neutral empty hint rather than nothing,
 // so the tile still makes sense in the widget manager. Returns a full bento tile.
+var dashSmartDigestCache = newViewCache[[]smart.Insight](8)
+
 func smartDigestWidget(app *appstate.App) ui.Node {
 	pr := uistate.UsePrefs().Get()
 	settings := uistate.LoadSmartSettings()
@@ -2353,11 +2376,15 @@ func smartDigestWidget(app *appstate.App) ui.Node {
 		})
 	}
 
-	in := buildSmartInput(app, pr.WeekStartWeekday())
-	all := smartengine.Run(in, settings)
-	if len(all) > digestCap {
-		all = all[:digestCap]
-	}
+	digestKey := fmt.Sprintf("%s|%d|%s|%s|%v", revKey(app), pr.WeekStartWeekday(), time.Now().Format(dateutil.Layout), uistate.ActiveLanguage(), settings)
+	all := memoByRev(dashSmartDigestCache, digestKey, func() []smart.Insight {
+		in := buildSmartInput(app, pr.WeekStartWeekday())
+		res := smartengine.Run(in, settings)
+		if len(res) > digestCap {
+			res = res[:digestCap]
+		}
+		return res
+	})
 
 	var body ui.Node
 	if len(all) == 0 {

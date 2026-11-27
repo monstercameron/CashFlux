@@ -80,7 +80,10 @@ func (a *App) TxnLinksChecked() ([]domain.TxnLink, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("read transaction links: local dataset is unavailable")
 	}
-	links, err := a.store.ListTxnLinks()
+	if err := a.store.CheckReady(); err != nil {
+		return nil, fmt.Errorf("read transaction links: %w", err)
+	}
+	links, err := a.reads.txnLinks.getChecked(a.store.Rev(), a.store.ListTxnLinks)
 	if err != nil {
 		return nil, fmt.Errorf("read transaction links: %w", err)
 	}

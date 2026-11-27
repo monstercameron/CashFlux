@@ -79,6 +79,42 @@ func (a *Archive) Add(r Record) {
 	}
 }
 
+// AddAll inserts a batch of records with the same deduplication, ordering, and
+// cap semantics as calling Add for each record in order, while sorting only once.
+func (a *Archive) AddAll(records []Record) {
+	if len(records) == 0 {
+		return
+	}
+	incoming := make(map[string]int, len(records))
+	for i, r := range records {
+		if r.ID != "" {
+			incoming[r.ID] = i
+		}
+	}
+	kept := make([]Record, 0, len(a.Items)+len(records))
+	for _, it := range a.Items {
+		if it.ID != "" {
+			if _, replaced := incoming[it.ID]; replaced {
+				continue
+			}
+		}
+		kept = append(kept, it)
+	}
+	for i, r := range records {
+		if r.ID != "" && incoming[r.ID] != i {
+			continue
+		}
+		kept = append(kept, r)
+	}
+	sort.SliceStable(kept, func(i, j int) bool {
+		return kept[i].At > kept[j].At
+	})
+	if len(kept) > maxRecords {
+		kept = kept[:maxRecords]
+	}
+	a.Items = kept
+}
+
 // Filter returns the records whose Message contains query (case-insensitive)
 // and — when severity is non-empty — whose Severity matches it exactly. An
 // empty query matches everything. Order is preserved (newest first). The result

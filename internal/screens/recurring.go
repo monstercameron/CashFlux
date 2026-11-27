@@ -300,8 +300,10 @@ func computeRhythm(app *appstate.App, now time.Time, withDiscovery bool) rhythmV
 	// last-seen, so the death check reuses the engine's own rhythm). The
 	// charged-after-cancel scan is cheap and stays on the first paint; the stopped
 	// check rides on discovery and so arrives with it.
-	rv.LateCharges, _ = subscriptions.ChargedAfterCancel(app.Transactions(), app.Cancellations(), rv.Rates)
-	rv.Cancellations, rv.Txns = app.Cancellations(), app.Transactions()
+	cancellations := app.Cancellations()
+	txns := app.Transactions()
+	rv.LateCharges, _ = subscriptions.ChargedAfterCancel(txns, cancellations, rv.Rates)
+	rv.Cancellations, rv.Txns = cancellations, txns
 	for _, cm := range rv.Discover.CycleMatches {
 		if ss, ok := recurdiscover.DetectStopped(cm.CommitmentID, cm.Evidence.Cadence, cm.Evidence.LastSeen, now, 7); ok {
 			rv.Stopped = append(rv.Stopped, ss)
@@ -443,10 +445,12 @@ func RhythmSurface(props rhythmSurfaceProps) ui.Node {
 		rhySlot(If(settled, ui.CreateElement(rhyRosterSection, rhyRosterProps{Focus: props.Focus, Acts: acts}))),
 		rhyFindingsSection(rv, acts),
 		rhyToolbar(rv, postMsg.Get(), showMetrics.Get(), postDue, toggleMetrics, csv),
-		If(showMetrics.Get(), Div(css.Class("rhy-section"),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("recurring.formulaHint")),
-			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("recurring.metricsTitle"), ShowSaved: true}),
-		)),
+		ui.If(showMetrics.Get(), func() ui.Node {
+			return Div(css.Class("rhy-section"),
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("recurring.formulaHint")),
+				ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("recurring.metricsTitle"), ShowSaved: true}),
+			)
+		}),
 	)
 }
 

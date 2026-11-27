@@ -501,13 +501,20 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// the same question the same way. The window starts at UTC midnight because
 	// transaction dates are UTC-midnight calendar dates. A local month start would miss
 	// the first-of-month transactions.
+	now := time.Now()
+	dayKey := now.Format(dateutil.Layout)
 	mtd := nwchange.Change{}
 	mtdKnown := nw.Complete()
 	if nw.Complete() {
-		var err error
-		if mtd, err = nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now()); err != nil {
-			slog.Warn("accounts: month-to-date net-worth change is unavailable", "err", err)
+		cached := memoByRev(acctMTDCache, revKey(app)+"|"+dayKey+"|"+props.Rates.Base, func() acctMTDMemo {
+			c, err := nwchange.MonthToDateChange(accounts, txns, props.Rates, now)
+			return acctMTDMemo{change: c, err: err}
+		})
+		if cached.err != nil {
+			slog.Warn("accounts: month-to-date net-worth change is unavailable", "err", cached.err)
 			mtdKnown = false
+		} else {
+			mtd = cached.change
 		}
 	}
 	deltaMinor, deltaErr := mtd.DeltaMinorChecked()
@@ -521,7 +528,6 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	smartSettings := uistate.LoadSmartSettings()
 
 	// The six-month net-worth shape the Dashboard hero also draws, so the two agree.
-	now := time.Now()
 	// The trend is deferred one settle, as the Dashboard hero defers its own, so the
 	// header never adds work to the first paint.
 	settled := useAfterDelay("acct-headline", 700*time.Millisecond)
@@ -530,7 +536,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 			return nil
 		}
 		return dashboardview.BuildNetWorthTrend(accounts, txns, props.Rates, now).Spark
-	}, rev, settled, now.Format(dateutil.Layout), nw.Complete())
+	}, rev, settled, dayKey, nw.Complete())
 	trendVisual := uiw.PageHeadlineTrend(uiw.PageHeadlineTrendProps{
 		Values: spark, Label: uistate.T("dashboard.netWorth"), GradientID: "acct-headline-trend",
 		Pending: nw.Complete() && !settled, PendingLabel: uistate.T("accounts.trendLoading"),
@@ -584,6 +590,18 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	})
 }
 
+type acctMTDMemo struct {
+	change nwchange.Change
+	err    error
+}
+
+var acctMTDCache = newViewCache[acctMTDMemo](8)
+var acctIdleCashCache = newViewCache[struct {
+	res idlecash.Result
+	err error
+}](8)
+var acctLiquidityCache = newViewCache[accountview.LiquidityView](8)
+
 // excludesByChoiceKey picks the singular or plural disclosure key for n accounts the
 // household has left out of net worth.
 func excludesByChoiceKey(n int) string {
@@ -604,11 +622,23 @@ func acctIdleCashLine(app *appstate.App, rates currency.Rates, onAllocate ui.Han
 	if benchmark <= 0 {
 		return Fragment()
 	}
-	res, err := idlecash.FromLedger(idlecash.LedgerInputs{
-		Accounts: app.Accounts(), Balances: accountSnapshot(app).Balances,
-		Recurring: app.Recurring(), Goals: app.Goals(),
-		Rates: rates, Now: time.Now(), BenchmarkAPRPercent: benchmark,
+	now := time.Now()
+	cacheKey := revKey(app) + "|" + strconv.FormatFloat(benchmark, 'f', -1, 64) + "|" + now.Format(dateutil.Layout) + "|" + rates.Base
+	cached := memoByRev(acctIdleCashCache, cacheKey, func() struct {
+		res idlecash.Result
+		err error
+	} {
+		res, err := idlecash.FromLedger(idlecash.LedgerInputs{
+			Accounts: app.Accounts(), Balances: accountSnapshot(app).Balances,
+			Recurring: app.Recurring(), Goals: app.Goals(),
+			Rates: rates, Now: now, BenchmarkAPRPercent: benchmark,
+		})
+		return struct {
+			res idlecash.Result
+			err error
+		}{res: res, err: err}
 	})
+	res, err := cached.res, cached.err
 	if err != nil {
 		slog.Warn("accounts: idle cash is unavailable", "err", err)
 		return Fragment()
@@ -638,7 +668,10 @@ var liquidityBucketCopy = map[liquidity.Class]struct{ key, testID string }{
 // buckets show and in what order. Rate-less accounts are skipped, consistent with the
 // net-worth exclusion disclosure above.
 func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.Node {
-	v := accountview.Liquidity(app.Accounts(), accountSnapshot(app).Balances, rates, base, time.Now())
+	now := time.Now()
+	v := memoByRev(acctLiquidityCache, revKey(app)+"|"+base+"|"+now.Format(dateutil.Layout), func() accountview.LiquidityView {
+		return accountview.Liquidity(app.Accounts(), accountSnapshot(app).Balances, rates, base, now)
+	})
 	if !v.Visible() {
 		return Fragment()
 	}
@@ -1103,12 +1136,13 @@ func acctListWidget(props acctListProps) ui.Node {
 	// Services are recurring bills, not accounts. They have their own class view, which
 	// stays on once it is chosen, even before the household has any service, so its
 	// empty state can be seen.
+	allAccounts := app.Accounts()
 	serviceList := app.Services()
-	utilities := utilityAccounts(app.Accounts())
+	utilities := utilityAccounts(allAccounts)
 	utilityCharged := utilityCharges(utilities, app.Recurring())
 	hasServices := len(serviceList) > 0 || len(utilities) > 0
 	list := accountview.List(accountview.ListInput{
-		Accounts: app.Accounts(), MemberID: activeMemberID, Class: f.Class,
+		Accounts: allAccounts, MemberID: activeMemberID, Class: f.Class,
 		ServicesClass: serviceClassView, Match: f.Matches,
 	})
 	hasLiab := len(list.Liabilities) > 0
@@ -1184,7 +1218,9 @@ func acctListWidget(props acctListProps) ui.Node {
 				}
 				return Div(ClassStr(groupCls),
 					ui.CreateElement(acctGroupHeader, acctGroupHeaderProps{Section: s, Collapsed: collapsed}),
-					If(!collapsed, Div(css.Class("rows"), MapKeyed(s.Accounts, accountRowKey, renderRow))),
+					ui.If(!collapsed, func() ui.Node {
+						return Div(css.Class("rows"), MapKeyed(s.Accounts, accountRowKey, renderRow))
+					}),
 				)
 			}),
 		)
@@ -1350,7 +1386,9 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	feed := newAcctRowFeed(app, accountSnapshot(app), acctViewTransactions(nav, txFilter), acctViewBillPayments(nav, txFilter), time.Now())
 	renderRow := func(ac domain.Account) ui.Node {
 		row := feed.props(ac)
-		row.ValuationHistory = app.BalanceHistory(ac.ID)
+		if ac.Type.IsValuation() {
+			row.ValuationHistory = app.BalanceHistory(ac.ID)
+		}
 		return ui.CreateElement(AccountRow, row)
 	}
 	bodyContent := ui.If(len(shown) == 0, func() ui.Node {

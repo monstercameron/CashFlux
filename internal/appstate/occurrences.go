@@ -13,24 +13,47 @@ package appstate
 
 import (
 	"encoding/json"
+	"maps"
 	"time"
 )
 
 const occurrencesPaidKVKey = "cashflux:occurrences:paid"
 
-// loadPaidMap reads the persisted paid-status map from KV storage. It returns
-// an empty (non-nil) map when no data has been written yet.
-func (a *App) loadPaidMap() map[string]int64 {
+// cachedPaidMap returns a shared read-only view of the persisted paid-status
+// map for the current store revision. Callers must not mutate the returned map.
+func (a *App) cachedPaidMap() map[string]int64 {
+	if a.ready() != nil {
+		return nil
+	}
+	rev := a.store.Rev()
+	if a.reads.paidMapLoaded && a.reads.paidMapRev == rev {
+		return a.reads.paidMap
+	}
 	raw, ok := a.GetKV(occurrencesPaidKVKey)
-	if !ok || raw == "" {
-		return map[string]int64{}
-	}
 	var m map[string]int64
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		a.log.Error("occurrences: corrupt paid map; resetting", "err", err)
+	if ok && raw != "" {
+		if err := json.Unmarshal([]byte(raw), &m); err != nil {
+			a.log.Error("occurrences: corrupt paid map; resetting", "err", err)
+			m = map[string]int64{}
+		}
+	}
+	if m == nil {
+		m = map[string]int64{}
+	}
+	a.reads.paidMap = m
+	a.reads.paidMapRev = rev
+	a.reads.paidMapLoaded = true
+	return m
+}
+
+// loadPaidMap reads a mutable copy of the persisted paid-status map from KV
+// storage. It returns an empty (non-nil) map when no data has been written yet.
+func (a *App) loadPaidMap() map[string]int64 {
+	m := a.cachedPaidMap()
+	if len(m) == 0 {
 		return map[string]int64{}
 	}
-	return m
+	return maps.Clone(m)
 }
 
 // savePaidMap writes the paid-status map back to KV storage.
@@ -76,7 +99,7 @@ func (a *App) UnmarkOccurrencePaid(billID string, due time.Time) error {
 // OccurrencePaid reports whether billID/due has been marked paid. It is safe
 // to call from render functions; the underlying KV read is O(1) per call.
 func (a *App) OccurrencePaid(billID string, due time.Time) bool {
-	m := a.loadPaidMap()
+	m := a.cachedPaidMap()
 	_, ok := m[occurrenceKey(billID, due)]
 	return ok
 }

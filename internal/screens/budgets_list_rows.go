@@ -35,7 +35,9 @@ type budgetListRowsProps struct {
 
 func budgetListRows(props budgetListRowsProps) ui.Node {
 	cbs := buildBudgetRowCallbacks(props.App, props.View.Base, props.View.CatName)
-	todoCounts := budgetTodoCounts(props.App.Tasks())
+	todoCounts := ui.UseMemo(func() map[string]int {
+		return budgetTodoCounts(props.App.Tasks())
+	}, revKey(props.App))
 	return Fragment(MapKeyed(props.Statuses,
 		func(s budgeting.Status) any { return s.Budget.ID },
 		func(s budgeting.Status) ui.Node {
@@ -108,9 +110,15 @@ func budgetListFilled(props budgetListFilledProps) ui.Node {
 		matchNote = Div(css.Class("budget-search-empty"), Attr("data-testid", "budgets-search-empty"),
 			Attr("role", "status"), uistate.T("budgets.searchNoMatch", strings.TrimSpace(props.Search)))
 	}
+	members := ui.UseMemo(func() []domain.Member {
+		return props.App.Members()
+	}, revKey(props.App))
+	budgetDefs := ui.UseMemo(func() []customfields.Def {
+		return props.App.CustomFieldDefsFor("budget")
+	}, revKey(props.App))
 	rows := ui.CreateElement(budgetListRows, budgetListRowsProps{
-		App: props.App, View: props.View, Statuses: visible, Members: props.App.Members(),
-		BudgetDefs: props.App.CustomFieldDefsFor("budget"), Compact: props.Compact,
+		App: props.App, View: props.View, Statuses: visible, Members: members,
+		BudgetDefs: budgetDefs, Compact: props.Compact,
 		OnDrill: props.OnDrill, OnViewTodos: props.OnViewTodos,
 	})
 	start, end := props.Period.Range()

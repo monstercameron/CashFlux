@@ -51,8 +51,9 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 		return Fragment()
 	}
 	now := time.Now()
-	evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(props.App), now)
-	min, max, step, ok := evaluation.SliderRange(g, goalRates(props.App))
+	rates := goalRates(props.App)
+	evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, rates, now)
+	min, max, step, ok := evaluation.SliderRange(g, rates)
 	if !ok {
 		return Fragment()
 	}
@@ -146,7 +147,8 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 	// Coordinate with GL2: when the goal draws on an APY-bearing account, project
 	// the finish with monthly compounding (goalinterest); else fall back to the
 	// linear slider point. On-track is judged against the goal's target date.
-	finish, hasFinish := planFinish(props.App, g, cur.Get(), now)
+	apy := goalLinkedAPY(props.App, g)
+	finish, hasFinish := planFinishEvaluated(evaluation, apy, g, cur.Get(), now)
 	onTrack := hasFinish && !g.TargetDate.IsZero() && !finish.After(g.TargetDate)
 	var readout ui.Node
 	switch {
@@ -175,7 +177,7 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 	}
 	var compareRows []ui.Node
 	for _, p := range plans {
-		fin, has := planFinish(props.App, g, p.minor, now)
+		fin, has := planFinishEvaluated(evaluation, apy, g, p.minor, now)
 		dateTxt := uistate.T("goals.compareNoLanding")
 		if has {
 			dateTxt = fin.Format("Jan 2006")
@@ -231,10 +233,13 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 // slider math. It returns hasFinish=false when no finish can be projected.
 func planFinish(app *appstate.App, g domain.Goal, monthlyMinor int64, now time.Time) (time.Time, bool) {
 	evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(app), now)
+	return planFinishEvaluated(evaluation, goalLinkedAPY(app, g), g, monthlyMinor, now)
+}
+
+func planFinishEvaluated(evaluation goalsvc.Evaluation, apy float64, g domain.Goal, monthlyMinor int64, now time.Time) (time.Time, bool) {
 	if evaluation.Err != nil {
 		return time.Time{}, false
 	}
-	apy := goalLinkedAPY(app, g)
 	if apy > 0 {
 		p := goalinterest.Project(evaluation.Coverage.Covered.Amount, monthlyMinor, g.TargetAmount.Amount, apy)
 		if !p.Reached {

@@ -599,7 +599,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 func txnToolbarChipLabel(props txnToolbarRenderProps) func(txnfilter.ActiveFilter) string {
 	names := txntoolbar.Indexes{Accounts: props.Indexes.accountNames, Categories: props.Indexes.categoryNames, Members: props.Indexes.memberNames}
-	customLabel := customFieldLabel(props.App.CustomFieldDefsFor("transaction"), props.Own.CustomKey)
+	customLabel := ""
+	if props.Own.CustomKey != "" {
+		customLabel = customFieldLabel(props.App.CustomFieldDefsFor("transaction"), props.Own.CustomKey)
+	}
 	p := txntoolbar.Presentation{Text: uistate.T, Money: fmtMoney, Date: uistate.LoadPrefs().FormatDate}
 	return func(af txnfilter.ActiveFilter) string { return p.FilterChipLabel(af, names, props.Base, customLabel) }
 }
@@ -1536,32 +1539,34 @@ func txnBulkOwnerPicker(props txnBulkOwnerPickerProps) ui.Node {
 			open.Set(true)
 		}
 	}))
-	rows := MapKeyed(props.Options,
-		func(option txnBulkPickerOption) any { return option.Value },
-		func(option txnBulkPickerOption) ui.Node {
-			return ui.CreateElement(txnBulkOwnerOption, txnBulkOwnerOptionProps{
-				ID: props.ID + "-option-" + option.Value, Option: option,
-				Selected: containsStr(selected.Get(), option.Value),
-				OnToggle: func(value string) { selected.Set(txnBulkOwnerChoice(selected.Get(), value)) },
-			})
-		},
-	)
-	listbox := Div(css.Class("cf-multipicker-list", tw.Flex, tw.FlexWrap, tw.Gap2),
-		Attr("id", props.ID+"-listbox"), Attr("role", "listbox"),
-		Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), rows)
 	trigger := uiw.ToolButton(uiw.ToolButtonProps{
 		Icon: icon.Users, Label: props.Label, AriaLabel: props.Label, TestID: props.TestID, Open: open.Get(),
 	}, Attr("id", props.ID), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
 		Attr("aria-controls", props.ID+"-listbox"), OnClick(onToggle))
 	// The choices stage inside the panel and apply when it closes, so Done and the close
 	// button both commit the selection.
-	sheet := If(open.Get(), uiw.PortalFlipPanel(uiw.FlipPanelProps{
-		Title: props.Label, Width: uiw.FlipSmallW, Height: uiw.FlipSmallH,
-		NoFooter: true, FlushBody: true, OnClose: cancel,
-		Back: Div(css.Class("modal-scroll"), listbox,
-			Div(css.Class("modal-foot"),
-				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", props.TestID+"-done"), OnClick(done), uistate.T("action.done")))),
-	}, props.ID+"-surface", ui.PortalTarget{}))
+	sheet := ui.If(open.Get(), func() ui.Node {
+		rows := MapKeyed(props.Options,
+			func(option txnBulkPickerOption) any { return option.Value },
+			func(option txnBulkPickerOption) ui.Node {
+				return ui.CreateElement(txnBulkOwnerOption, txnBulkOwnerOptionProps{
+					ID: props.ID + "-option-" + option.Value, Option: option,
+					Selected: containsStr(selected.Get(), option.Value),
+					OnToggle: func(value string) { selected.Set(txnBulkOwnerChoice(selected.Get(), value)) },
+				})
+			},
+		)
+		listbox := Div(css.Class("cf-multipicker-list", tw.Flex, tw.FlexWrap, tw.Gap2),
+			Attr("id", props.ID+"-listbox"), Attr("role", "listbox"),
+			Attr("aria-label", props.Label), Attr("aria-multiselectable", "true"), rows)
+		return uiw.PortalFlipPanel(uiw.FlipPanelProps{
+			Title: props.Label, Width: uiw.FlipSmallW, Height: uiw.FlipSmallH,
+			NoFooter: true, FlushBody: true, OnClose: cancel,
+			Back: Div(css.Class("modal-scroll"), listbox,
+				Div(css.Class("modal-foot"),
+					Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", props.TestID+"-done"), OnClick(done), uistate.T("action.done")))),
+		}, props.ID+"-surface", ui.PortalTarget{})
+	})
 	return Fragment(trigger, sheet)
 }
 

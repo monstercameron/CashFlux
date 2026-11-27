@@ -1734,8 +1734,11 @@ func Insights() ui.Node {
 
 	// Chat header controls (New chat, the Advanced expander with Edit prompt) —
 	// the saved-conversation pills moved to the rail so the thread stays the page.
-	convs := app.Conversations()
-	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
+	convs := memoByRev(insightsConvsCache, revKey(app), func() []domain.Conversation {
+		list := app.Conversations()
+		sort.Slice(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
+		return list
+	})
 	// Standard header actions: New chat + Edit prompt as labeled .btn-tool buttons (the
 	// app-wide toolbar-button standard). The old "Advanced" expander that only revealed
 	// Edit prompt is gone — it was a click to hide a single option.
@@ -1771,36 +1774,50 @@ func Insights() ui.Node {
 		sharePersona = defaultChatSystemPrompt
 	}
 	shareMem := uistate.LoadAgentMemory().Prompt()
-	shareChars := len(sharePersona) + len(aiCtx.Line()) + len(categoryNames(app.Categories())) + len(customFieldsSummary(app.CustomFieldDefs())) + len(shareMem)
+	shareMeta := memoByRev(insightsShareMetaCache, revKey(app), func() insightsShareMeta {
+		cats := app.Categories()
+		defs := app.CustomFieldDefs()
+		return insightsShareMeta{
+			catCount:     len(cats),
+			catNamesLen:  len(categoryNames(cats)),
+			cfCount:      len(defs),
+			cfSummaryLen: len(customFieldsSummary(defs)),
+		}
+	})
+	shareChars := len(sharePersona) + len(aiCtx.Line()) + shareMeta.catNamesLen + shareMeta.cfSummaryLen + len(shareMem)
 	for _, t := range turns.Get() {
 		shareChars += len(t.Text)
 	}
 	shareEstTokens := shareChars / 4
-	chatControls := Div(css.Class("ask-controls"), Attr("data-testid", "assistant-controls"),
-		Attr("role", "group"), Attr("aria-label", uistate.T("assistant.controlsLabel")),
-		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
-		If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
-		budgetPicker(budgetPickerProps{
-			Budget: budgetCap, Used: budgetUsed, Remaining: budgetLeft, Capped: budgetCapped, OnPick: pickBudget,
-		}),
-		privacyChip(privacyChipProps{Tier: tier, OnToggle: togglePrivacy}),
-		// Pre-send data-sharing preview: what the NEXT message will carry, with a
-		// rough token estimate, mirroring buildMessages' actual inputs.
-		sharePreview(sharePreviewProps{
-			Tier: tier, CtxLine: aiCtx.Line(),
-			Categories: len(app.Categories()), CustomFields: len(app.CustomFieldDefs()),
-			MemoryOn: shareMem != "", Turns: len(turns.Get()),
-			EstTokens: shareEstTokens,
-		}),
-		Div(css.Class("ask-ctrl-actions"),
-			// C251: editing the system prompt is meaningless without a model to send
-			// it to. Showing the control to a keyless user offers a setting that
-			// cannot have an effect, which reads as the feature being broken.
-			If(!noAI, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
-				Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
-				uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt")))),
-		),
-	)
+	chatControls := ui.If(ctrlOpen.Get(), func() ui.Node {
+		return Div(Attr("id", "ask-settings-drawer"), css.Class("ask-settings-drawer"),
+			Div(css.Class("ask-controls"), Attr("data-testid", "assistant-controls"),
+				Attr("role", "group"), Attr("aria-label", uistate.T("assistant.controlsLabel")),
+				modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
+				If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
+				budgetPicker(budgetPickerProps{
+					Budget: budgetCap, Used: budgetUsed, Remaining: budgetLeft, Capped: budgetCapped, OnPick: pickBudget,
+				}),
+				privacyChip(privacyChipProps{Tier: tier, OnToggle: togglePrivacy}),
+				// Pre-send data-sharing preview: what the NEXT message will carry, with a
+				// rough token estimate, mirroring buildMessages' actual inputs.
+				sharePreview(sharePreviewProps{
+					Tier: tier, CtxLine: aiCtx.Line(),
+					Categories: shareMeta.catCount, CustomFields: shareMeta.cfCount,
+					MemoryOn: shareMem != "", Turns: len(turns.Get()),
+					EstTokens: shareEstTokens,
+				}),
+				Div(css.Class("ask-ctrl-actions"),
+					// C251: editing the system prompt is meaningless without a model to send
+					// it to. Showing the control to a keyless user offers a setting that
+					// cannot have an effect, which reads as the feature being broken.
+					If(!noAI, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
+						Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
+						uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt")))),
+				),
+			),
+		)
+	})
 	// Bespoke aside group: the saved conversations as a quiet vertical index.
 	// G2-C7: the rail searches titles AND message text together, because someone
 	// hunting for "the chat about the car insurance" does not remember whether that
@@ -1929,47 +1946,51 @@ func Insights() ui.Node {
 	// A compact recent-conversations list in the empty body so the sparse chat
 	// space works and returning users can resume a chat without opening the side
 	// rail (detail5). Top 3 from the already-sorted conversation state.
-	recentBlock := Fragment()
-	if len(convs) > 0 {
-		recent := convs
-		if len(recent) > 3 {
-			recent = recent[:3]
-		}
-		recentBlock = Div(css.Class("asst-recent", tw.Mt1), Attr("data-testid", "assistant-recent-convos"),
-			Span(css.Class("asst-recent-label", tw.Text12, tw.FontSemibold, tw.TextFaint), uistate.T("detail5.recentLabel")),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
-				MapKeyed(recent,
-					func(c domain.Conversation) any { return c.ID },
-					func(c domain.Conversation) ui.Node {
-						return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
-					},
+	heroBlock := ui.If(empty, func() ui.Node {
+		recentBlock := Fragment()
+		if len(convs) > 0 {
+			recent := convs
+			if len(recent) > 3 {
+				recent = recent[:3]
+			}
+			recentBlock = Div(css.Class("asst-recent", tw.Mt1), Attr("data-testid", "assistant-recent-convos"),
+				Span(css.Class("asst-recent-label", tw.Text12, tw.FontSemibold, tw.TextFaint), uistate.T("detail5.recentLabel")),
+				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
+					MapKeyed(recent,
+						func(c domain.Conversation) any { return c.ID },
+						func(c domain.Conversation) ui.Node {
+							return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+						},
+					),
 				),
-			),
+			)
+		}
+		return Div(css.Class("asst-hero"),
+			agentIntro,
+			chips,
+			recentBlock,
+			// C248: static example Q→A pairs preview the assistant for keyless users.
+			ui.If(noAI, exampleConversationsNode),
 		)
-	}
-	heroBlock := Div(css.Class("asst-hero"),
-		agentIntro,
-		chips,
-		recentBlock,
-		// C248: static example Q→A pairs preview the assistant for keyless users.
-		If(noAI, exampleConversationsNode()),
-	)
+	})
 	chatConsole := Div(css.Class("chat-console"), Attr("data-testid", "assistant-chat"),
 		Div(css.Class("chat-scroll"), Attr("id", "cf-chat-scroll"),
 			Div(css.Class("chat-measure"),
 				backendToggle,
-				If(empty, heroBlock),
+				heroBlock,
 				If(!empty, thread),
 				// AG1: a multi-step plan the agent proposed renders here as a
 				// reviewable changeset (per-item toggles + Apply all + undo-all).
 				PendingChangesetHost(),
 				// Approval card: a mutating tool is paused waiting for the user's yes/no.
-				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
-					Preview:   approvalPreview,
-					Perm:      approvalPerm,
-					OnApprove: func() { respondApproval(approval, true) },
-					OnDecline: func() { respondApproval(approval, false) },
-				})),
+				ui.If(approvalPreview != "", func() ui.Node {
+					return ui.CreateElement(ApprovalCard, approvalCardProps{
+						Preview:   approvalPreview,
+						Perm:      approvalPerm,
+						OnApprove: func() { respondApproval(approval, true) },
+						OnDecline: func() { respondApproval(approval, false) },
+					})
+				}),
 				// AG20: the running per-conversation receipt (actions taken + spend).
 				If(!empty, AgentSessionReceipt(convID.Get())),
 				If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
@@ -2013,7 +2034,7 @@ func Insights() ui.Node {
 		askHead,
 		// The controls drawer: the full settings cell, revealed by the header's
 		// Chat settings button (default closed — the conversation leads).
-		If(ctrlOpen.Get(), Div(Attr("id", "ask-settings-drawer"), css.Class("ask-settings-drawer"), chatControls)),
+		chatControls,
 		chatConsole,
 	)
 
@@ -2021,14 +2042,16 @@ func Insights() ui.Node {
 		// When there is no financial data yet, show a guided empty state so a first-time
 		// user knows to add an account before asking questions. The chat section is still
 		// rendered below it so all hooks stay stable.
-		If(noData, uiw.Card(uiw.CardProps{
-			Body: ui.CreateElement(EmptyStateCTA, emptyCTAProps{
-				Message:   uistate.T("insights.noData"),
-				CTALabel:  uistate.T("insights.addAccount"),
-				AddTarget: "account",
-				Icon:      icon.Insights,
-			}),
-		})),
+		ui.If(noData, func() ui.Node {
+			return uiw.Card(uiw.CardProps{
+				Body: ui.CreateElement(EmptyStateCTA, emptyCTAProps{
+					Message:   uistate.T("insights.noData"),
+					CTALabel:  uistate.T("insights.addAccount"),
+					AddTarget: "account",
+					Icon:      icon.Insights,
+				}),
+			})
+		}),
 		// MIA-extend (#445-9): compact scope notice — shown when a scope is active
 		// so the user knows these figures are filtered. "Change scope in Reports →"
 		// links directly to the ScopeSelector on /reports.
@@ -2053,20 +2076,34 @@ func Insights() ui.Node {
 		),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).
-		If(promptOpen.Get(), uiw.FlipPanel(uiw.FlipPanelProps{
-			Title:   uistate.T("insights.promptTitle"),
-			Width:   uiw.FlipMediumW, // a prompt editor: a textarea + hint
-			Height:  uiw.FlipMediumH,
-			OnSave:  savePrompt,
-			OnClose: closePrompt,
-			Back: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
-				P(css.Class("muted", tw.Text13), uistate.T("insights.promptHint")),
-				Textarea(css.Class("field field-wide"), Attr("rows", "12"), Attr("aria-label", uistate.T("insights.promptTitle")), OnInput(onPromptInput), promptDraft.Get()),
-				Button(css.Class("btn", tw.SelfStart), Type("button"), OnClick(resetPrompt), uistate.T("insights.promptReset")),
-			),
-		})),
+		ui.If(promptOpen.Get(), func() ui.Node {
+			return uiw.FlipPanel(uiw.FlipPanelProps{
+				Title:   uistate.T("insights.promptTitle"),
+				Width:   uiw.FlipMediumW, // a prompt editor: a textarea + hint
+				Height:  uiw.FlipMediumH,
+				OnSave:  savePrompt,
+				OnClose: closePrompt,
+				Back: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
+					P(css.Class("muted", tw.Text13), uistate.T("insights.promptHint")),
+					Textarea(css.Class("field field-wide"), Attr("rows", "12"), Attr("aria-label", uistate.T("insights.promptTitle")), OnInput(onPromptInput), promptDraft.Get()),
+					Button(css.Class("btn", tw.SelfStart), Type("button"), OnClick(resetPrompt), uistate.T("insights.promptReset")),
+				),
+			})
+		}),
 	)
 }
+
+type insightsShareMeta struct {
+	catCount     int
+	catNamesLen  int
+	cfCount      int
+	cfSummaryLen int
+}
+
+var (
+	insightsConvsCache     = newViewCache[[]domain.Conversation](4)
+	insightsShareMetaCache = newViewCache[insightsShareMeta](4)
+)
 
 // customFieldsSummary builds a compact plain-English list of custom field definitions
 // for use in the Insights context message, so the AI can answer questions that

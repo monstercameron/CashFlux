@@ -43,12 +43,11 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	funding := goalFunding(app)
 	v := funding.Earmarks
 	accounts := app.Accounts()
-	goalsList := app.Goals()
 	base := v.TotalBalance.Currency
 
 	// Delete one earmark (goal + account) by persisting the goal's remaining allocations.
 	onDelete := func(goalID, acctID string) {
-		for _, g := range goalsList {
+		for _, g := range app.Goals() {
 			if g.ID != goalID {
 				continue
 			}
@@ -158,10 +157,12 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	})
 
 	overbooked := funding.Overbooked
+	rates := goalRates(app)
+	now := time.Now()
 	groups := MapKeyed(goalsWithEarmarks, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
 		return ui.CreateElement(goalEarmarkGroup, goalEarmarkGroupProps{
 			Goal: g, Accounts: accounts, Overbooked: overbooked[g.ID], OnDelete: onDelete,
-			Evaluation: goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(app), time.Now()),
+			Evaluation: goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, rates, now),
 		})
 	})
 

@@ -238,3 +238,38 @@ func TestLegacyRecordsWithoutKeysStillRender(t *testing.T) {
 		t.Error("the legacy sentence must still be there to fall back to")
 	}
 }
+
+func TestArchiveAddAllMatchesSequentialAdd(t *testing.T) {
+	initial := []Record{
+		{ID: "a", Message: "old-a", At: 100},
+		{ID: "b", Message: "old-b", At: 200},
+		{ID: "", Message: "anon-1", At: 150},
+	}
+	batch := []Record{
+		{ID: "b", Message: "new-b-1", At: 250},
+		{ID: "c", Message: "new-c", At: 300},
+		{ID: "b", Message: "new-b-2", At: 260, Read: true},
+		{ID: "", Message: "anon-2", At: 150},
+		{ID: "d", Message: "new-d", At: 50},
+	}
+	var seq, bulk Archive
+	for _, r := range initial {
+		seq.Add(r)
+		bulk.Add(r)
+	}
+	for _, r := range batch {
+		seq.Add(r)
+	}
+	bulk.AddAll(batch)
+	if len(bulk.Items) != len(seq.Items) {
+		t.Fatalf("len = %d, want %d", len(bulk.Items), len(seq.Items))
+	}
+	for i := range seq.Items {
+		if bulk.Items[i].ID != seq.Items[i].ID ||
+			bulk.Items[i].Message != seq.Items[i].Message ||
+			bulk.Items[i].At != seq.Items[i].At ||
+			bulk.Items[i].Read != seq.Items[i].Read {
+			t.Errorf("item[%d] = %+v, want %+v", i, bulk.Items[i], seq.Items[i])
+		}
+	}
+}

@@ -51,16 +51,14 @@ func budgetsReady(_ struct{}) ui.Node {
 	// Re-render on any data mutation (a budget CRUD, a transaction added elsewhere, a
 	// method switch).
 
-	base := app.Settings().BaseCurrency
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = budgetBaseCurrency(base)
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	accounts := app.Accounts()
-	txns := app.Transactions()
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 	rctx := widgetrender.RenderCtx{
-		App: app, Accounts: accounts, Txns: txns,
-		ScopedAccounts: accounts, ScopedTxns: txns,
+		App:   app,
 		Rates: rates, Base: base,
 		Start: time.Time{}, End: time.Now(),
 	}

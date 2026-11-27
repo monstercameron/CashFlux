@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/monstercameron/GoWebComponents/v8/state"
+	"github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
 // notifyLastSeenKey is the SQLite-backed KV key that persists the unix-second
@@ -22,7 +23,8 @@ const notifyLastSeenKey = "cashflux:notify:lastSeen"
 // stamp, so the bell badge re-renders the moment the Notification Center
 // stamps a visit (KV alone wouldn't re-render subscribers).
 func UseNotifyLastSeen() state.Atom[int64] {
-	a := state.UseAtom("notify:lastSeenAtom", LoadNotifyLastSeen())
+	initial := ui.UseMemo(LoadNotifyLastSeen, "notify-last-seen-init")
+	a := state.UseAtom("notify:lastSeenAtom", initial)
 	capturedNotifyLastSeen = a
 	notifyLastSeenCaptured = true
 	return a

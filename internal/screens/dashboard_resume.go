@@ -93,6 +93,12 @@ func dashResumeCard() ui.Node {
 	// The card reads several full-dataset signals (review queue, budget view);
 	// defer it off the first paint like the other data-heavy dashboard bands.
 	settled := useAfterSettle("resume")
+	reviewCount := ui.UseMemo(func() int {
+		if app == nil || !settled {
+			return 0
+		}
+		return reviewqueue.Count(app.Transactions())
+	}, revKey(app), settled)
 
 	if app == nil || dismissed.Get() || !settled {
 		return Fragment()
@@ -131,10 +137,10 @@ func dashResumeCard() ui.Node {
 	}
 
 	// Review inbox with items remaining.
-	if n := len(reviewqueue.Queue(app.Transactions())); n > 0 {
+	if reviewCount > 0 {
 		rows = append(rows, ui.CreateElement(resumeRow, resumeRowProps{
 			Kind:   resumeReview,
-			Text:   uistate.T("dashboard.resumeReview", n),
+			Text:   uistate.T("dashboard.resumeReview", reviewCount),
 			Action: uistate.T("dashboard.resumeContinue"),
 			TestID: "resume-review",
 		}))

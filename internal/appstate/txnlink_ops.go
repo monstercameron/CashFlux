@@ -16,7 +16,7 @@ import (
 // TxnLinks returns every persisted transaction-link (order groups and refund
 // pairs — the XC0b link primitive).
 func (a *App) TxnLinks() []domain.TxnLink {
-	v, err := a.store.ListTxnLinks()
+	v, err := a.TxnLinksChecked()
 	a.logErr("txn links", err)
 	return v
 }

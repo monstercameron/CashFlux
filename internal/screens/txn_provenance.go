@@ -33,6 +33,26 @@ func txnAutoByID(app *appstate.App, txns []domain.Transaction, rs []rules.Rule, 
 	return provCache.values
 }
 
+// txnIsAutomatic reports whether one transaction's category is automatic and
+// unconfirmed, reusing provCache without allocating a per-row slice.
+func txnIsAutomatic(app *appstate.App, t domain.Transaction, rs []rules.Rule, dataRev int) bool {
+	if !provCache.valid || provCache.app != app || provCache.revision != dataRev {
+		provCache = txnProvenanceCache{
+			app: app, revision: dataRev,
+			values: make(map[string]txnprov.Provenance),
+			seen:   make(map[string]bool), valid: true,
+		}
+	}
+	if !provCache.seen[t.ID] {
+		p := txnprov.Of(t, rs)
+		if p.IsAutomatic() {
+			provCache.values[t.ID] = p
+		}
+		provCache.seen[t.ID] = true
+	}
+	return provCache.values[t.ID].IsAutomatic()
+}
+
 type txnProvenanceCache struct {
 	app      *appstate.App
 	revision int

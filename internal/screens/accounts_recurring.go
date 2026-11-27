@@ -74,22 +74,12 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 		return recurSlot()
 	}
 
-	listed := cands[:min(len(cands), acctRecurCap)]
-	rows := make([]ui.Node, 0, len(listed))
-	for _, c := range listed {
-		rows = append(rows, WithKey(ui.CreateElement(accountRecurRow, accountRecurRowProps{
-			App:       app,
-			Candidate: c,
-			Base:      base,
-		}), c.Signature))
-	}
-	body := Fragment(
-		Div(css.Class("rows", "acct-recur-list"), rows),
-		If(len(cands) > len(listed), uiw.Callout(uiw.CalloutProps{
-			TestID: "acct-recur-capnote-" + props.Account.ID,
-			Body:   Span(uistate.T("sm6.capNote", len(listed))),
-		})),
-	)
+	body := ui.CreateElement(accountRecurBody, accountRecurBodyProps{
+		App:       app,
+		AccountID: props.Account.ID,
+		Cands:     cands,
+		Base:      base,
+	})
 	return Div(css.Class("acct-recur"), Attr("data-testid", "acct-recur-"+props.Account.ID),
 		uiw.Disclosure(uiw.DisclosureProps{
 			ID:      "acct-recur-list-" + props.Account.ID,
@@ -97,6 +87,32 @@ func accountRecurringPanel(props accountRecurProps) ui.Node {
 			Body:    body,
 			TestID:  "acct-recur-toggle-" + props.Account.ID,
 		}))
+}
+
+type accountRecurBodyProps struct {
+	App       *appstate.App
+	AccountID string
+	Cands     []recurdiscover.Candidate
+	Base      string
+}
+
+func accountRecurBody(props accountRecurBodyProps) ui.Node {
+	listed := props.Cands[:min(len(props.Cands), acctRecurCap)]
+	rows := make([]ui.Node, 0, len(listed))
+	for _, c := range listed {
+		rows = append(rows, WithKey(ui.CreateElement(accountRecurRow, accountRecurRowProps{
+			App:       props.App,
+			Candidate: c,
+			Base:      props.Base,
+		}), c.Signature))
+	}
+	return Fragment(
+		Div(css.Class("rows", "acct-recur-list"), rows),
+		If(len(props.Cands) > len(listed), uiw.Callout(uiw.CalloutProps{
+			TestID: "acct-recur-capnote-" + props.AccountID,
+			Body:   Span(uistate.T("sm6.capNote", len(listed))),
+		})),
+	)
 }
 
 // accountRecurCandidates returns all of the account's UNTRACKED repeats, plus

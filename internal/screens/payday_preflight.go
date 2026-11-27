@@ -29,6 +29,8 @@ import (
 // point (the one emphasized figure), and any account running below the keep floor
 // — with a one-tap "mark planned" per bill and a move-money link. It regenerates
 // once per pay cycle and stays hidden after dismissal until the next payday.
+var paydayPreflightCache = newViewCache[preflight.Checklist](4)
+
 func paydayPreflightCard() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -52,58 +54,62 @@ func paydayPreflightCard() ui.Node {
 		return nil
 	}
 
-	base := app.Settings().BaseCurrency
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	cl := memoByRev(paydayPreflightCache, revKey(app)+"|"+now.Format("2006-01-02")+"|"+cycleKey+"|"+base, func() preflight.Checklist {
+		rates := currency.Rates{Base: base, Rates: settings.FXRates}
+		allAccts := app.Accounts()
+		allRecur := app.Recurring()
 
-	// Bills due this cycle.
-	var items []preflight.BillItem
-	for _, b := range bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, nextPay) {
-		amt, err := rates.Convert(b.Amount, base)
-		if err != nil {
-			amt = money.New(b.Amount.Amount, base)
+		// Bills due this cycle.
+		occs := bills.OccurrencesWithin(allAccts, allRecur, now, nextPay)
+		items := make([]preflight.BillItem, 0, len(occs))
+		paid := map[string]bool{}
+		for _, b := range occs {
+			amt, err := rates.Convert(b.Amount, base)
+			if err != nil {
+				amt = money.New(b.Amount.Amount, base)
+			}
+			itemID := billItemID(b)
+			items = append(items, preflight.BillItem{
+				ID: itemID, Name: b.Name, AmountMinor: abs64i(amt.Amount),
+				Due: b.DueDate, Autopay: b.Autopay, AccountID: b.AccountID, Currency: base,
+			})
+			// TX9: drop bills already settled by a matched transaction. A recurring bill's
+			// occurrence carries a durable bill-match link when a real payment matched it;
+			// treat those as done rather than "still due this cycle".
+			if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
+				if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
+					paid[itemID] = true
+				}
+			}
 		}
-		items = append(items, preflight.BillItem{
-			ID: billItemID(b), Name: b.Name, AmountMinor: abs64i(amt.Amount),
-			Due: b.DueDate, Autopay: b.Autopay, AccountID: b.AccountID, Currency: base,
+
+		// Projected low over the cycle (smart schedule) + account balances.
+		plan := computeBillsSmart(app, now, nextPay)
+		var accts []preflight.AccountBalance
+		if bals, err := ledger.Balances(allAccts, app.Transactions()); err == nil {
+			for _, a := range allAccts {
+				if a.Archived || a.Class == domain.ClassLiability {
+					continue
+				}
+				if m, ok := bals[a.ID]; ok {
+					accts = append(accts, preflight.AccountBalance{
+						ID: a.ID, Name: a.Name,
+						BalanceMinor: convertMinorScreen(m.Amount, a.Currency, base, rates),
+					})
+				}
+			}
+		}
+
+		return preflight.Build(preflight.Input{
+			Now: now, CycleStart: nextPaydayOnOrBefore(bd.Paydays, now), NextPayday: nextPay,
+			Bills: items, ProjectedLowMinor: plan.Res.Smart.Low, ProjectedLowDate: plan.Res.Smart.LowDate,
+			KeepFloorMinor: bd.MinKeepMinor, Accounts: accts, Paid: paid,
 		})
-	}
-
-	// Projected low over the cycle (smart schedule) + account balances.
-	plan := computeBillsSmart(app, now, nextPay)
-	var accts []preflight.AccountBalance
-	if bals, err := ledger.Balances(app.Accounts(), app.Transactions()); err == nil {
-		for _, a := range app.Accounts() {
-			if a.Archived || a.Class == domain.ClassLiability {
-				continue
-			}
-			if m, ok := bals[a.ID]; ok {
-				accts = append(accts, preflight.AccountBalance{
-					ID: a.ID, Name: a.Name,
-					BalanceMinor: convertMinorScreen(m.Amount, a.Currency, base, rates),
-				})
-			}
-		}
-	}
-
-	// TX9: drop bills already settled by a matched transaction. A recurring bill's
-	// occurrence carries a durable bill-match link when a real payment matched it;
-	// treat those as done rather than "still due this cycle".
-	paid := map[string]bool{}
-	for _, b := range bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, nextPay) {
-		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
-			if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
-				paid[billItemID(b)] = true
-			}
-		}
-	}
-
-	cl := preflight.Build(preflight.Input{
-		Now: now, CycleStart: nextPaydayOnOrBefore(bd.Paydays, now), NextPayday: nextPay,
-		Bills: items, ProjectedLowMinor: plan.Res.Smart.Low, ProjectedLowDate: plan.Res.Smart.LowDate,
-		KeepFloorMinor: bd.MinKeepMinor, Accounts: accts, Paid: paid,
 	})
 	if !cl.HasItems() {
 		return nil

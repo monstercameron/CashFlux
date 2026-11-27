@@ -442,18 +442,35 @@ func (c *revCache[T]) getChecked(rev uint64, load func() ([]T, error)) ([]T, err
 // appReadCaches holds one revCache per frequently-read table. It lives inline on
 // App (see the reads field) so every accessor shares the same revision key.
 type appReadCaches struct {
-	members      revCache[domain.Member]
-	accounts     revCache[domain.Account]
-	categories   revCache[domain.Category]
-	transactions ledgerSnapshotCache
-	budgets      revCache[domain.Budget]
-	goals        revCache[domain.Goal]
-	tasks        revCache[domain.Task]
-	holdings     revCache[domain.Holding]
-	realized     revCache[domain.RealizedSale]
-	rules        revCache[rules.Rule]
-	documents    revCache[domain.Document]
-	recurring    revCache[domain.Recurring]
+	members         revCache[domain.Member]
+	accounts        revCache[domain.Account]
+	categories      revCache[domain.Category]
+	transactions    ledgerSnapshotCache
+	budgets         revCache[domain.Budget]
+	goals           revCache[domain.Goal]
+	tasks           revCache[domain.Task]
+	holdings        revCache[domain.Holding]
+	realized        revCache[domain.RealizedSale]
+	rules           revCache[rules.Rule]
+	documents       revCache[domain.Document]
+	recurring       revCache[domain.Recurring]
+	customPages     revCache[domain.CustomPage]
+	accountGroups   revCache[domain.AccountGroup]
+	institutions    revCache[domain.Institution]
+	txnLinks        revCache[domain.TxnLink]
+	savedInsights   revCache[domain.SavedInsight]
+	conversations   revCache[domain.Conversation]
+	customFieldDefs revCache[customfields.Def]
+	earmarks        revCache[domain.Earmark]
+	cancellations   revCache[domain.SubscriptionCancellation]
+	artifacts       revCache[domain.Artifact]
+	sweepRules      revCache[domain.SweepRule]
+	paidMapRev      uint64
+	paidMapLoaded   bool
+	paidMap         map[string]int64
+	billMatchRev    uint64
+	billMatchLoaded bool
+	billMatchByOcc  map[string]domain.TxnLink
 }
 
 // Members returns every household member, or none when the local dataset is unavailable.
@@ -494,11 +511,9 @@ func (a *App) Accounts() []domain.Account {
 // The result is cached per store revision, so the sort runs once per mutation,
 // not once per render.
 func (a *App) Categories() []domain.Category {
-	return a.reads.categories.get(a.store.Rev(), func() []domain.Category {
-		v, err := a.CategoriesChecked()
-		a.logErr("categories", err)
-		return v
-	})
+	v, err := a.CategoriesChecked()
+	a.logErr("categories", err)
+	return v
 }
 
 // CategoriesChecked reads current categories in the canonical natural order.
@@ -508,11 +523,20 @@ func (a *App) CategoriesChecked() ([]domain.Category, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("read categories: local dataset is unavailable")
 	}
-	rows, err := a.store.ListCategories()
+	if err := a.store.CheckReady(); err != nil {
+		return nil, fmt.Errorf("read categories: %w", err)
+	}
+	rows, err := a.reads.categories.getChecked(a.store.Rev(), func() ([]domain.Category, error) {
+		listed, err := a.store.ListCategories()
+		if err != nil {
+			return nil, err
+		}
+		return catname.Sorted(listed), nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("read categories: %w", err)
 	}
-	return catname.Sorted(rows), nil
+	return rows, nil
 }
 
 // Transactions returns the ledger snapshot for the current store revision.
@@ -607,9 +631,14 @@ func (a *App) Documents() []domain.Document {
 
 // SavedInsights returns every pinned AI insight.
 func (a *App) SavedInsights() []domain.SavedInsight {
-	v, err := a.store.ListSavedInsights()
-	a.logErr("saved insights", err)
-	return v
+	if a.ready() != nil {
+		return nil
+	}
+	return a.reads.savedInsights.get(a.store.Rev(), func() []domain.SavedInsight {
+		v, err := a.store.ListSavedInsights()
+		a.logErr("saved insights", err)
+		return v
+	})
 }
 
 // Recurring returns every scheduled recurring cash flow that feeds budgets, reports, forecasts and
@@ -669,16 +698,26 @@ func (a *App) Plans() []domain.Plan {
 
 // CustomPages returns every user-authored custom page.
 func (a *App) CustomPages() []domain.CustomPage {
-	v, err := a.store.ListCustomPages()
-	a.logErr("customPages", err)
-	return v
+	if a.ready() != nil {
+		return nil
+	}
+	return a.reads.customPages.get(a.store.Rev(), func() []domain.CustomPage {
+		v, err := a.store.ListCustomPages()
+		a.logErr("customPages", err)
+		return v
+	})
 }
 
 // Artifacts returns every user-stored artifact (uploaded images, datasets).
 func (a *App) Artifacts() []domain.Artifact {
-	v, err := a.store.ListArtifacts()
-	a.logErr("artifacts", err)
-	return v
+	if a.ready() != nil {
+		return nil
+	}
+	return a.reads.artifacts.get(a.store.Rev(), func() []domain.Artifact {
+		v, err := a.store.ListArtifacts()
+		a.logErr("artifacts", err)
+		return v
+	})
 }
 
 // Workflows returns every user-defined automation.
@@ -697,17 +736,30 @@ func (a *App) WorkflowRuns() []workflow.Run {
 
 // CustomFieldDefs returns every registered custom-field definition.
 func (a *App) CustomFieldDefs() []customfields.Def {
-	v, err := a.store.ListCustomFieldDefs()
-	a.logErr("customFieldDefs", err)
-	return v
+	if a.ready() != nil {
+		return nil
+	}
+	return a.reads.customFieldDefs.get(a.store.Rev(), func() []customfields.Def {
+		v, err := a.store.ListCustomFieldDefs()
+		a.logErr("customFieldDefs", err)
+		return v
+	})
 }
 
 // CustomFieldDefsFor returns the custom-field definitions for one entity type
 // (e.g. "account", "transaction").
 func (a *App) CustomFieldDefsFor(entityType string) []customfields.Def {
-	v, err := a.store.CustomFieldDefsByEntity(entityType)
-	a.logErr("customFieldDefs", err)
-	return v
+	all := a.CustomFieldDefs()
+	if len(all) == 0 {
+		return nil
+	}
+	var out []customfields.Def
+	for _, d := range all {
+		if d.EntityType == entityType {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // FreshnessWindows returns the staleness windows with the revaluation cadences
@@ -1558,12 +1610,17 @@ func (a *App) DeleteSavedInsight(id string) error {
 
 // Conversations returns every saved Insights chat (unordered; the caller sorts).
 func (a *App) Conversations() []domain.Conversation {
-	v, err := a.store.ListConversations()
-	if err != nil {
-		a.log.Error("list conversations", "err", err)
+	if a.ready() != nil {
 		return nil
 	}
-	return v
+	return a.reads.conversations.get(a.store.Rev(), func() []domain.Conversation {
+		v, err := a.store.ListConversations()
+		if err != nil {
+			a.log.Error("list conversations", "err", err)
+			return nil
+		}
+		return v
+	})
 }
 
 // PutConversation saves (inserts or replaces) an Insights conversation. It needs
@@ -4175,16 +4232,23 @@ func (a *App) Earmarks() []domain.Earmark {
 	if a.ready() != nil {
 		return nil
 	}
-	v, err := a.store.ListEarmarks()
-	a.logErr("earmarks", err)
-	return v
+	return a.reads.earmarks.get(a.store.Rev(), func() []domain.Earmark {
+		v, err := a.store.ListEarmarks()
+		a.logErr("earmarks", err)
+		return v
+	})
 }
 
 // Cancellations returns every persisted subscription cancellation record.
 func (a *App) Cancellations() []domain.SubscriptionCancellation {
-	v, err := a.store.ListSubscriptionCancellations()
-	a.logErr("subscription cancellations", err)
-	return v
+	if a.ready() != nil {
+		return nil
+	}
+	return a.reads.cancellations.get(a.store.Rev(), func() []domain.SubscriptionCancellation {
+		v, err := a.store.ListSubscriptionCancellations()
+		a.logErr("subscription cancellations", err)
+		return v
+	})
 }
 
 // MarkSubscriptionCancelled records that the subscription identified by subName

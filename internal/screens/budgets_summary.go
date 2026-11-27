@@ -364,6 +364,38 @@ type budgetSummaryFundingResult struct {
 	prepared     budgetview.FundingPreparation
 }
 
+type budgetFundingIncomeMemo struct {
+	lines []reports.CategorySpend
+	err   error
+}
+
+var budgetFundingIncomeCache = newViewCache[budgetFundingIncomeMemo](8)
+
+func budgetFundingIncomeLines(app *appstate.App, wStart, wEnd time.Time, base string) ([]reports.CategorySpend, error) {
+	if app == nil || app.Store() == nil {
+		return nil, fmt.Errorf("read budget income: app is unavailable")
+	}
+	if err := app.Store().CheckReady(); err != nil {
+		return nil, fmt.Errorf("read budget income: %w", err)
+	}
+	key := fmt.Sprintf("%s|%d|%d|%s", revKey(app), wStart.Unix(), wEnd.Unix(), base)
+	if cached, ok := budgetFundingIncomeCache.Get(key); ok {
+		return cached.lines, cached.err
+	}
+	transactions, incomeErr := app.TransactionsChecked()
+	settings, settingsErr := app.SettingsChecked()
+	incomeErr = errors.Join(incomeErr, settingsErr)
+	var lines []reports.CategorySpend
+	if incomeErr == nil {
+		lines, incomeErr = reports.IncomeByCategoryChecked(transactions, wStart, wEnd,
+			currency.Rates{Base: base, Rates: settings.FXRates})
+	}
+	if incomeErr == nil {
+		budgetFundingIncomeCache.Set(key, budgetFundingIncomeMemo{lines: lines})
+	}
+	return lines, incomeErr
+}
+
 func budgetSummaryFunding(p budgetSummaryFundingProps) budgetSummaryFundingResult {
 	// #64: the plan figure is EXPECTED income — say what actually arrived, so the
 	// basis never masquerades as money already received. One quiet sub-line.
@@ -373,26 +405,7 @@ func budgetSummaryFunding(p budgetSummaryFundingProps) budgetSummaryFundingResul
 	// while only $6,961.00 has come in, and "fully assigned" then looks exactly
 	// like "fully funded". The difference is the part that decides whether a
 	// payment clears.
-	var lines []reports.CategorySpend
-	var incomeErr error
-	var settingsRates map[string]float64
-	var transactions []domain.Transaction
-	if p.app == nil || p.app.Store() == nil {
-		incomeErr = fmt.Errorf("read budget income: app is unavailable")
-	} else {
-		if err := p.app.Store().CheckReady(); err != nil {
-			incomeErr = fmt.Errorf("read budget income: %w", err)
-		} else {
-			transactions, incomeErr = p.app.TransactionsChecked()
-			settings, settingsErr := p.app.SettingsChecked()
-			incomeErr = errors.Join(incomeErr, settingsErr)
-			settingsRates = settings.FXRates
-			if incomeErr == nil {
-				lines, incomeErr = reports.IncomeByCategoryChecked(transactions, p.wStart, p.wEnd,
-					currency.Rates{Base: p.v.Base, Rates: settingsRates})
-			}
-		}
-	}
+	lines, incomeErr := budgetFundingIncomeLines(p.app, p.wStart, p.wEnd, p.v.Base)
 	prepared := budgetview.PrepareFunding(budgetview.FundingInput{
 		IncomeLines: lines, IncomeError: incomeErr, Method: p.v.Method, Expected: p.v.BannerIncome, RolledOver: p.v.RolledOver,
 		Budgeted: p.normalizedBudgetTotal, Fixed: p.v.SavingsAssigned, PlanKnown: p.normalizationOK,

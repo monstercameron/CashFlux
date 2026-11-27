@@ -353,6 +353,26 @@ func TestIsRealSubscriptionName(t *testing.T) {
 		if got := IsRealSubscriptionName(tc.name, tc.txns, nil, catNameOf, planned); got != tc.want {
 			t.Errorf("IsRealSubscriptionName(%q) = %v, want %v", tc.name, got, tc.want)
 		}
+		cls := NewRealNameClassifier(tc.txns, nil, catNameOf, planned)
+		if got := cls.IsReal(tc.name); got != tc.want {
+			t.Errorf("RealNameClassifier.IsReal(%q) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	// Parity check across a combined ledger with liability + essential + real accounts.
+	accts := []domain.Account{
+		{ID: "acct-chk", Name: "Checking", Type: domain.TypeChecking},
+		{ID: "acct-cc", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability},
+	}
+	cardTxn := txnWithAccount("Monthly Club", "acct-cc", 2500)
+	realTxn := txnWithAccount("Spotify", "acct-chk", 1200)
+	combined := []domain.Transaction{utilTxn, cardTxn, realTxn}
+	batch := NewRealNameClassifier(combined, accts, catNameOf, planned)
+	for _, name := range []string{"Netflix", "Spotify", "Monthly Club", "City Power", "HOA Dues", "Chase Card Payment", "Pharmacy"} {
+		want := IsRealSubscriptionName(name, combined, accts, catNameOf, planned)
+		if got := batch.IsReal(name); got != want {
+			t.Errorf("RealNameClassifier.IsReal(%q) = %v, want %v", name, got, want)
+		}
 	}
 }
 

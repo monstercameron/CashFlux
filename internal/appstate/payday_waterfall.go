@@ -182,6 +182,11 @@ func (a *App) waterfallProposalFor(now time.Time, income int64, base string, rat
 	}
 
 	allGoals := a.Goals()
+	accts := a.Accounts()
+	acctByID := make(map[string]domain.Account, len(accts))
+	for _, ac := range accts {
+		acctByID[ac.ID] = ac
+	}
 
 	// Per-account free balance (XC7): real balance minus every existing earmark.
 	free := waterfall.AccountFree{}
@@ -208,7 +213,7 @@ func (a *App) waterfallProposalFor(now time.Time, income int64, base string, rat
 			continue
 		}
 		if _, seen := free[acctID]; !seen {
-			free[acctID] = a.accountFreeToEarmark(acctID, allGoals, base, rates)
+			free[acctID] = a.accountFreeToEarmarkIndexed(acctID, acctByID, allGoals, base, rates)
 		}
 		quotas = append(quotas, waterfall.GoalQuota{
 			GoalID:     g.ID,
@@ -255,15 +260,17 @@ func (a *App) waterfallProposalFor(now time.Time, income int64, base string, rat
 	return proposal
 }
 
-// accountFreeToEarmark is the account's real balance (in base currency minor
-// units) minus what every goal already earmarks against it — the XC7 ceiling the
-// waterfall must not exceed. Never negative.
-func (a *App) accountFreeToEarmark(acctID string, allGoals []domain.Goal, base string, rates currency.Rates) int64 {
-	acc, ok := findAccount(a, acctID)
+// accountFreeToEarmarkIndexed computes the account's real balance (in base
+// currency minor units) minus what every goal already earmarks against it,
+// using the pre-indexed account map and the per-account ledger index so
+// waterfall evaluation stays O(T) overall instead of scanning the full ledger
+// per linked account. Never negative.
+func (a *App) accountFreeToEarmarkIndexed(acctID string, acctByID map[string]domain.Account, allGoals []domain.Goal, base string, rates currency.Rates) int64 {
+	acc, ok := acctByID[acctID]
 	if !ok {
 		return 0
 	}
-	bal, err := ledger.Balance(acc, a.Transactions())
+	bal, err := ledger.Balance(acc, a.TransactionsByAccount(acctID))
 	if err != nil {
 		a.log.Warn("payday waterfall: balance lookup failed", "account", acctID, "err", err)
 		return 0
