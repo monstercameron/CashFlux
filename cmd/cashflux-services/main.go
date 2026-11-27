@@ -21,8 +21,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type serviceWorker struct {
@@ -35,6 +33,7 @@ type serviceWorker struct {
 const blobStreamChunkBytes = 64 << 10
 const aiChunkFlushBytes = 4 << 10
 const aiChunkFlushInterval = 16 * time.Millisecond
+const defaultWorkerUnaryTimeout = 60 * time.Second
 
 func newServiceWorker() *serviceWorker {
 	return &serviceWorker{
@@ -43,16 +42,24 @@ func newServiceWorker() *serviceWorker {
 	}
 }
 
-func (w *serviceWorker) connection(ctx context.Context, endpoint, token string) (*grpc.ClientConn, error) {
-	key := strings.TrimRight(strings.TrimSpace(endpoint), "/") + "\x00" + strings.TrimSpace(token)
+func (w *serviceWorker) connection(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
+	key := endpointPoolKey(endpoint)
 	w.mu.Lock()
 	conn := w.conns[key]
 	epoch := w.epoch
-	w.mu.Unlock()
+	if conn != nil && !connReusable(conn.GetState()) {
+		delete(w.conns, key)
+		dead := conn
+		conn = nil
+		w.mu.Unlock()
+		_ = dead.Close()
+	} else {
+		w.mu.Unlock()
+	}
 	if conn != nil {
 		return conn, nil
 	}
-	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
+	conn, err := syncbridge.DialEndpoint(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +72,7 @@ func (w *serviceWorker) connection(ctx context.Context, endpoint, token string) 
 		}
 		return nil, context.Canceled
 	}
-	if existing := w.conns[key]; existing != nil {
+	if existing := w.conns[key]; existing != nil && connReusable(existing.GetState()) {
 		w.mu.Unlock()
 		_ = conn.Close()
 		return existing, nil
@@ -73,6 +80,21 @@ func (w *serviceWorker) connection(ctx context.Context, endpoint, token string) 
 	w.conns[key] = conn
 	w.mu.Unlock()
 	return conn, nil
+}
+
+func (w *serviceWorker) evictConnection(endpoint string, bad *grpc.ClientConn) {
+	if bad == nil {
+		return
+	}
+	key := endpointPoolKey(endpoint)
+	w.mu.Lock()
+	if w.conns[key] == bad {
+		delete(w.conns, key)
+		w.mu.Unlock()
+		_ = bad.Close()
+		return
+	}
+	w.mu.Unlock()
 }
 
 func (w *serviceWorker) register(id string) (context.Context, bool) {
@@ -161,12 +183,13 @@ func (w *serviceWorker) handleBlobUpload(ctx context.Context, req rpcprotocol.Re
 		postFailure(req.ID, &rpcprotocol.Error{Code: "InvalidArgument", Message: err.Error()})
 		return
 	}
-	conn, err := w.connection(ctx, req.Endpoint, req.Token)
+	conn, err := w.connection(ctx, req.Endpoint)
 	if err != nil {
 		postFailure(req.ID, rpcError(err, false))
 		return
 	}
-	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, req.Method, grpccodec.CallOptions()...)
+	callCtx := syncbridge.WithBearerToken(ctx, req.Token)
+	stream, err := conn.NewStream(callCtx, &grpc.StreamDesc{ClientStreams: true}, req.Method, grpccodec.CallOptions()...)
 	if err == nil {
 		err = stream.SendMsg(&backendrpc.UploadBlobChunk{Header: &header})
 	}
@@ -185,6 +208,9 @@ func (w *serviceWorker) handleBlobUpload(ctx context.Context, req rpcprotocol.Re
 		err = stream.RecvMsg(&response)
 	}
 	if err != nil {
+		if !connReusable(conn.GetState()) {
+			w.evictConnection(req.Endpoint, conn)
+		}
 		postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 		return
 	}
@@ -202,12 +228,13 @@ func (w *serviceWorker) handleBlobDownload(ctx context.Context, req rpcprotocol.
 		postFailure(req.ID, &rpcprotocol.Error{Code: "InvalidArgument", Message: err.Error()})
 		return
 	}
-	conn, err := w.connection(ctx, req.Endpoint, req.Token)
+	conn, err := w.connection(ctx, req.Endpoint)
 	if err != nil {
 		postFailure(req.ID, rpcError(err, false))
 		return
 	}
-	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, req.Method, grpccodec.CallOptions()...)
+	callCtx := syncbridge.WithBearerToken(ctx, req.Token)
+	stream, err := conn.NewStream(callCtx, &grpc.StreamDesc{ServerStreams: true}, req.Method, grpccodec.CallOptions()...)
 	if err == nil {
 		err = stream.SendMsg(&request)
 	}
@@ -228,6 +255,9 @@ func (w *serviceWorker) handleBlobDownload(ctx context.Context, req rpcprotocol.
 		body = append(body, chunk.Data...)
 	}
 	if err != nil {
+		if !connReusable(conn.GetState()) {
+			w.evictConnection(req.Endpoint, conn)
+		}
 		postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 		return
 	}
@@ -235,11 +265,14 @@ func (w *serviceWorker) handleBlobDownload(ctx context.Context, req rpcprotocol.
 }
 
 func (w *serviceWorker) handleUnary(ctx context.Context, req rpcprotocol.Request) {
-	conn, err := w.connection(ctx, req.Endpoint, req.Token)
+	callCtx, cancel := context.WithTimeout(ctx, defaultWorkerUnaryTimeout)
+	defer cancel()
+	conn, err := w.connection(callCtx, req.Endpoint)
 	if err != nil {
 		postFailure(req.ID, rpcError(err, false))
 		return
 	}
+	callCtx = syncbridge.WithBearerToken(callCtx, req.Token)
 	switch req.Method {
 	case backendrpc.MethodSyncPutWorkspace:
 		var request backendrpc.PutWorkspaceRequest
@@ -249,7 +282,10 @@ func (w *serviceWorker) handleUnary(ctx context.Context, req rpcprotocol.Request
 		}
 		request.Dataset = req.Binary
 		var response backendrpc.PutWorkspaceResponse
-		if err := conn.Invoke(ctx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+		if err := conn.Invoke(callCtx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+			if !connReusable(conn.GetState()) {
+				w.evictConnection(req.Endpoint, conn)
+			}
 			postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 			return
 		}
@@ -267,7 +303,10 @@ func (w *serviceWorker) handleUnary(ctx context.Context, req rpcprotocol.Request
 			return
 		}
 		var response backendrpc.GetWorkspaceResponse
-		if err := conn.Invoke(ctx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+		if err := conn.Invoke(callCtx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+			if !connReusable(conn.GetState()) {
+				w.evictConnection(req.Endpoint, conn)
+			}
 			postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 			return
 		}
@@ -279,14 +318,61 @@ func (w *serviceWorker) handleUnary(ctx context.Context, req rpcprotocol.Request
 			return
 		}
 		postBinary(req.ID, payload, body)
+	case backendrpc.MethodBlobSyncPutSnapshot:
+		var request backendrpc.PutSnapshotRequest
+		if err := json.Unmarshal(req.Payload, &request); err != nil {
+			postFailure(req.ID, &rpcprotocol.Error{Code: "InvalidArgument", Message: err.Error()})
+			return
+		}
+		if len(req.Binary) > 0 {
+			request.Blob = req.Binary
+		}
+		var response backendrpc.PutSnapshotResponse
+		if err := conn.Invoke(callCtx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+			if !connReusable(conn.GetState()) {
+				w.evictConnection(req.Endpoint, conn)
+			}
+			postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
+			return
+		}
+		payload, err := json.Marshal(response)
+		if err != nil {
+			postFailure(req.ID, &rpcprotocol.Error{Code: "Internal", Message: err.Error()})
+			return
+		}
+		postPayload(rpcprotocol.KindReply, req.ID, 0, payload)
+	case backendrpc.MethodBlobSyncGetSnapshot:
+		var request backendrpc.GetSnapshotRequest
+		if err := json.Unmarshal(req.Payload, &request); err != nil {
+			postFailure(req.ID, &rpcprotocol.Error{Code: "InvalidArgument", Message: err.Error()})
+			return
+		}
+		var response backendrpc.GetSnapshotResponse
+		if err := conn.Invoke(callCtx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+			if !connReusable(conn.GetState()) {
+				w.evictConnection(req.Endpoint, conn)
+			}
+			postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
+			return
+		}
+		body := response.Blob
+		response.Blob = nil
+		payload, err := json.Marshal(response)
+		if err != nil {
+			postFailure(req.ID, &rpcprotocol.Error{Code: "Internal", Message: err.Error()})
+			return
+		}
+		postBinary(req.ID, payload, body)
 	default:
 		request := json.RawMessage(req.Payload)
 		var response json.RawMessage
-		callCtx := ctx
 		if req.Method == backendrpc.MethodAuthRefreshToken {
 			callCtx = syncbridge.WithDeviceID(callCtx, req.DeviceID)
 		}
 		if err := conn.Invoke(callCtx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+			if !connReusable(conn.GetState()) {
+				w.evictConnection(req.Endpoint, conn)
+			}
 			postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 			return
 		}
@@ -295,12 +381,13 @@ func (w *serviceWorker) handleUnary(ctx context.Context, req rpcprotocol.Request
 }
 
 func (w *serviceWorker) handleServerStream(ctx context.Context, req rpcprotocol.Request) {
-	conn, err := w.connection(ctx, req.Endpoint, req.Token)
+	conn, err := w.connection(ctx, req.Endpoint)
 	if err != nil {
 		postFailure(req.ID, rpcError(err, false))
 		return
 	}
-	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, req.Method, grpccodec.CallOptions()...)
+	callCtx := syncbridge.WithBearerToken(ctx, req.Token)
+	stream, err := conn.NewStream(callCtx, &grpc.StreamDesc{ServerStreams: true}, req.Method, grpccodec.CallOptions()...)
 	if err == nil {
 		err = stream.SendMsg(json.RawMessage(req.Payload))
 	}
@@ -308,6 +395,9 @@ func (w *serviceWorker) handleServerStream(ctx context.Context, req rpcprotocol.
 		err = stream.CloseSend()
 	}
 	if err != nil {
+		if !connReusable(conn.GetState()) {
+			w.evictConnection(req.Endpoint, conn)
+		}
 		postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 		return
 	}
@@ -384,34 +474,6 @@ func (w *serviceWorker) forwardAIStream(id string, stream grpc.ClientStream) {
 	}
 }
 
-func rpcError(err error, ambiguous bool) *rpcprotocol.Error {
-	if err == nil {
-		return nil
-	}
-	st, ok := status.FromError(err)
-	if ok {
-		return &rpcprotocol.Error{
-			Code:           st.Code().String(),
-			Message:        st.Message(),
-			MayHaveApplied: ambiguous,
-		}
-	}
-	return &rpcprotocol.Error{
-		Code:           "Unavailable",
-		Message:        err.Error(),
-		MayHaveApplied: ambiguous,
-	}
-}
-
-func mayHaveApplied(err error) bool {
-	switch status.Code(err) {
-	case codes.Canceled, codes.DeadlineExceeded, codes.Unknown, codes.Internal, codes.Unavailable:
-		return true
-	default:
-		return false
-	}
-}
-
 func postPayload(kind rpcprotocol.Kind, id string, seq uint64, payload []byte) {
 	message := js.Global().Get("Object").New()
 	message.Set("version", rpcprotocol.Version)
@@ -435,6 +497,16 @@ func postFailure(id string, rpcErr *rpcprotocol.Error) {
 	errValue.Set("code", rpcErr.Code)
 	errValue.Set("message", rpcErr.Message)
 	errValue.Set("mayHaveApplied", rpcErr.MayHaveApplied)
+	if rpcErr.Reason != "" {
+		errValue.Set("reason", rpcErr.Reason)
+	}
+	if len(rpcErr.Metadata) > 0 {
+		metaObj := js.Global().Get("Object").New()
+		for k, v := range rpcErr.Metadata {
+			metaObj.Set(k, v)
+		}
+		errValue.Set("metadata", metaObj)
+	}
 	message.Set("error", errValue)
 	js.Global().Call("postMessage", message)
 }
@@ -491,6 +563,9 @@ func decodeRequest(data js.Value) (rpcprotocol.Request, error) {
 		}
 		if req.Method, err = requiredStringField(data, "method"); err != nil {
 			return rpcprotocol.Request{}, err
+		}
+		if deviceID := data.Get("deviceId"); !deviceID.IsUndefined() && !deviceID.IsNull() && deviceID.Type() == js.TypeString {
+			req.DeviceID = strings.TrimSpace(deviceID.String())
 		}
 		if payload := data.Get("payload"); !payload.IsUndefined() && !payload.IsNull() {
 			if payload.Type() != js.TypeString {

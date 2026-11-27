@@ -61,9 +61,18 @@ type Response struct {
 
 // Error is a gRPC-independent failure crossing the worker boundary.
 type Error struct {
-	Code           string `json:"code"`
-	Message        string `json:"message"`
-	MayHaveApplied bool   `json:"mayHaveApplied,omitempty"`
+	Code           string            `json:"code"`
+	Message        string            `json:"message"`
+	MayHaveApplied bool              `json:"mayHaveApplied,omitempty"`
+	Reason         string            `json:"reason,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+}
+
+// HasReason reports whether err is a worker RPC error carrying the given
+// structured ErrorInfo reason (e.g. BILLING_LAPSED, ADMIN_SUSPENDED).
+func HasReason(err error, reason string) bool {
+	var rpcErr *Error
+	return errors.As(err, &rpcErr) && strings.EqualFold(rpcErr.Reason, reason)
 }
 
 func (e *Error) Error() string {

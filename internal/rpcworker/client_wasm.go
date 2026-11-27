@@ -65,12 +65,23 @@ type Stream struct {
 	closed bool
 }
 
-var defaultClient *Client
+var (
+	defaultClientMu sync.Mutex
+	defaultClient   *Client
+)
 
-// StartDefault boots the one process-wide RPC worker.
+// StartDefault boots the one process-wide RPC worker, automatically recreating
+// it if a previous worker terminated with a fatal error instead of permanently
+// bricking all future RPCs.
 func StartDefault() (*Client, error) {
-	if defaultClient != nil {
+	defaultClientMu.Lock()
+	defer defaultClientMu.Unlock()
+	if defaultClient != nil && !defaultClient.isDead() {
 		return defaultClient, nil
+	}
+	if defaultClient != nil {
+		defaultClient.terminate()
+		defaultClient = nil
 	}
 	document := js.Global().Get("document")
 	if document.IsUndefined() || document.IsNull() {
@@ -88,9 +99,36 @@ func StartDefault() (*Client, error) {
 	return client, nil
 }
 
-// Default returns the process-wide worker client, or nil before StartDefault.
+// Default returns the process-wide worker client, or nil before StartDefault
+// (or when the previous worker died and needs StartDefault to recreate it).
 func Default() *Client {
+	defaultClientMu.Lock()
+	defer defaultClientMu.Unlock()
+	if defaultClient != nil && defaultClient.isDead() {
+		return nil
+	}
 	return defaultClient
+}
+
+func (c *Client) isDead() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.fatal != nil
+}
+
+func (c *Client) terminate() {
+	if c == nil {
+		return
+	}
+	if !c.worker.IsUndefined() && !c.worker.IsNull() {
+		func() {
+			defer func() { _ = recover() }()
+			c.worker.Call("terminate")
+		}()
+	}
+	c.onMessage.Release()
+	c.onError.Release()
+	c.onMessageError.Release()
 }
 
 // New starts a Dedicated Worker at workerURL.
@@ -152,12 +190,23 @@ func (c *Client) installHandlers() {
 	c.worker.Set("onmessageerror", c.onMessageError)
 }
 
+func jsOptString(v js.Value) string {
+	if v.IsUndefined() || v.IsNull() || v.Type() != js.TypeString {
+		return ""
+	}
+	return v.String()
+}
+
 func (c *Client) handleMessage(data js.Value) {
-	if data.IsUndefined() || data.IsNull() {
+	if data.IsUndefined() || data.IsNull() || data.Type() != js.TypeObject {
 		return
 	}
-	version := data.Get("version").Int()
-	kind := rpcprotocol.Kind(data.Get("kind").String())
+	verVal := data.Get("version")
+	if verVal.IsUndefined() || verVal.IsNull() || verVal.Type() != js.TypeNumber {
+		return
+	}
+	version := verVal.Int()
+	kind := rpcprotocol.Kind(jsOptString(data.Get("kind")))
 	if kind == rpcprotocol.KindReady {
 		if version != rpcprotocol.Version {
 			c.failAll(fmt.Errorf("services worker protocol version %d does not match app version %d; reload required", version, rpcprotocol.Version))
@@ -176,23 +225,29 @@ func (c *Client) handleMessage(data js.Value) {
 		c.failAll(fmt.Errorf("services worker message version %d does not match app version %d", version, rpcprotocol.Version))
 		return
 	}
-	id := data.Get("id").String()
+	id := jsOptString(data.Get("id"))
 	switch kind {
 	case rpcprotocol.KindReply:
-		c.deliverReply(id, []byte(data.Get("payload").String()), nil)
+		c.deliverReply(id, []byte(jsOptString(data.Get("payload"))), nil)
 	case rpcprotocol.KindFailure:
 		c.deliverFailure(id, decodeError(data.Get("error")))
 	case rpcprotocol.KindBinaryReply:
 		var binary []byte
 		if value := data.Get("bytes"); !value.IsUndefined() && !value.IsNull() {
-			binary = make([]byte, value.Get("byteLength").Int())
-			js.CopyBytesToGo(binary, value)
+			if bl := value.Get("byteLength"); !bl.IsUndefined() && !bl.IsNull() && bl.Type() == js.TypeNumber {
+				binary = make([]byte, bl.Int())
+				js.CopyBytesToGo(binary, value)
+			}
 		}
-		c.deliverBinaryReply(id, []byte(data.Get("payload").String()), binary)
+		c.deliverBinaryReply(id, []byte(jsOptString(data.Get("payload"))), binary)
 	case rpcprotocol.KindStreamEvent:
+		var seq uint64
+		if sv := data.Get("seq"); !sv.IsUndefined() && !sv.IsNull() && sv.Type() == js.TypeNumber {
+			seq = uint64(sv.Float())
+		}
 		c.deliverStream(id, streamReply{
-			payload: []byte(data.Get("payload").String()),
-			seq:     uint64(data.Get("seq").Float()),
+			payload: []byte(jsOptString(data.Get("payload"))),
+			seq:     seq,
 		})
 	case rpcprotocol.KindStreamEnd:
 		c.deliverStream(id, streamReply{done: true})
@@ -202,14 +257,27 @@ func (c *Client) handleMessage(data js.Value) {
 }
 
 func decodeError(value js.Value) error {
-	if value.IsUndefined() || value.IsNull() {
+	if value.IsUndefined() || value.IsNull() || value.Type() != js.TypeObject {
 		return errors.New("RPC failed without an error")
 	}
-	return &rpcprotocol.Error{
-		Code:           value.Get("code").String(),
-		Message:        value.Get("message").String(),
-		MayHaveApplied: value.Get("mayHaveApplied").Bool(),
+	out := &rpcprotocol.Error{
+		Code:           jsOptString(value.Get("code")),
+		Message:        jsOptString(value.Get("message")),
+		MayHaveApplied: value.Get("mayHaveApplied").Truthy(),
+		Reason:         jsOptString(value.Get("reason")),
 	}
+	if meta := value.Get("metadata"); !meta.IsUndefined() && !meta.IsNull() && meta.Type() == js.TypeObject {
+		keys := js.Global().Get("Object").Call("keys", meta)
+		n := keys.Get("length").Int()
+		if n > 0 {
+			out.Metadata = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				k := keys.Index(i).String()
+				out.Metadata[k] = jsOptString(meta.Get(k))
+			}
+		}
+	}
+	return out
 }
 
 func (c *Client) deliverReply(id string, payload []byte, err error) {
@@ -434,6 +502,9 @@ func (c *Client) postBinary(kind rpcprotocol.Kind, id, endpoint, token, method s
 	message.Set("endpoint", endpoint)
 	message.Set("token", token)
 	message.Set("method", method)
+	if deviceID := stableDeviceID(); deviceID != "" {
+		message.Set("deviceId", deviceID)
+	}
 	if payload != nil {
 		message.Set("payload", string(payload))
 	}
@@ -715,12 +786,28 @@ func (c *Client) OpenServerStream(ctx context.Context, endpoint, token, method s
 }
 
 // Recv decodes the next stream event. It returns io.EOF after the worker's one
-// terminal event.
+// terminal event, and never hangs if Cancel or worker failure closed the stream.
 func (s *Stream) Recv(target any) error {
 	if s == nil {
 		return errors.New("rpc worker: stream is nil")
 	}
-	event := <-s.events
+	// Prefer an already-buffered event so terminal errors or final messages
+	// delivered right before done closes are never skipped.
+	var event streamReply
+	select {
+	case event = <-s.events:
+	default:
+		select {
+		case event = <-s.events:
+		case <-s.done:
+			// Check one final time for a terminal error placed before done closed.
+			select {
+			case event = <-s.events:
+			default:
+				return context.Canceled
+			}
+		}
+	}
 	if event.err != nil {
 		return event.err
 	}

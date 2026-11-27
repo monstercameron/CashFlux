@@ -49,6 +49,33 @@ func invokeWorkerRPC(ctx context.Context, endpoint, token, method string, reques
 		}
 		typed.Dataset = dataset
 		return nil
+	case backendrpc.MethodBlobSyncPutSnapshot:
+		var typed backendrpc.PutSnapshotRequest
+		switch value := request.(type) {
+		case backendrpc.PutSnapshotRequest:
+			typed = value
+		case *backendrpc.PutSnapshotRequest:
+			if value == nil {
+				return errors.New("services worker: nil PutSnapshot request")
+			}
+			typed = *value
+		default:
+			return errors.New("services worker: unexpected PutSnapshot request type")
+		}
+		blob := typed.Blob
+		typed.Blob = nil
+		return client.InvokeWithBinaryRequest(ctx, endpoint, token, method, typed, response, blob)
+	case backendrpc.MethodBlobSyncGetSnapshot:
+		typed, ok := response.(*backendrpc.GetSnapshotResponse)
+		if !ok || typed == nil {
+			return errors.New("services worker: unexpected GetSnapshot response type")
+		}
+		blob, err := client.InvokeWithBinaryResponse(ctx, endpoint, token, method, request, typed)
+		if err != nil {
+			return err
+		}
+		typed.Blob = blob
+		return nil
 	default:
 		return client.Invoke(ctx, endpoint, token, method, request, response)
 	}

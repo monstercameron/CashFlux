@@ -1,3 +1,12 @@
+## 2026-11-27 — Rework services.wasm worker and rpcworker transport
+
+Fixed the recurring browser-worker transport, connection-pool, and refresh-binding failures across `cmd/cashflux-services`, `internal/rpcworker`, `internal/rpcprotocol`, and `internal/app/rpcworker.go`:
+
+- **Multi-tab refresh revocation fix**: `decodeRequest` in `cmd/cashflux-services/main.go` now decodes `deviceId` (and `rpcworker.Client.postBinary` attaches `deviceId`) so `AuthService.RefreshToken` forwards `x-cashflux-device-id` and honors server-side 10-second replay grace across tabs instead of revoking the device family.
+- **Endpoint connection pooling & dead-conn eviction**: Pooled `*grpc.ClientConn` by normalized endpoint only (`syncbridge.DialEndpoint`) and injected bearer tokens per RPC (`syncbridge.WithBearerToken`), checking `connectivity.State` and evicting `Shutdown`/`TransientFailure` connections instead of leaking one WebSocket per 15-minute token rotation until hitting the per-client cap.
+- **v2 snapshot binary transfer & structured errors**: Added transferable `Uint8Array` fast-paths for `MethodBlobSyncPutSnapshot` and `MethodBlobSyncGetSnapshot`, preserved `errdetails.ErrorInfo` (`Reason`/`Metadata`) in `rpcprotocol.Error`, added a 60s safety timeout on worker unary calls, fixed `Stream.Recv()` to select on `<-s.done` (preventing cancel hangs), added safe JS type checks in `handleMessage`, and made `rpcworker.StartDefault()` automatically recreate the worker if a prior instance died.
+- **Verification**: Added native unit tests in `cmd/cashflux-services/helpers_test.go`, verified `internal/rpcprotocol` and `internal/rpcworker` tests, `GOOS=js GOARCH=wasm go vet`, and built `web/bin/services.wasm`. Next: fix crypto caching, incremental blob sync, and local persistence races.
+
 ## 2026-11-27 — Wire and harden server v2 BlobSync, gRPC limits, and SQLite blob locking
 
 Completed server-side v2 `BlobSync` registration and fixed the major server/bridge reliability bugs uncovered in the sync audit:
