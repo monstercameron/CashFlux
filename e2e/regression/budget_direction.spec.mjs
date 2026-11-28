@@ -53,17 +53,21 @@ test.describe("what a budget measures", { tag: "@prod" }, () => {
     await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
     await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toHaveCount(0);
     await app.keyboard.press("Escape");
+    await expect(categoryPicker).toHaveCount(0);
 
     await app.getByTestId("budget-direction").selectOption("save");
+    await expect(app.getByTestId("budget-direction-hint")).toBeVisible();
     await openCategoryPicker();
     await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toBeVisible();
     await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
     await app.keyboard.press("Escape");
+    await expect(categoryPicker).toHaveCount(0);
 
     // ...and switching back re-restricts it. A spending budget tracking an income
     // category can never accrue — matchesScope wants an outflow — so offering one
     // would ship a budget broken by construction.
     await app.getByTestId("budget-direction").selectOption("");
+    await expect(app.getByTestId("budget-direction-hint")).toHaveCount(0);
     await openCategoryPicker();
     await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
     await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toHaveCount(0);
