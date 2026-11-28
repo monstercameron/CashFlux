@@ -10,7 +10,7 @@
 // but IS saving. These cover the part only a browser can: that the choice exists,
 // that it defaults to the historical meaning, and that it changes which
 // categories a budget may track.
-import { test, expect, nav } from "./fixtures.mjs";
+import { test, expect, nav, settle } from "./fixtures.mjs";
 
 async function openAddBudget(app) {
   await nav(app, "/budgets");
@@ -47,21 +47,30 @@ test.describe("what a budget measures", { tag: "@prod" }, () => {
     };
     const categoryPicker = app.getByRole("listbox", { name: "Category" });
 
+    const closeCategoryPicker = async () => {
+      await app.keyboard.press("Escape");
+      await expect(categoryPicker).toHaveCount(0);
+      // AccessibleOverlay removes itself from GWC's overlay stack in a passive
+      // UseEffect (and restores focus via setTimeout(0)), which commits an
+      // overlay-stack update on the parent FlipPanel after the listbox detaches.
+      // Drain animation frames before changing the sibling <select> so the
+      // change event cannot collide with that in-flight FlipPanel render.
+      await settle(app);
+    };
+
     // The add form uses the shared searchable picker rather than a native select.
     // Assert the category-direction contract against the choices users see.
     await openCategoryPicker();
     await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
     await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toHaveCount(0);
-    await app.keyboard.press("Escape");
-    await expect(categoryPicker).toHaveCount(0);
+    await closeCategoryPicker();
 
     await app.getByTestId("budget-direction").selectOption("save");
     await expect(app.getByTestId("budget-direction-hint")).toBeVisible();
     await openCategoryPicker();
     await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toBeVisible();
     await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
-    await app.keyboard.press("Escape");
-    await expect(categoryPicker).toHaveCount(0);
+    await closeCategoryPicker();
 
     // ...and switching back re-restricts it. A spending budget tracking an income
     // category can never accrue — matchesScope wants an outflow — so offering one
