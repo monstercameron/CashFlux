@@ -1,3 +1,7 @@
+## 2026-11-27 — Pin mid-month date in TestBillsPreparedFitUsesFreshFXAndShowsUnavailable
+
+`TestBillsPreparedFitUsesFreshFXAndShowsUnavailable` in `internal/screens/bills_fit_prepared_wasm_test.go` added `+2d` and `+3d` to `app.ClockNow()`, which crossed the Nov 30 → Dec 1 month boundary once CI rolled past midnight UTC (`2026-11-28T01:27Z`) and placed the pending EUR charge outside November's monthly budget window. Pinned `now` to a deterministic mid-month UTC timestamp (`2026-11-15T12:00:00Z`) so the test is month-end safe.
+
 ## 2026-11-27 — Fix CI deploy-gate failures (vulns, testkit timer leak, device_erase spec)
 
 Cleared all three CI failures blocking the `v1.19.149` production release:

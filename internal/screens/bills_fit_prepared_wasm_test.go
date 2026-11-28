@@ -6,6 +6,7 @@ package screens
 
 import (
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -14,7 +15,9 @@ import (
 
 func TestBillsPreparedFitUsesFreshFXAndShowsUnavailable(t *testing.T) {
 	app := primaryAccountsGoalsApp(t)
-	now := app.ClockNow()
+	// Pin mid-month so due (+2d) and pending EUR (+3d) always fall within the
+	// same monthly budget period regardless of wall-clock month end.
+	now := time.Date(2026, time.November, 15, 12, 0, 0, 0, time.UTC)
 	settings, err := app.Store().GetSettings()
 	if err != nil {
 		t.Fatal(err)
