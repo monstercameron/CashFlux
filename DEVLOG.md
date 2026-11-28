@@ -1,3 +1,11 @@
+## 2026-11-27 — Fix CI deploy-gate failures (vulns, testkit timer leak, device_erase spec)
+
+Cleared all three CI failures blocking the `v1.19.149` production release:
+
+- **Vulnerability scan (`go.mod`, `go.sum`)**: Upgraded toolchain `go1.27.3` → `go1.27.4` (GO-2026-6859), `go.opentelemetry.io/otel*` `v1.45.0` → `v1.47.0` (GO-2026-6974), and `github.com/gorilla/websocket` `v1.5.3` → `v1.5.4-0.20240701034025-d67f41855da4` (GO-2026-6278). `govulncheck ./...` now reports 0 vulnerabilities.
+- **WASM testkit race (`internal/uistate/settings.go`, `internal/screens/networth_availability_wasm_test.go`)**: `TestPrimaryNetWorthHeroAccountsAvailabilityTransitions` called `f.Cleanup()` without unmounting its tree, leaving a 300ms `useAfterSettle` timer alive that fired during `TestPrimaryNetWorthDashboardKpiAndHouseholdDisclosure`, re-rendered the old fixture's `dashboardHero`, and overwrote `uistate.capturedDataRev` with the old runtime's atom. Switched `uistate.BumpDataRevision` to `capturedDataRev.Update(...)` (which is atomic and always resolves the active global runtime via `runtime.ResolveRuntime()`) and explicitly unmounted the tree before `f.Cleanup()`.
+- **Playwright deploy gate (`e2e/regression/device_erase.spec.mjs`)**: Removed the stale `sample-start-fresh` click left behind after commit `b794d9af` removed the top-bar sample-data chip (`ensureWorkspaceRegistry()` already initializes the active workspace on first boot).
+
 ## 2026-11-27 — Wire thin WASM v2 BlobSync adapter, live in-place apply, and conflict checkpoint UI
 
 Completed the client-side migration to `cashflux.v2.BlobSync` with live in-place apply, durable conflict checkpoints, and unified sync state handling:

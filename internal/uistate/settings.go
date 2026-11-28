@@ -111,6 +111,6 @@ func CurrentDataRevision() int {
 // since the dashboard reads it).
 func BumpDataRevision() {
 	if dataRevCaptured {
-		capturedDataRev.Set(capturedDataRev.Get() + 1)
+		capturedDataRev.Update(func(n int) int { return n + 1 })
 	}
 }

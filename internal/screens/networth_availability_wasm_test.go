@@ -50,7 +50,11 @@ func TestPrimaryNetWorthHeroAccountsAvailabilityTransitions(t *testing.T) {
 	}
 	var lens state.Atom[scope.ReportScope]
 	f := render.New(t)
-	defer f.Cleanup()
+	defer func() {
+		f.Render(ui.Fragment())
+		f.Stabilize()
+		f.Cleanup()
+	}()
 	f.Render(ui.CreateElement(func() ui.Node {
 		_ = uistate.UseDataRevision().Get()
 		lens = uistate.UseActiveScope()
@@ -283,7 +287,11 @@ func TestPrimaryNotificationNetWorthWinRequiresCompleteTotal(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := render.New(t)
-	defer f.Cleanup()
+	defer func() {
+		f.Render(ui.Fragment())
+		f.Stabilize()
+		f.Cleanup()
+	}()
 	f.Render(ui.CreateElement(notifWinsWidget, notifProps{App: app}))
 	f.Stabilize()
 	if strings.Contains(f.Text(), "Net worth") || !strings.Contains(f.Text(), goal.Name) {

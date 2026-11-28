@@ -20,9 +20,6 @@ test("device erase removes real files from two locally created workspaces @prod"
   try {
     await page.goto("/");
     await ready();
-    await expect(page.getByTestId("sample-start-fresh")).toBeVisible();
-    await Promise.all([page.waitForEvent("load"), page.getByTestId("sample-start-fresh").click()]);
-    await ready();
     const firstWorkspace = await page.evaluate(() => JSON.parse(window.cashfluxStoreGet("cashflux:workspaces")).activeId);
     await upload("erase-first-workspace.png");
 
