@@ -5,9 +5,15 @@
 package app
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/conflictcheckpoint"
+	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	uic "github.com/monstercameron/GoWebComponents/v8/ui"
 )
 
@@ -56,5 +62,84 @@ func TestCloudConflictReviewRendersV2DiffAndMergeAction(t *testing.T) {
 	f.Stabilize()
 	if merged != 1 {
 		t.Fatalf("OnMerge calls = %d, want 1", merged)
+	}
+}
+
+func TestHostedHydrationWakeSyncAndManualSyncDoNotDeadlockOnPushBlocked(t *testing.T) {
+	fixpullFixture(t)
+	oldPull, oldWake := hostedPullWorkspaceRPC, lastWakeAt
+	t.Cleanup(func() {
+		hostedPullWorkspaceRPC = oldPull
+		wakeMu.Lock()
+		lastWakeAt = oldWake
+		wakeMu.Unlock()
+	})
+	calls := 0
+	hostedPullWorkspaceRPC = func(_ context.Context, _ prefs.Prefs, req backendrpc.GetWorkspaceRequest, out *backendrpc.GetWorkspaceResponse) error {
+		calls++
+		out.Found, out.Workspace.ID, out.Dataset = true, req.ID, hostgateEnvelope()
+		return nil
+	}
+	mergedRemoteWorkspaces = true
+	wakeMu.Lock()
+	lastWakeAt = time.Time{}
+	wakeMu.Unlock()
+
+	wakeSync()
+	hostgateWaitPull(t)
+	if calls != 1 || currentHostedHydration().Phase != hostedHydrationLocked {
+		t.Fatalf("wakeSync during hosted hydration: calls=%d phase=%s, want 1 / %s", calls, currentHostedHydration().Phase, hostedHydrationLocked)
+	}
+
+	// Reset back to waiting and verify requestBackendSyncNow also drives hosted hydration.
+	setHostedHydration(hostedHydrationStatus{Required: true, Phase: hostedHydrationWaiting})
+	requestBackendSyncNow()
+	hostgateWaitPull(t)
+	if calls != 2 || currentHostedHydration().Phase != hostedHydrationLocked {
+		t.Fatalf("requestBackendSyncNow during hosted hydration: calls=%d phase=%s, want 2 / %s", calls, currentHostedHydration().Phase, hostedHydrationLocked)
+	}
+}
+
+func TestIdleAutosaveDuringHostedHydrationDoesNotRaiseUnsavedBanner(t *testing.T) {
+	oldHosted := currentHostedHydration()
+	oldApp := appstate.Default
+	t.Cleanup(func() {
+		setHostedHydration(oldHosted)
+		appstate.Default = oldApp
+		uistate.ClearPersistFailure("dataset")
+	})
+
+	if err := appstate.Init(nil, false); err != nil {
+		t.Fatalf("appstate.Init: %v", err)
+	}
+	app := appstate.Default
+	t.Cleanup(func() { _ = app.Store().Close() })
+
+	uistate.ClearPersistFailure("dataset")
+	initializeHostedHydration(true)
+
+	save, _ := newRecordAutosave(app, func(_ map[string]string, _ map[string]string, cb func(error)) {
+		cb(nil)
+	}, nil)
+
+	f := cloudTestFixture(t, uic.CreateElement(SaveFailureBanner))
+	// Idle boot/ticker save while hosted hydration is still checking the server
+	// must stay silent and not flash "Changes aren't saved yet".
+	save()
+	f.Stabilize()
+	if cloudTestID(f, "div", "unsaved-changes") != nil {
+		t.Fatal("idle autosave during hosted hydration raised persist failure banner")
+	}
+
+	// An explicit durable writer request must still fail loudly while paused.
+	done := make(chan appstate.DurableResult, 1)
+	app.RequestDurable(func(res appstate.DurableResult) { done <- res })
+	select {
+	case res := <-done:
+		if res.Err == nil {
+			t.Fatal("explicit durable request succeeded while hosted hydration was required")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("explicit durable request timed out")
 	}
 }

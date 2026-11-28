@@ -305,6 +305,12 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		// goroutine adopts the generation. While it owns the pause, that window
 		// must not be mistaken for a foreign writer and made permanently stale.
 		if paused() {
+			// While hosted hydration is loading the account's server data, the
+			// financial shell is unmounted and there are no user edits to save.
+			// Do not flash "Changes aren't saved yet" on idle boot/ticker ticks.
+			if hostedHydrationRequired() && len(waiters) == 0 {
+				return
+			}
 			completeWaiters(app.Rev(), 0, pausedErr)
 			return
 		}
@@ -366,6 +372,9 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			}
 			if paused() {
 				inFlight = false
+				if hostedHydrationRequired() && len(waiters) == 0 {
+					return
+				}
 				completeWaiters(app.Rev(), 0, pausedErr)
 				return
 			}

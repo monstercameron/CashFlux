@@ -586,9 +586,11 @@ func startBackendSync() {
 		}
 		startV2Watch()
 		startBackendWatch()
-		// Reconcile the account's workspace registry first, then run a single
-		// serialized v2 sync cycle (pull -> reconcile -> live-apply -> push).
-		mergeRemoteWorkspaces(func() { requestV2Sync() })
+		// Reconcile the account's workspace registry first, then pull the
+		// authoritative workspace snapshot so hosted first-open hydration,
+		// App Lock prompts, legacy migration, and existing v1 accounts resolve
+		// before handing off to incremental v2 BlobSync.
+		mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 	}()
 }
 
@@ -793,6 +795,12 @@ func wakeSync() {
 	lastWakeAt = time.Now()
 	wakeMu.Unlock()
 
+	if hostedHydrationRequired() {
+		if !hostedHydrationPullHeld() {
+			pullActiveWorkspaceFromBackend(true)
+		}
+		return
+	}
 	wakeV2Watch()
 	requestV2Sync()
 }
@@ -1011,6 +1019,12 @@ func queueActiveWorkspaceAtServerVersion(force bool) {
 
 func requestBackendSyncNow() {
 	if syncApplyPaused || !backendSessionReady() {
+		return
+	}
+	if hostedHydrationRequired() {
+		if !hostedHydrationPullHeld() {
+			pullActiveWorkspaceFromBackend(true)
+		}
 		return
 	}
 	if eng, ok := ensureV2Engine(); ok {
@@ -1376,7 +1390,7 @@ func restartBackendSync() {
 	wireSyncLifecycleListeners()
 	startV2Watch()
 	startBackendWatch()
-	mergeRemoteWorkspaces(func() { requestV2Sync() })
+	mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 }
 
 // runBackendWatch is the watch loop body: it dials the bridge, subscribes, and
@@ -1849,6 +1863,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 				}
 			} else {
 				markHostedHydrationReady()
+				requestV2Sync()
 			}
 			return
 		}
@@ -1892,7 +1907,10 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// snapshot first, then release the hosted gate without a reload so the
 			// user's just-entered App Lock passcode remains in memory.
 			markHostedHydrationApplying()
-			done := markHostedHydrationReady
+			done := func() {
+				markHostedHydrationReady()
+				requestV2Sync()
+			}
 			if meta.LegacyPlaintext && !datasetEncryptionActive() {
 				done = markHostedLegacyProtection
 			}
@@ -1904,6 +1922,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// reloading the browser or discarding UI state.
 		saveSyncedDatasetThen(w.ID, localDataset, meta, func() {
 			uistate.BumpDataRevision()
+			requestV2Sync()
 		})
 	}()
 }
